@@ -32,9 +32,11 @@
               </p>
 
               @if(count($changePlans ?? []) > 1)
-                <details class="account-change-plan">
-                  <summary class="auth-account-card__link" style="cursor:pointer;">Change plan</summary>
-                  <form action="{{ url('/account/plan/change') }}" method="post" class="space-y-4 mt-3">
+                <div class="account-change-plan">
+                  <p class="auth-account-card__payment-text" style="margin-bottom:0.5rem;">
+                    <strong>Change plan</strong> — select a different plan below to switch instantly.
+                  </p>
+                  <form action="{{ url('/account/plan/change') }}" method="post" class="space-y-4" data-auto-submit-on-select>
                     @csrf
                     <div class="form-group{{ $errors->has('plan_id') ? ' form-group--error' : '' }}">
                       <div class="auth-plan-grid" role="radiogroup" aria-label="Membership plan">
@@ -54,11 +56,18 @@
                       </div>
                       @error('plan_id')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
                     </div>
-                    <button type="submit" class="btn btn-outline w-full justify-center">
-                      <i class="fas fa-rotate mr-2" aria-hidden="true"></i> Update Plan
-                    </button>
+                    <noscript>
+                      <button type="submit" class="btn btn-outline w-full justify-center">
+                        <i class="fas fa-rotate mr-2" aria-hidden="true"></i> Update Plan
+                      </button>
+                    </noscript>
                   </form>
-                </details>
+                </div>
+                <script>
+                  document.querySelectorAll('form[data-auto-submit-on-select] input[name="plan_id"]').forEach((radio) => {
+                    radio.addEventListener('change', () => radio.form.requestSubmit());
+                  });
+                </script>
               @endif
 
               <form id="account-payment-form" data-amount="{{ $membership->plan?->price ?? 0 }}">
