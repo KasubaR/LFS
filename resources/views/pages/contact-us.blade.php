@@ -103,17 +103,6 @@
           <div class="contact-row__value">CV-6 COMESA Village, Lusaka Showgrounds, Lusaka, Zambia</div>
         </div>
       </div>
-      <div class="contact-row">
-        <div class="contact-row__icon" style="color:var(--flag-red);background:rgba(192,57,43,0.1)">
-          <i class="fas fa-phone-alt" aria-hidden="true"></i>
-        </div>
-        <div>
-          <div class="contact-row__label">Phone</div>
-          <div class="contact-row__value">
-            <a href="tel:+260767023948">+260 767 023 948</a>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 
