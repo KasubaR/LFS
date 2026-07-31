@@ -273,7 +273,7 @@ $shareTitle = urlencode($post['title'] ?? 'LFS News');
       <p class="sidebar-card__eyebrow">Ready to run?</p>
       <h3 class="sidebar-card__cta-title">Join LFS Today</h3>
       <p class="sidebar-card__body">Become part of Zambia's biggest running community and never run alone.</p>
-      <a href="https://squidal.com/lfsmembership" target="_blank" rel="noopener noreferrer" class="btn btn-orange w-full mt-3">
+      <a href="{{ route('register') }}" class="btn btn-orange w-full mt-3">
         <i class="fas fa-running"></i> Join Now
       </a>
     </div>

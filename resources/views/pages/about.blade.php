@@ -388,7 +388,7 @@
     </p>
 
     <div class="flex flex-wrap gap-4 justify-center mt-8">
-      <a href="https://squidal.com/lfsmembership" class="btn btn-primary text-base px-8 py-4" target="_blank" rel="noopener noreferrer">
+      <a href="{{ route('register') }}" class="btn btn-primary text-base px-8 py-4">
         <i class="fas fa-id-card" aria-hidden="true"></i> Join LFS Today
       </a>
       <a href="{{ url('/contact') }}" class="btn btn-outline text-base px-8 py-4">

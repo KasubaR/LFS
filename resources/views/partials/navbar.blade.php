@@ -68,7 +68,6 @@
 <!-- ── MOBILE NAV DRAWER (same order & links as desktop) ── -->
 <div id="mobile-nav" class="lfs-nav__mobile" role="dialog" aria-label="Mobile navigation" aria-hidden="true">
   <a href="{{ url('/#hero') }}" @class(['lfs-nav__mobile-link--active' => $navIsHome])>Home</a>
-  <a href="{{ url('/#activities') }}">Activities</a>
   <a href="{{ url('/#events') }}">Events</a>
   <a href="{{ url('/#news') }}">News</a>
   <a href="{{ url('/shop') }}" @class(['lfs-nav__mobile-link--active' => $navIsShop])>Shop</a>

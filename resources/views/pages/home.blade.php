@@ -131,11 +131,11 @@ $_heroFeatureCount = count($_feBanners);
         </p>
 
         <div class="flex flex-wrap items-center gap-4 mt-6 animate-fadeUp" style="animation-delay:0.45s">
-          <a href="https://squidal.com/lfsmembership" class="btn btn-primary" target="_blank" rel="noopener noreferrer">
+          <a href="{{ route('register') }}" class="btn btn-primary btn--hero">
             Join LFS
             <i class="fas fa-arrow-right" aria-hidden="true"></i>
           </a>
-          <a href="{{ url('/shop') }}" class="btn btn-outline">
+          <a href="{{ url('/shop') }}" class="btn btn-outline btn--hero">
             Shop
             <i class="fas fa-arrow-right" aria-hidden="true"></i>
           </a>
@@ -280,7 +280,7 @@ $_heroFeatureCount = count($_feBanners);
       </div>
     </div>
 
-    <a href="https://squidal.com/lfsmembership" class="btn btn-primary mt-8" target="_blank" rel="noopener noreferrer">
+    <a href="{{ route('register') }}" class="btn btn-primary mt-8">
       <i class="fas fa-id-card" aria-hidden="true"></i> Become a Member
     </a>
   </div>
@@ -473,8 +473,8 @@ $_heroFeatureCount = count($_feBanners);
       </div>
       <div class="text-sm text-center mt-1" style="color:rgba(255,255,255,0.4)">per year · renewed annually</div>
       <hr class="my-5" style="border-color:rgba(255,255,255,0.1)">
-      <a href="https://squidal.com/lfsmembership" class="btn btn-primary w-full justify-center" target="_blank" rel="noopener noreferrer">
-        Pay Membership Fee
+      <a href="{{ route('register') }}" class="btn btn-primary w-full justify-center">
+        Create Account
       </a>
       <p class="text-center mt-3 text-xs" style="color:rgba(255,255,255,0.4)">
         Contact the LFS Treasurer to make payment

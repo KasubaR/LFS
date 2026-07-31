@@ -293,6 +293,10 @@ button {
   border-color: rgba(255,255,255,0.25);
 }
 
+.btn--hero {
+  min-width: 180px;
+}
+
 .btn-outline:hover {
   border-color: var(--orange-light);
   color: var(--orange-light);
@@ -1769,6 +1773,7 @@ body.mobile-nav-open {
 
   .lfs-nav { padding: 1rem 1.5rem; }
   .lfs-nav__links { display: none; }
+  .lfs-nav__actions { display: none; }
   .lfs-nav__hamburger { display: flex; }
 
   .gallery-grid {

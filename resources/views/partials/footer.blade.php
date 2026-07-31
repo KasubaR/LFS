@@ -53,10 +53,10 @@
     <!-- ── Join Column ── -->
     <nav class="lfs-footer__col" aria-label="Join links">
       <h4>Join</h4>
-      <a href="https://squidal.com/lfsmembership" target="_blank" rel="noopener noreferrer">Membership</a>
+      <a href="{{ route('register') }}">Create Account</a>
       <a href="{{ url('/#shop') }}">Shop Regalia</a>
       <a href="{{ url('/#contact') }}">Contact Us</a>
-      <a href="https://squidal.com/lfsmembership" target="_blank" rel="noopener noreferrer">Membership Fee</a>
+      <a href="{{ route('register') }}">Membership Fee</a>
     </nav>
 
     <!-- ── Contact Column ── -->

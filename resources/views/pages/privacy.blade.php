@@ -154,9 +154,9 @@
       7. Third-Party Links
     </h2>
     <p>
-      Our site contains links to external services (Squidal for membership, Lenco for
-      payments, Strava, social media). We are not responsible for the privacy practices
-      of those sites and encourage you to read their respective privacy policies.
+      Our site contains links to external services (Lenco for payments, Strava, social
+      media). We are not responsible for the privacy practices of those sites and
+      encourage you to read their respective privacy policies.
     </p>
 
     <h2 style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;margin-top:2.5rem;margin-bottom:0.5rem;color:#111">

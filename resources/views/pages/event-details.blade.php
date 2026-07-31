@@ -137,7 +137,7 @@ if (is_string($brochureRaw) && $brochureRaw !== '') {
             <i class="fas fa-camera" aria-hidden="true"></i> View Photos
           </a>
           @elseif($isOpen)
-          @php $regHref = !empty($ev['registrationLink']) ? $ev['registrationLink'] : ($isMembersOnly ? 'https://squidal.com/lfsmembership' : url('/contact')); @endphp
+          @php $regHref = !empty($ev['registrationLink']) ? $ev['registrationLink'] : ($isMembersOnly ? route('register') : url('/contact')); @endphp
           <a href="{{ $regHref }}" class="btn btn-primary" target="_blank" rel="noopener noreferrer">
             <i class="fas {{ $registerIcon }}" aria-hidden="true"></i> {{ $registerLabel }}
           </a>
@@ -484,8 +484,8 @@ if (is_string($brochureRaw) && $brochureRaw !== '') {
               $sidebarRegHref   = $ev['registrationLink'];
               $sidebarRegTarget = ' target="_blank" rel="noopener noreferrer"';
             } elseif ($isOpen && $isMembersOnly) {
-              $sidebarRegHref   = 'https://squidal.com/lfsmembership';
-              $sidebarRegTarget = ' target="_blank" rel="noopener noreferrer"';
+              $sidebarRegHref   = route('register');
+              $sidebarRegTarget = '';
             } else {
               $sidebarRegHref   = url('/contact');
               $sidebarRegTarget = '';
