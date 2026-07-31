@@ -25,7 +25,7 @@
         <a href="https://instagram.com/lfszambia"  class="lfs-footer__social" target="_blank" rel="noopener" aria-label="Instagram">
           <i class="fab fa-instagram" aria-hidden="true"></i>
         </a>
-        <a href="https://wa.me/260966755326"       class="lfs-footer__social" target="_blank" rel="noopener" aria-label="WhatsApp">
+        <a href="https://wa.me/260767023948"       class="lfs-footer__social" target="_blank" rel="noopener" aria-label="WhatsApp">
           <i class="fab fa-whatsapp" aria-hidden="true"></i>
         </a>
         <a href="https://twitter.com/lfszambia"    class="lfs-footer__social" target="_blank" rel="noopener" aria-label="X / Twitter">

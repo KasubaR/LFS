@@ -260,7 +260,7 @@
 
   @php
   $management = [
-    ['name' => 'Katai Chola',       'role' => 'President',         'image' => '/images/Satellites/Katai-chola.png',          'bio' => "Club President and driving force behind LFS. Katai leads the club's strategic direction, community growth, and event management vision. Reachable at +260 966 755 326."],
+    ['name' => 'Katai Chola',       'role' => 'President',         'image' => '/images/Satellites/Katai-chola.png',          'bio' => "Club President and driving force behind LFS. Katai leads the club's strategic direction, community growth, and event management vision."],
     ['name' => 'Richard Katongo',   'role' => 'Committee Member',  'image' => '/images/Satellites/richard-katongo.png',      'bio' => "A valued member of the LFS management committee, contributing to the club's operations and community engagement."],
     ['name' => 'Nelly Banda',       'role' => 'Committee Member',  'image' => '/images/Satellites/Nelly-banda.png',          'bio' => "A valued member of the LFS management committee, contributing to the club's operations and community engagement."],
     ['name' => 'Francis Kasonde',   'role' => 'Committee Member',  'image' => '/images/Satellites/francis-kasonde.png',      'bio' => "A valued member of the LFS management committee, contributing to the club's operations and community engagement."],

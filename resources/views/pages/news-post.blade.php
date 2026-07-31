@@ -259,7 +259,7 @@ $shareTitle = urlencode($post['title'] ?? 'LFS News');
         <a href="https://instagram.com/lfszambia" target="_blank" rel="noopener" class="sidebar-social sidebar-social--ig">
           <i class="fab fa-instagram"></i> Instagram
         </a>
-        <a href="https://wa.me/260966755326" target="_blank" rel="noopener" class="sidebar-social sidebar-social--wa">
+        <a href="https://wa.me/260767023948" target="_blank" rel="noopener" class="sidebar-social sidebar-social--wa">
           <i class="fab fa-whatsapp"></i> WhatsApp
         </a>
         <a href="https://twitter.com/lfszambia" target="_blank" rel="noopener" class="sidebar-social sidebar-social--tw">

@@ -181,14 +181,14 @@
             <span class="dashboard-contact-item__icon" aria-hidden="true"><i class="fas fa-phone"></i></span>
             <div>
               <div class="dashboard-contact-item__label">Phone</div>
-              <a href="tel:+260966755326" class="dashboard-contact-item__value">+260 966 755 326</a>
+              <a href="tel:+260767023948" class="dashboard-contact-item__value">+260 767 023 948</a>
             </div>
           </li>
           <li class="dashboard-contact-item">
             <span class="dashboard-contact-item__icon" aria-hidden="true"><i class="fab fa-whatsapp"></i></span>
             <div>
               <div class="dashboard-contact-item__label">WhatsApp</div>
-              <a href="https://wa.me/260966755326" class="dashboard-contact-item__value" target="_blank" rel="noopener">Message LFS</a>
+              <a href="https://wa.me/260767023948" class="dashboard-contact-item__value" target="_blank" rel="noopener">Message LFS</a>
             </div>
           </li>
           <li class="dashboard-contact-item">

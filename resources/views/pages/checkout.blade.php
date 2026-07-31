@@ -236,8 +236,8 @@ $csrfToken  = $csrfToken  ?? '';
             <li class="checkout-pickup__instruction-item">
               <i class="fas fa-check-circle" aria-hidden="true"></i>
               <span>For assistance, contact us on
-                <a href="https://wa.me/260966755326" style="color:var(--green);">WhatsApp</a>
-                or call <strong>+260 966 755 326</strong>.</span>
+                <a href="https://wa.me/260767023948" style="color:var(--green);">WhatsApp</a>
+                or call <strong>+260 767 023 948</strong>.</span>
             </li>
           </ul>
         </div>
@@ -565,7 +565,7 @@ $csrfToken  = $csrfToken  ?? '';
           </div>
           <div class="checkout-trust__badge">
             <i class="fas fa-headset"></i>
-            <span>Support via WhatsApp: +260 966 755 326</span>
+            <span>Support via WhatsApp: +260 767 023 948</span>
           </div>
           <div class="checkout-trust__badge">
             <i class="fas fa-undo-alt"></i>

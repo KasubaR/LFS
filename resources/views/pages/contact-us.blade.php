@@ -108,9 +108,9 @@
           <i class="fas fa-phone-alt" aria-hidden="true"></i>
         </div>
         <div>
-          <div class="contact-row__label">President — Katai Chola</div>
+          <div class="contact-row__label">Phone</div>
           <div class="contact-row__value">
-            <a href="tel:+260966755326">+260 966 755 326</a>
+            <a href="tel:+260767023948">+260 767 023 948</a>
           </div>
         </div>
       </div>
