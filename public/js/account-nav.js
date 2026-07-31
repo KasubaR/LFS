@@ -153,6 +153,54 @@
     }
   }
 
+  // Submits a form via fetch and swaps #account-tab-panel with the response,
+  // same as swapTo() above but for POST forms that redirect back into the
+  // account area (e.g. changing plan). Falls back to a real submit on any
+  // failure so the action always completes, just without the soft-swap.
+  async function submitFormSwap(form) {
+    const main = document.querySelector(CONTENT_SELECTOR);
+    const livePanel = main?.querySelector(PANEL_SELECTOR);
+    if (!main || !livePanel) {
+      form.submit();
+      return;
+    }
+
+    showLoading(livePanel);
+
+    try {
+      const res = await fetch(form.action, {
+        method: form.method || 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: new FormData(form),
+      });
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+
+      const html = await res.text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const newPanel = doc.querySelector(PANEL_SELECTOR);
+      if (!newPanel) throw new Error('No matching content in response');
+
+      livePanel.innerHTML = newPanel.innerHTML;
+      document.title = doc.title;
+
+      // The profile card above the panel is intentionally left untouched by
+      // every swap (see file header) — but a plan change actually changes
+      // its "Plan" field, so patch that one value in directly.
+      const newPlanName = doc.querySelector('[data-account-plan-name]');
+      const livePlanName = document.querySelector('[data-account-plan-name]');
+      if (newPlanName && livePlanName) {
+        livePlanName.textContent = newPlanName.textContent;
+      }
+
+      scrollActiveAccountTabIntoView(livePanel);
+      window.dispatchEvent(new CustomEvent('lfs:account-nav', { detail: { container: livePanel } }));
+    } catch {
+      form.submit();
+    } finally {
+      hideLoading(livePanel);
+    }
+  }
+
   document.addEventListener('click', (e) => {
     if (e.defaultPrevented || e.button !== 0) return;
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -165,6 +213,13 @@
       markTabPending(link);
     }
     swapTo(link.href, { push: true });
+  });
+
+  document.addEventListener('change', (e) => {
+    const radio = e.target.closest('form[data-auto-submit-on-select] input');
+    if (!radio) return;
+
+    submitFormSwap(radio.form);
   });
 
   window.addEventListener('popstate', () => {

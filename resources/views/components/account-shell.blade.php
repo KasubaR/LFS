@@ -142,7 +142,7 @@
           @if($membership->plan)
             <div class="account-profile-card__meta-item">
               <dt>Plan</dt>
-              <dd>{{ $membership->plan->name }}</dd>
+              <dd data-account-plan-name>{{ $membership->plan->name }}</dd>
             </div>
           @endif
           @if($membership->expiry_date)

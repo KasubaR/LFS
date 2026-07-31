@@ -26,15 +26,10 @@
                 Your membership application is ready. Pay with Mobile Money to activate your membership.
               </p>
 
-              <p class="auth-account-card__payment-text">
-                Selected plan: <strong>{{ $membership->plan?->name ?? '—' }}</strong>
-                (K{{ number_format((float) ($membership->plan?->price ?? 0)) }})
-              </p>
-
               @if(count($changePlans ?? []) > 1)
                 <div class="account-change-plan">
                   <p class="auth-account-card__payment-text" style="margin-bottom:0.5rem;">
-                    <strong>Change plan</strong> — select a different plan below to switch instantly.
+                    <strong>1. Choose your plan</strong> — selecting a different plan switches it instantly.
                   </p>
                   <form action="{{ url('/account/plan/change') }}" method="post" class="space-y-4" data-auto-submit-on-select>
                     @csrf
@@ -63,12 +58,13 @@
                     </noscript>
                   </form>
                 </div>
-                <script>
-                  document.querySelectorAll('form[data-auto-submit-on-select] input[name="plan_id"]').forEach((radio) => {
-                    radio.addEventListener('change', () => radio.form.requestSubmit());
-                  });
-                </script>
+                <hr class="my-5" style="border-color:rgba(15,15,15,0.08);">
               @endif
+
+              <p class="auth-account-card__payment-text" style="margin-bottom:0.5rem;">
+                <strong>{{ count($changePlans ?? []) > 1 ? '2. Pay for membership' : 'Pay for membership' }}</strong>
+                — {{ $membership->plan?->name ?? '—' }} (K{{ number_format((float) ($membership->plan?->price ?? 0)) }})
+              </p>
 
               <form id="account-payment-form" data-amount="{{ $membership->plan?->price ?? 0 }}">
                 @csrf
