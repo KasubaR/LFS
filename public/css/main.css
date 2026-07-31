@@ -1771,10 +1771,10 @@ body.mobile-nav-open {
     --section-py: 3.5rem;
   }
 
-  .lfs-nav { padding: 1rem 1.5rem; }
+  .lfs-nav { padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: flex-start; gap: 1rem; }
   .lfs-nav__links { display: none; }
   .lfs-nav__actions { display: none; }
-  .lfs-nav__hamburger { display: flex; }
+  .lfs-nav__hamburger { display: flex; order: -1; }
 
   .gallery-grid {
     grid-template-columns: repeat(2, 1fr);
