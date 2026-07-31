@@ -9,6 +9,7 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -29,6 +30,12 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         require_once app_path('Support/lfs_helpers.php');
+
+        // Some hosts still run MySQL/MariaDB without innodb_large_prefix, which
+        // caps indexed key length at 767 bytes — too small for a varchar(255)
+        // column under utf8mb4 (1020 bytes). 191 chars keeps every index under
+        // that limit regardless of host config.
+        Schema::defaultStringLength(191);
 
         Password::defaults(fn () => Password::min(8));
 
