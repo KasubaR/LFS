@@ -42,6 +42,65 @@
     return isAccountUrl(url) && url.href !== window.location.href;
   }
 
+  function scrollActiveAccountTabIntoView(root) {
+    const scope = root && root.querySelector ? root : document;
+    const list = scope.querySelector('.account-tabs__list');
+    const active = scope.querySelector('.account-tabs__link.is-active, .account-tabs__link[aria-current="page"]');
+    if (!list || !active) return;
+
+    // Soft-nav re-renders the chips and resets scrollLeft to 0; keep
+    // the selected chip in view on narrow screens.
+    const listRect = list.getBoundingClientRect();
+    const activeRect = active.getBoundingClientRect();
+    const nextLeft = list.scrollLeft
+      + (activeRect.left - listRect.left)
+      - (listRect.width - activeRect.width) / 2;
+
+    list.scrollTo({
+      left: Math.max(0, nextLeft),
+      behavior: 'auto',
+    });
+  }
+
+  function markTabPending(link) {
+    const list = link.closest('.account-tabs__list');
+    if (!list) return;
+
+    list.querySelectorAll('.account-tabs__link').forEach((tab) => {
+      tab.classList.remove('is-active', 'is-pending');
+      tab.removeAttribute('aria-current');
+    });
+
+    link.classList.add('is-active', 'is-pending');
+    link.setAttribute('aria-current', 'page');
+    scrollActiveAccountTabIntoView(document);
+  }
+
+  function showLoading(target) {
+    target.classList.add('is-loading');
+    target.setAttribute('aria-busy', 'true');
+
+    if (target.querySelector('.account-nav-loading')) return;
+
+    const el = document.createElement('div');
+    el.className = 'account-nav-loading';
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    el.innerHTML = ''
+      + '<div class="account-nav-loading__bar" aria-hidden="true"></div>'
+      + '<div class="account-nav-loading__body">'
+      +   '<span class="account-nav-loading__spinner" aria-hidden="true"></span>'
+      +   '<span class="account-nav-loading__text">Loading…</span>'
+      + '</div>';
+    target.appendChild(el);
+  }
+
+  function hideLoading(target) {
+    target.classList.remove('is-loading');
+    target.removeAttribute('aria-busy');
+    target.querySelector('.account-nav-loading')?.remove();
+  }
+
   async function swapTo(url, { push }) {
     const main = document.querySelector(CONTENT_SELECTOR);
     if (!main) {
@@ -56,7 +115,7 @@
     const controller = new AbortController();
     currentController = controller;
 
-    loadingTarget.classList.add('is-loading');
+    showLoading(loadingTarget);
 
     try {
       const res = await fetch(url, {
@@ -80,12 +139,17 @@
       }
 
       swapTarget.scrollIntoView({ block: 'start' });
+      scrollActiveAccountTabIntoView(swapTarget);
       window.dispatchEvent(new CustomEvent('lfs:account-nav', { detail: { container: swapTarget } }));
     } catch (err) {
       if (err.name === 'AbortError') return;
       window.location.href = url;
     } finally {
-      loadingTarget.classList.remove('is-loading');
+      // Only clear loading for the latest navigation — an aborted
+      // request must not remove the spinner for a newer one.
+      if (currentController === controller) {
+        hideLoading(loadingTarget);
+      }
     }
   }
 
@@ -97,6 +161,9 @@
     if (!isEligibleLink(link)) return;
 
     e.preventDefault();
+    if (link.closest('.account-tabs')) {
+      markTabPending(link);
+    }
     swapTo(link.href, { push: true });
   });
 
@@ -104,6 +171,12 @@
     if (!isAccountUrl(new URL(window.location.href))) return;
     swapTo(window.location.href, { push: false });
   });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => scrollActiveAccountTabIntoView(document));
+  } else {
+    scrollActiveAccountTabIntoView(document);
+  }
 })();
 
 (() => {

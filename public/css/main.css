@@ -371,8 +371,8 @@ body.page-no-nav #main-content {
 
 /* Account soft-nav: brief dim on the tab panel while the next tab's
    content is fetched — the profile card above it never re-renders,
-   so it's excluded from this and never flashes */
-#account-tab-panel.is-loading,
+   so it's excluded from this and never flashes. Loading UI lives in
+   dashboard.css (.account-nav-loading). */
 #main-content.is-loading {
   opacity: 0.5;
   transition: opacity 0.15s ease;
@@ -602,6 +602,140 @@ body.page-no-nav #main-content {
 
 .lfs-nav__cta::after {
   display: none;
+}
+
+.lfs-nav__profile {
+  position: relative;
+}
+
+.lfs-nav__profile-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  max-width: 12rem;
+  padding: 0.2rem 0.55rem 0.2rem 0.2rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.lfs-nav__profile-toggle:hover,
+.lfs-nav__profile.is-open .lfs-nav__profile-toggle,
+.lfs-nav__profile--active .lfs-nav__profile-toggle {
+  background: rgba(126, 203, 147, 0.18);
+  border-color: var(--green-bright);
+  color: var(--green-bright);
+}
+
+.lfs-nav__profile-avatar {
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 0.85rem;
+}
+
+.lfs-nav__profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.lfs-nav__profile-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.lfs-nav__profile-chevron {
+  font-size: 0.65rem;
+  opacity: 0.75;
+  transition: transform var(--transition-fast);
+}
+
+.lfs-nav__profile.is-open .lfs-nav__profile-chevron {
+  transform: rotate(180deg);
+}
+
+.lfs-nav__profile-menu {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  right: 0;
+  min-width: 11.5rem;
+  padding: 0.4rem;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #141414;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.35);
+  z-index: 120;
+}
+
+.lfs-nav__profile-menu[hidden] {
+  display: none;
+}
+
+.lfs-nav__profile-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.88);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.lfs-nav__profile-item:hover {
+  background: rgba(126, 203, 147, 0.14);
+  color: #fff;
+}
+
+.lfs-nav__profile-item--danger {
+  color: #f0a0a0;
+}
+
+.lfs-nav__profile-item--danger:hover {
+  background: rgba(192, 57, 43, 0.18);
+  color: #ffc9c9;
+}
+
+.lfs-nav__profile-signout {
+  margin: 0;
+}
+
+.lfs-nav__mobile-account {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.lfs-nav__mobile-signout {
+  margin-top: 0.5rem;
+}
+
+.lfs-nav__mobile-signout-btn {
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--green);
+  color: var(--green);
+  cursor: pointer;
 }
 
 .lfs-nav__hamburger {
@@ -1771,10 +1905,32 @@ body.mobile-nav-open {
     --section-py: 3.5rem;
   }
 
-  .lfs-nav { padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .lfs-nav { padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
   .lfs-nav__links { display: none; }
-  .lfs-nav__actions { display: none; }
+  .lfs-nav__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .lfs-nav__actions > :not(.lfs-nav__profile) {
+    display: none !important;
+  }
   .lfs-nav__hamburger { display: flex; margin-left: auto; }
+  .lfs-nav__actions:has(.lfs-nav__profile) { margin-left: auto; }
+  .lfs-nav__actions:has(.lfs-nav__profile) + .lfs-nav__hamburger { margin-left: 0; }
+  .lfs-nav__profile-name,
+  .lfs-nav__profile-chevron {
+    display: none;
+  }
+  .lfs-nav__profile-toggle {
+    padding: 0;
+    width: 2.35rem;
+    height: 2.35rem;
+    justify-content: center;
+  }
+  .lfs-nav__profile-menu {
+    right: 0;
+  }
 
   .gallery-grid {
     grid-template-columns: repeat(2, 1fr);

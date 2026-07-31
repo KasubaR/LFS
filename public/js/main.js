@@ -125,6 +125,46 @@ function initNav() {
   if (hamburger && mobileMenu) {
     hamburger.addEventListener('click', () => {
       setMobileNavOpen(!LFS.state.navOpen);
+      closeNavProfileMenu();
+    });
+  }
+
+  // Profile dropdown (signed-in account menu)
+  const profile = $('.lfs-nav__profile');
+  const profileToggle = $('.lfs-nav__profile-toggle');
+  const profileMenu = $('#nav-profile-menu');
+
+  function closeNavProfileMenu() {
+    if (!profile || !profileToggle || !profileMenu) return;
+    profile.classList.remove('is-open');
+    profileToggle.setAttribute('aria-expanded', 'false');
+    profileMenu.hidden = true;
+  }
+
+  function openNavProfileMenu() {
+    if (!profile || !profileToggle || !profileMenu) return;
+    profile.classList.add('is-open');
+    profileToggle.setAttribute('aria-expanded', 'true');
+    profileMenu.hidden = false;
+  }
+
+  if (profile && profileToggle && profileMenu) {
+    profileToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (profile.classList.contains('is-open')) {
+        closeNavProfileMenu();
+      } else {
+        if (LFS.state.navOpen) setMobileNavOpen(false);
+        openNavProfileMenu();
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!profile.contains(e.target)) closeNavProfileMenu();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeNavProfileMenu();
     });
   }
 

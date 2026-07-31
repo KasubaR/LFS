@@ -17,6 +17,12 @@
   $navIsContact = str_starts_with($relativePath, '/contact');
   $navIsAuth    = in_array($relativePath, ['/login', '/create-account', '/forgot-password', '/account', '/email/verify', '/membership/apply'], true)
       || str_starts_with($relativePath, '/reset-password');
+  $navUser = auth()->user();
+  $navFirstName = $navUser
+      ? (explode(' ', trim((string) $navUser->name), 2)[0] ?: 'Account')
+      : '';
+  $navOnAccount = str_starts_with($relativePath, '/account');
+  $navAvatarUrl = $navUser?->avatarUrl();
 @endphp
 
 <nav class="lfs-nav" role="navigation" aria-label="Main navigation">
@@ -42,17 +48,44 @@
     <li><a href="{{ url('/contact') }}" @class(['nav-link', 'nav-link--active' => $navIsContact])>Contact Us</a></li>
   </ul>
 
-  <!-- Desktop auth actions (right) -->
+  <!-- Auth actions (right) -->
   <div class="lfs-nav__actions">
     @guest
     <a href="{{ url('/create-account') }}" class="lfs-nav__cta">Join Now</a>
     <a href="{{ url('/login') }}" @class(['nav-link', 'nav-link--active' => $navIsAuth && $relativePath === '/login'])>Sign In</a>
     @else
-    <a href="{{ url('/account') }}" @class(['nav-link', 'nav-link--active' => $relativePath === '/account'])>Account</a>
-    <form action="{{ url('/logout') }}" method="post" style="display:inline;">
-      @csrf
-      <button type="submit" class="lfs-nav__cta" style="background:transparent;border:1px solid var(--green);color:var(--green);cursor:pointer;">Sign Out</button>
-    </form>
+    <div class="lfs-nav__profile{{ $navOnAccount ? ' lfs-nav__profile--active' : '' }}">
+      <button
+        type="button"
+        class="lfs-nav__profile-toggle"
+        aria-expanded="false"
+        aria-haspopup="true"
+        aria-controls="nav-profile-menu"
+      >
+        <span class="lfs-nav__profile-avatar" aria-hidden="true">
+          @if($navAvatarUrl)
+            <img src="{{ $navAvatarUrl }}" alt="" width="32" height="32">
+          @else
+            <i class="fas fa-user"></i>
+          @endif
+        </span>
+        <span class="lfs-nav__profile-name">{{ $navFirstName }}</span>
+        <i class="fas fa-chevron-down lfs-nav__profile-chevron" aria-hidden="true"></i>
+      </button>
+      <div id="nav-profile-menu" class="lfs-nav__profile-menu" hidden role="menu">
+        <a href="{{ url('/account') }}" class="lfs-nav__profile-item" role="menuitem">
+          <i class="fas fa-id-card" aria-hidden="true"></i>
+          My Account
+        </a>
+        <form action="{{ url('/logout') }}" method="post" class="lfs-nav__profile-signout">
+          @csrf
+          <button type="submit" class="lfs-nav__profile-item lfs-nav__profile-item--danger" role="menuitem">
+            <i class="fas fa-right-from-bracket" aria-hidden="true"></i>
+            Sign Out
+          </button>
+        </form>
+      </div>
+    </div>
     @endguest
   </div>
 
@@ -80,10 +113,13 @@
   </a>
   <a href="{{ url('/login') }}">Sign In</a>
   @else
-  <a href="{{ url('/account') }}">Account</a>
-  <form action="{{ url('/logout') }}" method="post" style="margin-top:0.5rem;">
+  <a href="{{ url('/account') }}" class="lfs-nav__mobile-account">
+    <i class="fas fa-user" aria-hidden="true"></i>
+    My Account
+  </a>
+  <form action="{{ url('/logout') }}" method="post" class="lfs-nav__mobile-signout">
     @csrf
-    <button type="submit" class="lfs-nav__mobile-cta" style="width:100%;background:transparent;border:1px solid var(--green);color:var(--green);cursor:pointer;">
+    <button type="submit" class="lfs-nav__mobile-cta lfs-nav__mobile-signout-btn">
       Sign Out
     </button>
   </form>
