@@ -1,0 +1,353 @@
+openapi: 3.1.0
+
+info:
+  title: LFS Partner API
+  version: "1.0.0"
+  summary: Member verification for LFS event websites.
+  description: |
+    Lets an LFS event website confirm that someone registering is a paid-up
+    Lusaka Fitness Squad member, so it can apply the LFS member discount at
+    checkout.
+
+    The API answers about **one person at a time**. There is no endpoint that
+    returns the member list — event sites never hold a copy of member data.
+
+    ## Getting a key
+    LFS issues one API key per event website from the admin panel. The key is
+    shown once at creation and stored only as a hash. Contact LFS to be issued
+    one, and treat it like a password: server-side only, never in browser
+    JavaScript or a public repository.
+
+    ## Credential format
+    `Authorization: Bearer lfsk_<key_id>.<secret>`
+
+    ## Fail closed
+    If this API is unreachable, times out, or returns a non-200 status, treat
+    the registrant as **not a member** and charge the full price. Granting the
+    discount on error means an outage discounts every registration. Offer event
+    staff a manual override instead.
+
+  contact:
+    name: Lusaka Fitness Squad
+    email: info@lfszambia.run
+
+servers:
+  - url: https://lfszambia.run/api/v1
+    description: Production
+
+security:
+  - BearerKey: []
+
+tags:
+  - name: Members
+    description: Membership verification.
+
+paths:
+  /members/verify:
+    post:
+      tags: [Members]
+      summary: Verify a membership at checkout
+      operationId: verifyMember
+      description: |
+        Checks a membership number against a second factor — the member's
+        surname or the email address on their LFS account.
+
+        A second factor is **required**. Membership numbers are issued
+        sequentially, so a number on its own is guessable and is never accepted
+        as proof by itself.
+
+        This is a `POST` so that surnames and email addresses never appear in
+        URLs, server access logs, or proxy caches.
+
+        Requires the `members:verify` scope.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyRequest'
+            examples:
+              bySurname:
+                summary: Membership number + surname
+                value:
+                  membership_number: "LFS-000412"
+                  surname: "Mwale"
+              byEmail:
+                summary: Membership number + email
+                value:
+                  membership_number: "LFS-000412"
+                  email: "chanda@example.com"
+      responses:
+        '200':
+          description: |
+            The lookup completed. This is returned for members **and**
+            non-members — check `data.is_member`, not the HTTP status. A 404 is
+            never used for "not a member" because it is indistinguishable from
+            a misconfigured base URL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyResponse'
+              examples:
+                activeMember:
+                  summary: Paid-up member — apply the discount
+                  value:
+                    data:
+                      is_member: true
+                      status: active
+                      membership_number: "LFS-000412"
+                      first_name: "Chanda"
+                      satellite: "Lusaka Central"
+                      expires_on: "2027-03-14"
+                      plan: "Annual"
+                      verified_at: "2026-07-31T09:12:44+00:00"
+                expiredMember:
+                  summary: Lapsed — no discount, but you can prompt them to renew
+                  value:
+                    data:
+                      is_member: false
+                      status: expired
+                      membership_number: "LFS-000412"
+                      first_name: "Chanda"
+                      satellite: "Lusaka Central"
+                      expires_on: "2026-03-14"
+                      plan: "Annual"
+                      verified_at: "2026-07-31T09:12:44+00:00"
+                notFound:
+                  summary: No match — also returned when the second factor is wrong
+                  value:
+                    data:
+                      is_member: false
+                      status: not_found
+                      membership_number: null
+                      first_name: null
+                      satellite: null
+                      expires_on: null
+                      plan: null
+                      verified_at: "2026-07-31T09:12:44+00:00"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /members/token/{token}:
+    get:
+      tags: [Members]
+      summary: Look up a membership by card token
+      operationId: getMemberByToken
+      description: |
+        Resolves the token embedded in the QR code on an LFS membership card.
+        For scanning at a registration desk.
+
+        No second factor is needed: the token is an unguessable UUID. It is a
+        `GET` because the token is not personal data.
+
+        Requires the `members:read.token` scope.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          description: The UUID from the member's card QR code.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The lookup completed. Check `data.is_member`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+components:
+
+  securitySchemes:
+    BearerKey:
+      type: http
+      scheme: bearer
+      description: |
+        `Authorization: Bearer lfsk_<key_id>.<secret>`
+
+        Issued per event website. Scoped, rate limited, and revocable. May also
+        be pinned to a fixed server IP address on request.
+
+  schemas:
+
+    VerifyRequest:
+      type: object
+      required: [membership_number]
+      properties:
+        membership_number:
+          type: string
+          maxLength: 40
+          description: As printed on the member's card, e.g. `LFS-000412`. Case and surrounding whitespace are ignored.
+          examples: ["LFS-000412"]
+        surname:
+          type: [string, "null"]
+          maxLength: 120
+          description: |
+            The member's surname. Case-insensitive, and multi-word surnames such
+            as "van der Merwe" are accepted. Required unless `email` is given.
+          examples: ["Mwale"]
+        email:
+          type: [string, "null"]
+          format: email
+          maxLength: 255
+          description: |
+            The email address on the member's LFS account. Case-insensitive.
+            Required unless `surname` is given.
+          examples: ["chanda@example.com"]
+
+    VerifyResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/VerificationResult'
+
+    VerificationResult:
+      type: object
+      required: [is_member, status, verified_at]
+      properties:
+        is_member:
+          type: boolean
+          description: |
+            **The only field to branch on when deciding the discount.** True
+            only when the membership is active and unexpired.
+        status:
+          type: string
+          enum: [active, expired, cancelled, pending_payment, not_found]
+          description: |
+            Why the answer is what it is, so you can show a useful message:
+
+            - `active` — paid up. Apply the discount.
+            - `expired` — was a member; membership lapsed. Prompt them to renew.
+            - `cancelled` — membership was cancelled.
+            - `pending_payment` — applied but has not paid yet.
+            - `not_found` — no match. Also returned when the membership number
+              exists but the surname/email does not match, so that a wrong
+              second factor cannot be used to confirm a number is real.
+        membership_number:
+          type: [string, "null"]
+          description: Echoed back on a match; `null` when `status` is `not_found`.
+        first_name:
+          type: [string, "null"]
+          description: |
+            First name only, for on-screen confirmation ("Discount applied for
+            Chanda"). The API deliberately does not return full names, email
+            addresses, or phone numbers.
+        satellite:
+          type: [string, "null"]
+          description: The member's LFS satellite group, if they belong to one.
+        expires_on:
+          type: [string, "null"]
+          format: date
+          description: Membership expiry date. Useful for a "renew" prompt when `status` is `expired`.
+        plan:
+          type: [string, "null"]
+          description: Membership plan name, e.g. `Annual`.
+        verified_at:
+          type: string
+          format: date-time
+          description: When LFS answered. Store this if you need an audit trail of applied discounts.
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                - unauthorized
+                - credential_revoked
+                - credential_expired
+                - ip_not_allowed
+                - insufficient_scope
+                - invalid_request
+                - rate_limited
+            message:
+              type: string
+              description: Human-readable explanation. Safe to log; do not show to registrants.
+            fields:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+              description: Present on `invalid_request` only — per-field validation messages.
+
+  responses:
+
+    Unauthorized:
+      description: |
+        Missing, malformed, revoked, or expired key. `unauthorized` is
+        deliberately returned for both an unknown key and a wrong secret.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: unauthorized
+              message: Invalid or missing API credentials.
+
+    Forbidden:
+      description: The key is valid but lacks the required scope, or is pinned to a different IP address.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: insufficient_scope
+              message: This API key does not have the "members:verify" scope.
+
+    InvalidRequest:
+      description: |
+        The request body failed validation — most often a missing second factor.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: invalid_request
+              message: Provide either a surname or an email address.
+              fields:
+                surname: ["Provide either a surname or an email address."]
+
+    RateLimited:
+      description: |
+        Per-key rate limit exceeded (60 requests/minute by default). Retry after
+        the number of seconds in the `Retry-After` header. Do not retry in a
+        tight loop — fail closed and let the registrant try again.
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Seconds until the limit resets.
+        X-RateLimit-Limit:
+          schema: { type: integer }
+        X-RateLimit-Remaining:
+          schema: { type: integer }
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: rate_limited
+              message: Rate limit exceeded. Retry in 42 seconds.

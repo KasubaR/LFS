@@ -1,0 +1,574 @@
+/* Auth pages — complements main.css lfs-form */
+
+/* White card uses light form tokens (--text-muted in main.css is for dark sections) */
+.auth-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--off-white);
+}
+
+.auth-split__visual {
+  position: relative;
+  min-height: 100%;
+  overflow: hidden;
+}
+
+.auth-split__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 30%;
+}
+
+.auth-split__visual-overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(155deg, rgba(15, 15, 15, 0.82) 0%, rgba(30, 58, 42, 0.72) 45%, rgba(74, 124, 89, 0.55) 100%),
+    linear-gradient(to top, rgba(15, 15, 15, 0.65) 0%, transparent 50%);
+}
+
+.auth-split__visual-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 100%;
+  padding: clamp(2rem, 5vw, 3.5rem);
+}
+
+.auth-split__brand {
+  display: inline-flex;
+  width: fit-content;
+}
+
+.auth-split__brand img {
+  width: clamp(7rem, 14vw, 10rem);
+  height: auto;
+  filter: drop-shadow(0 4px 24px rgba(0, 0, 0, 0.35));
+}
+
+.auth-split__copy {
+  max-width: 28ch;
+  margin-top: auto;
+  margin-bottom: auto;
+  padding: 2rem 0;
+}
+
+.auth-split__eyebrow {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--green-bright);
+  margin-bottom: 0.85rem;
+}
+
+.auth-split__tagline {
+  font-family: var(--font-display);
+  font-size: clamp(2.4rem, 5vw, 3.75rem);
+  line-height: 0.95;
+  letter-spacing: 0.04em;
+  color: #fff;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.35);
+}
+
+.auth-split__motto {
+  margin-top: 1rem;
+  font-size: 1.05rem;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.6;
+}
+
+.auth-split__motto em {
+  font-style: italic;
+  color: var(--orange-light);
+}
+
+.auth-split__flag {
+  margin-top: auto;
+  max-width: 12rem;
+}
+
+.auth-split__panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(2rem, 5vw, 3.5rem) clamp(1.5rem, 5vw, 4rem);
+  background:
+    radial-gradient(ellipse at top right, rgba(74, 124, 89, 0.08) 0%, transparent 55%),
+    var(--warm-white);
+}
+
+.auth-split__panel-inner {
+  width: 100%;
+  max-width: 28rem;
+}
+
+.auth-split__breadcrumb ol {
+  color: rgba(15, 15, 15, 0.42);
+  margin-bottom: 1.5rem;
+}
+
+.auth-split__breadcrumb a {
+  color: rgba(15, 15, 15, 0.55);
+}
+
+.auth-split__breadcrumb a:hover {
+  color: var(--green);
+}
+
+.auth-split__breadcrumb .fas {
+  color: rgba(15, 15, 15, 0.28);
+}
+
+.auth-split__header {
+  margin-bottom: 1.5rem;
+}
+
+.auth-split__title {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  line-height: 1;
+  letter-spacing: 0.03em;
+  color: var(--black);
+}
+
+.auth-split__subtitle {
+  margin-top: 0.65rem;
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: rgba(15, 15, 15, 0.58);
+  max-width: 42ch;
+}
+
+.auth-split__card {
+  box-shadow:
+    0 1px 2px rgba(15, 15, 15, 0.04),
+    0 12px 40px rgba(15, 15, 15, 0.08);
+}
+
+.auth-form__remember {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0;
+  font-size: 0.9rem;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+  color: rgba(15, 15, 15, 0.75);
+  cursor: pointer;
+}
+
+.auth-card.lfs-form label.auth-form__remember {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.auth-card.lfs-form .auth-form__remember input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  min-width: 1rem;
+  padding: 0;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--green);
+  cursor: pointer;
+}
+
+@media (max-width: 960px) {
+  .auth-split {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .auth-split__visual {
+    min-height: clamp(220px, 36vh, 320px);
+  }
+
+  .auth-split__visual-content {
+    padding: 1.5rem;
+  }
+
+  .auth-split__copy {
+    margin: 0;
+    padding: 0.5rem 0;
+  }
+
+  .auth-split__tagline {
+    font-size: 2rem;
+  }
+
+  .auth-split__motto {
+    display: none;
+  }
+
+  .auth-split__flag {
+    display: none;
+  }
+
+  .auth-split__panel {
+    align-items: flex-start;
+    padding-top: 2rem;
+    padding-bottom: 2.5rem;
+  }
+}
+
+/* White card uses light form tokens (--text-muted in main.css is for dark sections) */
+.auth-card.lfs-form label {
+  color: rgba(15, 15, 15, 0.6);
+}
+
+.auth-card.lfs-form input,
+.auth-card.lfs-form select,
+.auth-card.lfs-form textarea {
+  background: #fff;
+  color: var(--black);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+.auth-card.lfs-form input::placeholder,
+.auth-card.lfs-form textarea::placeholder {
+  color: rgba(15, 15, 15, 0.4);
+}
+
+.auth-card.lfs-form select option {
+  background: #fff;
+  color: var(--black);
+}
+
+.auth-section__inner {
+  max-width: 32rem;
+  margin: 0 auto;
+}
+
+.auth-card {
+  padding: 2rem;
+  background: #fff;
+  border: 1px solid rgba(74, 124, 89, 0.15);
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 32px rgba(15, 15, 15, 0.06);
+}
+
+.auth-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+  margin-bottom: 1.25rem;
+}
+
+.auth-alert--success {
+  background: rgba(74, 124, 89, 0.12);
+  color: var(--green);
+  border: 1px solid rgba(74, 124, 89, 0.25);
+}
+
+.auth-alert--error {
+  background: rgba(192, 57, 43, 0.1);
+  color: #c0392b;
+  border: 1px solid rgba(192, 57, 43, 0.25);
+}
+
+.lfs-form .form-group--error input,
+.lfs-form .form-group--error select {
+  border-color: #c0392b;
+}
+
+.lfs-form .form-group__error {
+  color: #c0392b;
+  font-size: 0.82rem;
+  margin-top: 0.35rem;
+}
+
+.auth-form__password-wrap {
+  position: relative;
+}
+
+.auth-form__input-wrap {
+  position: relative;
+}
+
+.auth-form__input-wrap input {
+  padding-right: 2.75rem;
+}
+
+.auth-form__eye {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--green);
+  cursor: pointer;
+  padding: 0.25rem;
+}
+
+.auth-links {
+  margin-top: 1.25rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: rgba(15, 15, 15, 0.65);
+}
+
+.auth-links a {
+  color: var(--green);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.auth-links a:hover {
+  color: var(--orange);
+}
+
+.auth-plan-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.auth-plan-option {
+  display: block;
+  cursor: pointer;
+}
+
+.auth-plan-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.auth-plan-option__card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(74, 124, 89, 0.25);
+  border-radius: 0.5rem;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.auth-plan-option input:checked + .auth-plan-option__card {
+  border-color: var(--green);
+  background: rgba(74, 124, 89, 0.08);
+}
+
+.auth-plan-option__name {
+  font-weight: 600;
+  color: var(--black);
+}
+
+.auth-plan-option__meta {
+  font-size: 0.85rem;
+  color: rgba(15, 15, 15, 0.55);
+}
+
+.auth-plan-option__price {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.5rem;
+  color: var(--green);
+}
+
+.auth-account-card {
+  padding: 1.25rem;
+  border: 1px solid rgba(74, 124, 89, 0.2);
+  border-radius: 0.5rem;
+  background: rgba(74, 124, 89, 0.04);
+  margin-top: 1rem;
+}
+
+.auth-account-card__label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(15, 15, 15, 0.5);
+}
+
+.auth-account-card__value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--black);
+  margin-top: 0.2rem;
+}
+
+.auth-status-badge {
+  display: inline-block;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.auth-status-badge--active {
+  background: rgba(74, 124, 89, 0.15);
+  color: var(--green);
+}
+
+.auth-status-badge--pending {
+  background: rgba(224, 123, 57, 0.15);
+  color: var(--orange);
+}
+
+.auth-status-badge--draft {
+  background: rgba(15, 15, 15, 0.08);
+  color: rgba(15, 15, 15, 0.6);
+}
+
+.auth-status-badge--expired {
+  background: rgba(201, 69, 56, 0.12);
+  color: var(--red);
+}
+
+.auth-account-card--payment {
+  margin-top: 1.5rem;
+}
+
+.auth-account-card__payment-text {
+  color: rgba(15, 15, 15, 0.7);
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.auth-account-card__payment-note {
+  font-size: 0.8rem;
+  color: rgba(15, 15, 15, 0.5);
+  margin-top: 0.75rem;
+  text-align: center;
+}
+
+.auth-account-card__empty-text {
+  color: rgba(15, 15, 15, 0.7);
+  line-height: 1.6;
+}
+
+.auth-account-card__link {
+  color: var(--green);
+}
+
+.auth-links--account {
+  margin-top: 1.5rem;
+}
+
+.auth-logout-form {
+  display: inline;
+}
+
+/* ── Membership payment panel (Lenco mobile money) ── */
+.auth-payment-provider-grid {
+  display: grid;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.auth-payment-provider {
+  display: block;
+  cursor: pointer;
+}
+
+.auth-payment-provider input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.auth-payment-provider__card {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1rem;
+  border: 1px solid rgba(74, 124, 89, 0.25);
+  border-radius: 0.5rem;
+  font-weight: 600;
+  color: var(--black);
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.auth-payment-provider input:checked + .auth-payment-provider__card {
+  border-color: var(--green);
+  background: rgba(74, 124, 89, 0.08);
+}
+
+.auth-payment-phone-wrap {
+  display: none;
+  margin-bottom: 1rem;
+}
+
+.auth-payment-phone-wrap.is-visible {
+  display: block;
+}
+
+.auth-payment-result {
+  display: none;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  background: rgba(74, 124, 89, 0.08);
+  border: 1px solid rgba(74, 124, 89, 0.2);
+  margin-top: 1rem;
+}
+
+.auth-payment-result.is-visible {
+  display: block;
+}
+
+.auth-payment-result__title {
+  font-weight: 600;
+  color: var(--black);
+  margin-bottom: 0.4rem;
+}
+
+.auth-payment-result__text {
+  font-size: 0.9rem;
+  color: rgba(15, 15, 15, 0.7);
+  margin-bottom: 0.6rem;
+}
+
+.auth-payment-result__status {
+  font-size: 0.85rem;
+  color: rgba(15, 15, 15, 0.6);
+}
+
+.auth-payment-error {
+  display: none;
+  padding: 0.85rem 1rem;
+  border-radius: 0.5rem;
+  background: rgba(201, 69, 56, 0.08);
+  border: 1px solid rgba(201, 69, 56, 0.25);
+  color: var(--red);
+  font-size: 0.9rem;
+  margin-top: 1rem;
+}
+
+.auth-payment-error.is-visible {
+  display: block;
+}
+
+/* ── Renewal panel ── */
+.auth-renewal-panel {
+  margin-top: 1rem;
+}
+
+.auth-renewal-panel__text {
+  color: rgba(15, 15, 15, 0.7);
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.auth-logout-form__btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--green);
+  font: inherit;
+  cursor: pointer;
+  font-weight: 500;
+}

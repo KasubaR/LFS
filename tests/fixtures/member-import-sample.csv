@@ -1,0 +1,4 @@
+Ref,Registration date,Registration time,Full names,Email,Phone,Status,Net amount,Sex,Nationality,T-shirt size,Type,Satellite,Payment plan,Town
+13239,15/01/2025,10:30:00,Alice Import,alice.import@test.com,0977000001,Paid,1000,Female,Zambian,M,New,Woodies,Annual,Lusaka
+13240,20/03/2025,14:00:00,Bob Import,bob.import@test.com,0977000002,Paid,250,Male,Zambian,L,Renewal,North Side,Quarter,Ndola
+13241,01/06/2025,09:15:00,Carol Skip,carol.skip@test.com,0977000003,Pending,1000,Female,Zambian,XL,New,Woodies,Annual,Kitwe

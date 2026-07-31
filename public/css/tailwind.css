@@ -1,0 +1,275 @@
+/*
+  ============================================================
+  LFS — Lusaka Fitness Squad | Tailwind Configuration Layer
+  ============================================================
+  This file extends Tailwind with LFS brand tokens and
+  Zambian flag colors as named utility classes.
+
+  HOW TO USE:
+  • In a build-tool project (Vite, Next.js, etc.) replace the
+    CDN <script> tag with a proper Tailwind build and import
+    this file as your CSS entry point alongside main.css.
+  • For CDN usage (current setup), this file adds CSS custom
+    property overrides and extra utility classes on top of the
+    Tailwind CDN bundle. Load it AFTER the Tailwind CDN script.
+
+  STRUCTURE:
+  1. Tailwind CDN script tag reference (see index.html)
+  2. tailwind.config  — brand tokens injected via window obj
+  3. Custom utilities — Tailwind @layer-style classes
+  ============================================================
+*/
+
+/* ── TAILWIND THEME EXTENSION (CDN mode via window.tailwind) ──
+   The matching <script> block in index.html injects these
+   tokens into the Tailwind CDN runtime so you can use
+   classes like: bg-lfs-green, text-flag-red, etc.
+   ─────────────────────────────────────────────────────────── */
+
+/*
+  window.tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          // Zambian Flag
+          'flag-black':  '#0f0f0f',
+          'flag-green':  '#198a4e',
+          'flag-red':    '#c0392b',
+          'flag-orange': '#e07b39',
+          // LFS Brand
+          'lfs-green':        '#4a7c59',
+          'lfs-green-light':  '#6aad7e',
+          'lfs-green-bright': '#7ecb93',
+          'lfs-dark-green':   '#1e3a2a',
+          'lfs-red':          '#c0392b',
+          'lfs-red-light':    '#e05252',
+          'lfs-orange':       '#e07b39',
+          'lfs-orange-light': '#f0a060',
+          'lfs-gold':         '#c9a84c',
+          'lfs-off-white':    '#f5f2ec',
+          'lfs-warm-white':   '#faf8f4',
+          'lfs-muted':        '#6b6b6b',
+        },
+        fontFamily: {
+          display: ['Bebas Neue', 'sans-serif'],
+          body:    ['DM Sans', 'sans-serif'],
+        },
+        fontSize: {
+          'display-xl': ['clamp(4rem, 10vw, 9rem)',  { lineHeight: '0.92' }],
+          'display-lg': ['clamp(3rem, 6vw, 6rem)',   { lineHeight: '1' }],
+          'display-md': ['clamp(1.75rem, 3vw, 2.5rem)', { lineHeight: '1.1' }],
+          'label':      ['0.7rem', { letterSpacing: '0.15em', fontWeight: '600' }],
+        },
+        spacing: {
+          'section': 'clamp(1.5rem, 6vw, 4rem)',
+        },
+        borderRadius: {
+          'lfs': '0.25rem',
+        },
+        boxShadow: {
+          'card':       '0 4px 24px rgba(0,0,0,0.10)',
+          'hover':      '0 12px 40px rgba(0,0,0,0.18)',
+          'green-glow': '0 4px 20px rgba(74,124,89,0.30)',
+          'red-glow':   '0 4px 20px rgba(192,57,43,0.25)',
+          'orange-glow':'0 4px 20px rgba(224,123,57,0.25)',
+        },
+        transitionDuration: {
+          '150': '150ms',
+          '300': '300ms',
+          '600': '600ms',
+        },
+        animation: {
+          'fade-up':      'fadeUp 0.8s ease forwards',
+          'fade-in':      'fadeIn 1s ease forwards',
+          'pulse-custom': 'pulse 2s ease infinite',
+          'grid-move':    'gridMove 20s linear infinite',
+        },
+        keyframes: {
+          fadeUp:   { from: { opacity:'0', transform:'translateY(30px)' }, to: { opacity:'1', transform:'translateY(0)' } },
+          fadeIn:   { from: { opacity:'0' }, to: { opacity:'1' } },
+          pulse:    { '0%,100%': { opacity:'1', transform:'scale(1)' }, '50%': { opacity:'0.4', transform:'scale(1.4)' } },
+          gridMove: { '0%': { transform:'translate(0,0)' }, '100%': { transform:'translate(50px,50px)' } },
+        },
+        backgroundImage: {
+          'flag-gradient': 'linear-gradient(to right, #198a4e 0%, #198a4e 25%, #c0392b 25%, #c0392b 50%, #0f0f0f 50%, #0f0f0f 75%, #e07b39 75%, #e07b39 100%)',
+          'green-gradient': 'linear-gradient(135deg, #4a7c59, #7ecb93)',
+          'dark-gradient':  'linear-gradient(135deg, #0f0f0f, #1e3a2a)',
+          'grid-pattern':   'linear-gradient(rgba(74,124,89,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(74,124,89,0.05) 1px, transparent 1px)',
+        },
+      }
+    }
+  }
+*/
+
+/* ── ZAMBIAN FLAG UTILITY CLASSES ──────────────────────────── */
+
+/* Text */
+.text-flag-green    { color: #198a4e; }
+.text-flag-red      { color: #c0392b; }
+.text-flag-orange   { color: #e07b39; }
+.text-lfs-green     { color: #4a7c59; }
+.text-lfs-bright    { color: #7ecb93; }
+.text-lfs-gold      { color: #c9a84c; }
+
+/* Backgrounds */
+.bg-flag-green      { background-color: #198a4e; }
+.bg-flag-red        { background-color: #c0392b; }
+.bg-flag-orange     { background-color: #e07b39; }
+.bg-lfs-green       { background-color: #4a7c59; }
+.bg-lfs-green-light { background-color: #6aad7e; }
+.bg-lfs-dark-green  { background-color: #1e3a2a; }
+.bg-lfs-off-white   { background-color: #f5f2ec; }
+.bg-lfs-warm-white  { background-color: #faf8f4; }
+
+/* Borders */
+.border-flag-green  { border-color: #198a4e; }
+.border-flag-red    { border-color: #c0392b; }
+.border-flag-orange { border-color: #e07b39; }
+.border-lfs-green   { border-color: #4a7c59; }
+
+/* Hover variants */
+.hover\:bg-lfs-green:hover       { background-color: #4a7c59; }
+.hover\:bg-lfs-green-light:hover { background-color: #6aad7e; }
+.hover\:bg-flag-red:hover        { background-color: #c0392b; }
+.hover\:bg-flag-orange:hover     { background-color: #e07b39; }
+.hover\:text-lfs-bright:hover    { color: #7ecb93; }
+.hover\:text-flag-orange:hover   { color: #e07b39; }
+.hover\:border-lfs-green:hover   { border-color: #4a7c59; }
+.hover\:border-flag-red:hover    { border-color: #c0392b; }
+
+/* ── TYPOGRAPHY EXTENSIONS ──────────────────────────────────── */
+
+.font-display { font-family: 'Bebas Neue', sans-serif; }
+.font-body    { font-family: 'DM Sans', sans-serif; }
+
+.tracking-lfs  { letter-spacing: 0.15em; }
+.tracking-wide-lfs { letter-spacing: 0.08em; }
+.leading-lfs   { line-height: 0.92; }
+
+/* ── ANIMATION HELPERS ──────────────────────────────────────── */
+
+.animate-fade-up {
+  animation: fadeUp 0.8s ease forwards;
+}
+
+.animate-fade-in {
+  animation: fadeIn 1s ease forwards;
+}
+
+.animate-pulse-dot {
+  animation: pulse 2s ease infinite;
+}
+
+.animate-grid {
+  animation: gridMove 20s linear infinite;
+}
+
+/* Staggered animation delays — use with animate-fade-up */
+.delay-0   { animation-delay: 0s; }
+.delay-1   { animation-delay: 0.15s; }
+.delay-2   { animation-delay: 0.30s; }
+.delay-3   { animation-delay: 0.45s; }
+.delay-4   { animation-delay: 0.60s; }
+.delay-5   { animation-delay: 0.75s; }
+
+/* ── COMPONENT HELPERS (Tailwind-style single purpose) ─────── */
+
+/* Grid overlay background */
+.bg-grid-overlay {
+  background-image:
+    linear-gradient(rgba(74,124,89,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74,124,89,0.05) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+/* Gradient text */
+.text-gradient-lfs {
+  background: linear-gradient(135deg, #7ecb93, #4a7c59);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-flag {
+  background: linear-gradient(135deg, #198a4e, #e07b39);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Outline stroke text (hero display) */
+.text-stroke-white {
+  -webkit-text-stroke: 2px rgba(255, 255, 255, 0.25);
+  color: transparent;
+}
+
+.text-stroke-green {
+  -webkit-text-stroke: 2px #4a7c59;
+  color: transparent;
+}
+
+/* Backdrop nav blur */
+.backdrop-nav {
+  background: rgba(15, 15, 15, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Flag gradient bar (horizontal) */
+.flag-bar {
+  background: linear-gradient(
+    to right,
+    #198a4e  0%,  #198a4e  25%,
+    #c0392b  25%, #c0392b  50%,
+    #0f0f0f  50%, #0f0f0f  75%,
+    #e07b39  75%, #e07b39  100%
+  );
+}
+
+/* Flag gradient border top shorthand */
+.border-top-flag {
+  border-top: 3px solid transparent;
+  border-image: linear-gradient(
+    to right,
+    #198a4e  0%,  #198a4e  25%,
+    #c0392b  25%, #c0392b  50%,
+    #0f0f0f  50%, #0f0f0f  75%,
+    #e07b39  75%, #e07b39  100%
+  ) 1;
+}
+
+/* Zambian flag vertical stripe (hero right edge) */
+.flag-stripe-vertical {
+  display: flex;
+  flex-direction: column;
+  width: 4px;
+}
+
+.flag-stripe-vertical span { flex: 1; }
+.flag-stripe-vertical span:nth-child(1) { background: #198a4e; }
+.flag-stripe-vertical span:nth-child(2) { background: #c0392b; }
+.flag-stripe-vertical span:nth-child(3) { background: #0f0f0f; }
+.flag-stripe-vertical span:nth-child(4) { background: #e07b39; }
+
+/* Glow shadows */
+.shadow-green-glow  { box-shadow: 0 4px 20px rgba(74, 124, 89, 0.30); }
+.shadow-red-glow    { box-shadow: 0 4px 20px rgba(192, 57, 43, 0.25); }
+.shadow-orange-glow { box-shadow: 0 4px 20px rgba(224, 123, 57, 0.25); }
+
+/* ── RESPONSIVE OVERRIDES ────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .mobile\:hidden { display: none !important; }
+  .mobile\:block  { display: block !important; }
+  .mobile\:flex   { display: flex !important; }
+}
+
+@media (min-width: 901px) {
+  .desktop\:hidden { display: none !important; }
+}
+
+/* ── PRINT ───────────────────────────────────────────────────── */
+
+@media print {
+  .no-print { display: none !important; }
+}

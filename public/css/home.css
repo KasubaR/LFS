@@ -1,0 +1,593 @@
+/* ============================================================
+   LFS — home.css
+   Page-specific styles for the Home / Landing page.
+   Extends main.css — do NOT duplicate base tokens here.
+   Load order: tailwind.css → main.css → home.css
+   ============================================================ */
+
+/* ── HERO (background image, compact height) ────────────────── */
+.home-hero--compact {
+  min-height: 65vh;
+}
+
+/* Featured event(s) — name + date; syncs with hero image slider */
+.home-hero__featured-wrap {
+  margin-bottom: 0.5rem;
+  transition: opacity 0.45s ease, max-height 0.45s ease, margin 0.45s ease;
+}
+
+.home-hero__featured-wrap--conceal {
+  opacity: 0;
+  max-height: 0;
+  margin-bottom: 0;
+  overflow: hidden;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.home-hero__featured-panels {
+  position: relative;
+  /* Must clear headline + meta + CTA (panels are stacked absolutely) */
+  min-height: clamp(12rem, 36vw, 24rem);
+}
+
+.home-hero__featured {
+  margin-bottom: 0;
+}
+
+.home-hero__featured-panel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1s ease;
+  z-index: 0;
+}
+
+.home-hero__featured-panel--active {
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 1;
+}
+
+/* Match #heroGenericContent stagger (kicker, headline, body, CTA) */
+.home-hero__featured-kicker.animate-fadeUp {
+  animation-delay: 0.05s;
+}
+
+.home-hero__featured-title.animate-fadeUp {
+  animation-delay: 0.15s;
+}
+
+.home-hero__featured-date.animate-fadeUp {
+  animation-delay: 0.3s;
+}
+
+.home-hero__featured-actions.animate-fadeUp {
+  animation-delay: 0.45s;
+}
+
+.home-hero__featured-kicker {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--green-bright);
+  margin: 0;
+}
+
+.home-hero__featured-link--block {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  transition: color var(--transition-fast), transform var(--transition-fast);
+}
+
+.home-hero__featured-link--block .home-hero__featured-title {
+  transition: color var(--transition-fast);
+}
+
+.home-hero__featured-link--block:hover .home-hero__featured-title,
+.home-hero__featured-link--block:focus-visible .home-hero__featured-title {
+  color: var(--green-bright);
+}
+
+.home-hero__featured-link--block:hover,
+.home-hero__featured-link--block:focus-visible {
+  transform: translateX(2px);
+}
+
+.home-hero__bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* Slider images — stacked, fade between them */
+.home-hero__slide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  opacity: 0;
+  transition: opacity 1s ease;
+  will-change: opacity;
+}
+.home-hero__slide--active {
+  opacity: 1;
+}
+
+/* Dot indicators */
+.hero-slider-dots {
+  position: absolute;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.45rem;
+  z-index: 5;
+}
+.hero-slider-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.35);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.25s ease, transform 0.25s ease;
+}
+.hero-slider-dot--active {
+  background: #fff;
+  transform: scale(1.25);
+}
+
+.home-hero__content {
+  padding: 1.5rem 2rem 2rem;
+  border-radius: 0.5rem;
+  max-width: fit-content;
+}
+
+/* ── ACTIVITY CARD (additional layout helpers) ──────────────── */
+.activity-card {
+  position: relative;
+  padding: 2.5rem 2rem;
+  background: var(--black-soft);
+  transition: background var(--transition-base);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.activity-card:hover {
+  background: var(--black-mid);
+}
+
+.activity-card__num {
+  font-family: var(--font-display);
+  font-size: 4rem;
+  line-height: 1;
+  color: rgba(255,255,255,0.05);
+  position: absolute;
+  top: 1rem;
+  right: 1.5rem;
+  pointer-events: none;
+}
+
+.activity-card__icon {
+  font-size: 1.75rem;
+  margin-bottom: 1rem;
+  color: var(--green-bright);
+  display: inline-block;
+  transition: color var(--transition-base), transform var(--transition-base);
+}
+
+.activity-card:hover .activity-card__icon {
+  color: var(--flag-orange);
+  transform: translateY(-4px);
+}
+
+.activity-card__title {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  letter-spacing: 0.04em;
+  color: #fff;
+  margin-bottom: 0.5rem;
+}
+
+.activity-card__body {
+  font-size: 0.88rem;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.7;
+  max-width: 42ch;
+}
+
+.activity-card__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 1.25rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--green-bright);
+  transition: color var(--transition-fast), gap var(--transition-fast);
+}
+
+.activity-card__link:hover {
+  color: var(--flag-orange);
+  gap: 0.65rem;
+}
+
+.activity-card__arrow {
+  font-size: 0.7rem;
+}
+
+/* ── EVENTS LIST ─────────────────────────────────────────────── */
+.events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: rgba(0,0,0,0.06);
+  border: 1px solid rgba(0,0,0,0.07);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.events-list--empty {
+  gap: 0;
+  background: #fff;
+}
+
+.events-list--empty .events-empty {
+  flex: 1;
+  min-height: 280px;
+  border: none;
+  border-radius: 0;
+}
+
+.event-card {
+  display: grid;
+  grid-template-columns: 6rem 1fr auto;
+  align-items: center;
+  gap: 1.5rem;
+  background: #fff;
+  padding: 1.25rem 1.5rem;
+  transition: background var(--transition-base), transform var(--transition-base);
+}
+
+.event-card:hover {
+  background: var(--warm-white);
+  transform: translateX(3px);
+}
+
+.event-card__date-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--dark-green);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.4rem;
+  min-width: 4rem;
+  text-align: center;
+}
+
+.event-card__month {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--green-bright);
+}
+
+.event-card__day {
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  line-height: 1;
+  color: #fff;
+}
+
+.event-card__tags {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.event-card__distance {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--black);
+  text-transform: uppercase;
+}
+
+.event-card__title {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  letter-spacing: 0.03em;
+  color: var(--black);
+  margin-bottom: 0.2rem;
+}
+
+.event-card__meta {
+  font-size: 0.78rem;
+  color: var(--black);
+}
+
+.event-card__actions {
+  flex-shrink: 0;
+}
+
+.btn-sm {
+  padding: 0.5rem 1.1rem;
+  font-size: 0.72rem;
+}
+
+/* ── EVENTS EMPTY STATE (matches events.ejs) ─────────────────── */
+.events-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+  background: #fff;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(0,0,0,0.07);
+  min-height: 280px;
+}
+
+.events-empty__icon {
+  font-size: 3rem;
+  color: rgba(0,0,0,0.1);
+  margin-bottom: 1.25rem;
+}
+
+.events-empty__heading {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+.events-empty__desc {
+  color: #6b7280;
+  font-size: 0.9rem;
+  max-width: 36ch;
+  line-height: 1.7;
+}
+
+.events-empty__cta {
+  margin-top: 1.25rem;
+}
+
+/* ── NEWS CARDS ──────────────────────────────────────────────── */
+.news-card {
+  background: var(--black-soft);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+  display: flex;
+  flex-direction: column;
+}
+
+.news-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.16);
+}
+
+.news-card__image-link {
+  display: block;
+  overflow: hidden;
+}
+
+.news-card__image {
+  position: relative;
+  height: 200px;
+  overflow: hidden;
+}
+
+.news-card__image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--transition-slow);
+}
+
+.news-card:hover .news-card__image img {
+  transform: scale(1.06);
+}
+
+.news-card__category {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  background: var(--green);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-sm);
+}
+
+.news-card__body {
+  padding: 1.25rem 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.news-card__date {
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.news-card__title {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  letter-spacing: 0.03em;
+  color: #fff;
+  margin-bottom: 0.5rem;
+  line-height: 1.25;
+}
+
+.news-card__title a {
+  color: inherit;
+  transition: color var(--transition-fast);
+}
+
+.news-card__title a:hover {
+  color: var(--green-bright);
+}
+
+.news-card__excerpt {
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.45);
+  line-height: 1.65;
+  flex: 1;
+}
+
+.news-card__read-more {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 1rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--green-bright);
+  transition: color var(--transition-fast), gap var(--transition-fast);
+  gap: 0.3rem;
+}
+
+.news-card__read-more:hover {
+  color: var(--flag-orange);
+  gap: 0.5rem;
+}
+
+/* News & Updates empty state (mirrors shop-preview empty state) */
+.news-empty {
+  text-align: center;
+  padding: 3rem 2rem;
+  background: rgba(0,0,0,0.03);
+  border-radius: 12px;
+  border: 1px dashed rgba(0,0,0,0.12);
+}
+
+.news-empty__title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.75rem;
+  color: var(--black);
+  margin: 0 0 0.5rem;
+}
+
+.news-empty__text {
+  font-size: 0.95rem;
+  color: #6b7280;
+  max-width: 28rem;
+  margin: 0 auto 1.25rem;
+  line-height: 1.5;
+}
+
+.news-empty__cta {
+  margin-top: 0.5rem;
+}
+
+/* ── FOOTER EXTRAS (home-specific sponsor section) ───────────── */
+.lfs-footer__sponsors {
+  margin-top: 1.5rem;
+}
+
+.lfs-footer__sponsors-label {
+  display: block;
+  font-size: 0.6rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.25);
+  margin-bottom: 0.5rem;
+}
+
+.lfs-footer__sponsors-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.lfs-footer__sponsor-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.3);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-sm);
+  padding: 0.2rem 0.6rem;
+  letter-spacing: 0.06em;
+}
+
+.lfs-footer__contact-snap {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.lfs-footer__contact-link {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.3);
+  transition: color var(--transition-fast);
+}
+
+.lfs-footer__contact-link:hover {
+  color: var(--green-bright);
+}
+
+.lfs-footer__contact-link i {
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* ── MOBILE RESPONSIVE ───────────────────────────────────────── */
+@media (max-width: 900px) {
+  .event-card {
+    grid-template-columns: 5rem 1fr;
+    grid-template-rows: auto auto;
+  }
+
+  .event-card__actions {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 600px) {
+  .event-card {
+    grid-template-columns: 4.5rem 1fr;
+    gap: 1rem;
+    padding: 1rem;
+  }
+
+  .event-card__day {
+    font-size: 1.8rem;
+  }
+
+  .news-card__image {
+    height: 160px;
+  }
+}
