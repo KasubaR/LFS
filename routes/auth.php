@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\ChangePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\MembershipApplicationController;
 use App\Http\Controllers\Auth\MembershipPaymentController;
+use App\Http\Controllers\Auth\MembershipPlanChangeController;
 use App\Http\Controllers\Auth\MembershipRenewalController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
@@ -114,6 +115,10 @@ Route::middleware(['auth', 'member', 'verified', 'force.password.change'])->grou
     Route::post('/account/renew', [MembershipRenewalController::class, 'store'])
         ->middleware('throttle:5,1')
         ->name('account.renew');
+
+    Route::post('/account/plan/change', [MembershipPlanChangeController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('account.plan.change');
 });
 
 Route::post('/account/payment/webhook', [MembershipPaymentController::class, 'webhook'])

@@ -24,6 +24,8 @@ class MembershipService
 
     public const PLAN_NOT_FOUND_CODE = 'PLAN_NOT_FOUND';
 
+    public const NO_OPEN_MEMBERSHIP_CODE = 'NO_OPEN_MEMBERSHIP';
+
     public function __construct(
         private readonly MembershipPaymentService $paymentService,
         private readonly MembershipPlanService $planService
@@ -77,6 +79,61 @@ class MembershipService
     public function userHasOpenMembership(int $userId): bool
     {
         return $this->hasOpenMembership($userId);
+    }
+
+    /**
+     * Switch the plan on a member's unpaid application (Draft or PendingPayment).
+     * If a payment row already exists for it (PendingPayment), its amount/plan
+     * are updated to match so the member is charged the new plan's price.
+     *
+     * @return array<string, mixed>
+     */
+    public function changePlan(int $userId, int $planId): array
+    {
+        $plan = $this->findPlanOrFail($planId);
+        $membership = $this->findOpenMembershipForUser($userId);
+
+        if (! $membership) {
+            throw new CodeException('No pending membership application to update.', self::NO_OPEN_MEMBERSHIP_CODE);
+        }
+
+        if ((int) $membership->current_plan_id === $plan->id) {
+            return $this->toMembership($membership->fresh(['user', 'plan']));
+        }
+
+        return DB::transaction(function () use ($membership, $plan) {
+            $fromPlanId = (int) $membership->current_plan_id;
+
+            Membership::query()->whereKey($membership->id)->update([
+                'current_plan_id' => $plan->id,
+            ]);
+
+            if ($membership->status === MembershipStatus::PendingPayment) {
+                MembershipPayment::query()
+                    ->where('membership_id', $membership->id)
+                    ->whereNotIn('status', MembershipPaymentStatus::TERMINAL)
+                    ->orderByDesc('created_at')
+                    ->limit(1)
+                    ->update([
+                        'plan_id' => $plan->id,
+                        'amount' => (float) $plan->price,
+                    ]);
+            }
+
+            $this->logHistory(
+                $membership->id,
+                (int) $membership->user_id,
+                MembershipHistoryEvent::PlanChanged,
+                $membership->status,
+                $membership->status,
+                $plan->id,
+                'member',
+                null,
+                ['fromPlanId' => $fromPlanId, 'toPlanId' => $plan->id]
+            );
+
+            return $this->toMembership($membership->fresh(['user', 'plan']));
+        });
     }
 
     public function userHasActiveMembership(int $userId): bool
@@ -547,6 +604,14 @@ class MembershipService
             ->where('user_id', $userId)
             ->whereIn('status', [MembershipStatus::Draft, MembershipStatus::PendingPayment])
             ->exists();
+    }
+
+    private function findOpenMembershipForUser(int $userId): ?Membership
+    {
+        return Membership::query()
+            ->where('user_id', $userId)
+            ->whereIn('status', [MembershipStatus::Draft, MembershipStatus::PendingPayment])
+            ->first();
     }
 
     private function findLatestMembershipForUser(int $userId): ?Membership

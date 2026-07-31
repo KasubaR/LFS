@@ -74,6 +74,7 @@ class AccountController extends Controller
             'canRenew' => $membership !== null && $membership->status === MembershipStatus::Expired,
             'hasPaidMembership' => $hasPaidMembership,
             'renewalPlans' => $this->planService->getActivePlans(),
+            'changePlans' => $canContinuePayment ? $this->planService->getActivePlans() : [],
             'announcements' => $hasPaidMembership ? $this->announcementService->getActiveForMembers(5) : [],
             'upcomingEvents' => $hasPaidMembership ? $this->memberDashboardService->getUpcomingEvents((int) $user->id) : [],
             'extraScripts' => $canContinuePayment

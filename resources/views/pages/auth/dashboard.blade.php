@@ -26,6 +26,41 @@
                 Your membership application is ready. Pay with Mobile Money to activate your membership.
               </p>
 
+              <p class="auth-account-card__payment-text">
+                Selected plan: <strong>{{ $membership->plan?->name ?? '—' }}</strong>
+                (K{{ number_format((float) ($membership->plan?->price ?? 0)) }})
+              </p>
+
+              @if(count($changePlans ?? []) > 1)
+                <details class="account-change-plan">
+                  <summary class="auth-account-card__link" style="cursor:pointer;">Change plan</summary>
+                  <form action="{{ url('/account/plan/change') }}" method="post" class="space-y-4 mt-3">
+                    @csrf
+                    <div class="form-group{{ $errors->has('plan_id') ? ' form-group--error' : '' }}">
+                      <div class="auth-plan-grid" role="radiogroup" aria-label="Membership plan">
+                        @foreach($changePlans as $plan)
+                          <label class="auth-plan-option">
+                            <input type="radio" name="plan_id" value="{{ $plan['id'] }}"
+                              {{ (string) old('plan_id', (string) $membership->current_plan_id) === (string) $plan['id'] ? 'checked' : '' }} required>
+                            <span class="auth-plan-option__card">
+                              <span>
+                                <span class="auth-plan-option__name">{{ $plan['name'] }}</span>
+                                <span class="auth-plan-option__meta">{{ $plan['durationMonths'] }} months</span>
+                              </span>
+                              <span class="auth-plan-option__price">K{{ number_format($plan['price']) }}</span>
+                            </span>
+                          </label>
+                        @endforeach
+                      </div>
+                      @error('plan_id')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
+                    </div>
+                    <button type="submit" class="btn btn-outline w-full justify-center">
+                      <i class="fas fa-rotate mr-2" aria-hidden="true"></i> Update Plan
+                    </button>
+                  </form>
+                </details>
+              @endif
+
               <form id="account-payment-form" data-amount="{{ $membership->plan?->price ?? 0 }}">
                 @csrf
                 <div class="auth-payment-provider-grid" role="radiogroup" aria-label="Mobile money provider">
