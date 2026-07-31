@@ -7,26 +7,29 @@
   :status="$status ?? null"
   :split="true">
 
-  <p style="color:rgba(15,15,15,0.7); line-height:1.7; margin-bottom:1.25rem;">
-    We sent a verification link to your email address. Click the link in that email to verify your account.
-    Once verified, you will choose your satellite and membership plan.
-  </p>
+  <div class="auth-verify">
+    <p class="auth-verify__copy">
+      We sent a verification link to your email address. Tap the link in that email to verify your account
+      and continue — you will be signed in automatically.
+    </p>
 
-  <form action="{{ url('/email/verification-notification') }}" method="post">
-    @csrf
-    <button type="submit" class="btn btn-primary w-full justify-center">
-      <i class="fas fa-paper-plane mr-2" aria-hidden="true"></i> Resend Verification Email
-    </button>
-  </form>
-
-  <p class="auth-links">
-    <form action="{{ url('/logout') }}" method="post" style="display:inline;">
+    <form action="{{ url('/email/verification-notification') }}" method="post" class="auth-verify__form">
       @csrf
-      <button type="submit" style="background:none;border:none;padding:0;color:var(--green);font:inherit;cursor:pointer;font-weight:500;">
-        Sign out
+      <button type="submit" class="btn btn-primary auth-verify__submit">
+        <i class="fas fa-paper-plane" aria-hidden="true"></i>
+        <span>Resend Verification Email</span>
       </button>
     </form>
-  </p>
+
+    <div class="auth-links">
+      <form action="{{ url('/logout') }}" method="post" class="auth-logout-form">
+        @csrf
+        <button type="submit" class="auth-logout-form__btn">
+          Sign out
+        </button>
+      </form>
+    </div>
+  </div>
 
 </x-auth-form-card>
 @endsection

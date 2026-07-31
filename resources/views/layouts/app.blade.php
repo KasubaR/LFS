@@ -50,14 +50,18 @@
   </main>
 
   <!-- ── FOOTER PARTIAL ── -->
-  @include('partials.footer')
+  @php $cartCount = $cartCount ?? 0; @endphp
+  @unless($hideFooter ?? false)
+    @include('partials.footer')
+  @endunless
 
   <!-- ── FLOATING CART FAB (hidden when cart empty) ── -->
-  @php $cartCount = $cartCount ?? 0; @endphp
+  @unless($hideFooter ?? false)
   <button class="lfs-cart-fab{{ $cartCount === 0 ? ' lfs-cart-fab--hidden' : '' }}" onclick="window.location='/shop/cart'" aria-label="View cart ({{ $cartCount }} items)">
     <i class="fas fa-shopping-bag"></i>
     <span class="lfs-cart-fab__count"{{ $cartCount === 0 ? ' style="display:none"' : '' }}>{{ $cartCount }}</span>
   </button>
+  @endunless
 
   <!-- Cookie consent banner -->
   @include('partials.cookie-banner')

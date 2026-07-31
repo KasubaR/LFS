@@ -187,23 +187,32 @@
   .auth-split {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
+    min-height: 100vh;
+    min-height: 100dvh;
   }
 
   .auth-split__visual {
-    min-height: clamp(220px, 36vh, 320px);
+    min-height: clamp(140px, 28vh, 220px);
+    max-height: 28vh;
   }
 
   .auth-split__visual-content {
-    padding: 1.5rem;
+    padding: 1.25rem 1.25rem 1rem;
+    justify-content: flex-end;
+  }
+
+  .auth-split__brand img {
+    width: clamp(5.5rem, 22vw, 7.5rem);
   }
 
   .auth-split__copy {
     margin: 0;
-    padding: 0.5rem 0;
+    padding: 0.35rem 0 0;
+    max-width: none;
   }
 
   .auth-split__tagline {
-    font-size: 2rem;
+    font-size: clamp(1.45rem, 6vw, 2rem);
   }
 
   .auth-split__motto {
@@ -216,9 +225,91 @@
 
   .auth-split__panel {
     align-items: flex-start;
-    padding-top: 2rem;
-    padding-bottom: 2.5rem;
+    padding: 1.25rem 1rem 2rem;
   }
+
+  .auth-split__panel-inner {
+    max-width: none;
+  }
+
+  .auth-split__breadcrumb {
+    margin-bottom: 0.75rem;
+  }
+
+  .auth-split__breadcrumb ol {
+    margin-bottom: 0.85rem;
+    font-size: 0.82rem;
+  }
+
+  .auth-split__header {
+    margin-bottom: 1rem;
+  }
+
+  .auth-split__title {
+    font-size: clamp(1.7rem, 7vw, 2.2rem);
+  }
+
+  .auth-split__subtitle {
+    font-size: 0.9rem;
+    max-width: none;
+  }
+
+  .auth-card {
+    padding: 1.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .auth-split__visual {
+    min-height: 120px;
+    max-height: 22vh;
+  }
+
+  .auth-split__eyebrow {
+    font-size: 0.65rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .auth-split__breadcrumb {
+    display: none;
+  }
+
+  .auth-split__panel {
+    padding: 1rem 0.85rem 1.75rem;
+  }
+
+  .auth-card {
+    padding: 1.1rem;
+    border-radius: 0.65rem;
+  }
+}
+
+/* Verify-email page */
+.auth-verify__copy {
+  color: rgba(15, 15, 15, 0.7);
+  line-height: 1.7;
+  margin-bottom: 1.25rem;
+  font-size: 0.95rem;
+}
+
+.auth-verify__form {
+  margin: 0;
+}
+
+.auth-verify__submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  width: 100%;
+  min-height: 2.85rem;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.auth-verify__submit i {
+  flex-shrink: 0;
 }
 
 /* White card uses light form tokens (--text-muted in main.css is for dark sections) */

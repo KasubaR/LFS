@@ -122,12 +122,23 @@
 .membership-card-page {
   display: grid;
   gap: 1.25rem;
+  justify-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.membership-card-page .digital-membership-card {
+  width: 100%;
+  margin: 0 auto;
 }
 
 .membership-card-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+  width: 100%;
+  max-width: 28rem;
+  justify-content: center;
 }
 
 .digital-membership-card {

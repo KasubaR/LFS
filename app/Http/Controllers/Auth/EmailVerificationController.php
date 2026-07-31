@@ -4,12 +4,13 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Concerns\ProvidesAuthViews;
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Services\MemberOnboardingService;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Contracts\View\View;
-use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class EmailVerificationController extends Controller
 {
@@ -34,9 +35,13 @@ class EmailVerificationController extends Controller
         ]));
     }
 
-    public function verify(EmailVerificationRequest $request): RedirectResponse
+    public function verify(Request $request, string $id, string $hash): RedirectResponse
     {
-        $user = $request->user();
+        $user = User::query()->findOrFail($id);
+
+        if (! hash_equals(sha1($user->getEmailForVerification()), (string) $hash)) {
+            abort(403, 'Invalid verification link.');
+        }
 
         if (! $user->hasVerifiedEmail()) {
             if ($user->markEmailAsVerified()) {
@@ -44,7 +49,10 @@ class EmailVerificationController extends Controller
             }
         }
 
-        return redirect($this->onboardingService->resolveNextRoute($user))
+        Auth::login($user, remember: true);
+        $request->session()->regenerate();
+
+        return redirect($this->onboardingService->resolveNextRoute($user->fresh()))
             ->with('auth_status', 'Your email has been verified.');
     }
 

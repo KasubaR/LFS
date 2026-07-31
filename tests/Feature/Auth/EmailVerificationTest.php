@@ -21,6 +21,7 @@ class EmailVerificationTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Verify Email', false);
+        $response->assertSee('signed in automatically', false);
     }
 
     public function test_email_can_be_verified(): void
@@ -38,6 +39,26 @@ class EmailVerificationTest extends TestCase
         $response = $this->actingAs($user)->get($verificationUrl);
 
         $response->assertRedirect('/membership/apply');
+        $this->assertTrue($user->fresh()->hasVerifiedEmail());
+        Event::assertDispatched(Verified::class);
+    }
+
+    public function test_verification_link_logs_the_user_in_automatically(): void
+    {
+        Event::fake([Verified::class]);
+
+        $user = User::factory()->unverified()->create();
+
+        $verificationUrl = URL::temporarySignedRoute(
+            'verification.verify',
+            now()->addMinutes(60),
+            ['id' => $user->id, 'hash' => sha1($user->email)]
+        );
+
+        $response = $this->get($verificationUrl);
+
+        $response->assertRedirect('/membership/apply');
+        $this->assertAuthenticatedAs($user);
         $this->assertTrue($user->fresh()->hasVerifiedEmail());
         Event::assertDispatched(Verified::class);
     }

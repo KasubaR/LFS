@@ -28,6 +28,7 @@ trait ProvidesAuthViews
         return $this->authViewData(array_merge([
             'bodyClass' => 'page-no-hero page-no-nav',
             'hideNavbar' => true,
+            'hideFooter' => true,
         ], $data));
     }
 }

@@ -39,10 +39,6 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/email/verify', [EmailVerificationController::class, 'notice'])
         ->name('verification.notice');
 
-    Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
-        ->middleware('signed')
-        ->name('verification.verify');
-
     Route::post('/email/verification-notification', [EmailVerificationController::class, 'send'])
         ->middleware('throttle:6,1')
         ->name('verification.send');
@@ -55,6 +51,11 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('verified')
         ->name('password.change.store');
 });
+
+// Signed verification link — works without an existing session and logs the user in.
+Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
+    ->middleware(['signed', 'throttle:6,1'])
+    ->name('verification.verify');
 
 Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::get('/membership/apply', [MembershipApplicationController::class, 'create'])->name('membership.apply');

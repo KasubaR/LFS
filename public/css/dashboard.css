@@ -4,11 +4,14 @@
 .account-section {
   padding: 3rem var(--section-px) 5rem;
   background: var(--off-white);
+  overflow-x: clip;
 }
 
 .dashboard-section__inner {
   max-width: 1100px;
   margin: 0 auto;
+  width: 100%;
+  min-width: 0;
 }
 
 .account-breadcrumb-bar {
@@ -282,16 +285,29 @@ body.page-no-nav .account-section {
 /* ── Tabs ── */
 .account-tabs {
   margin-bottom: 1.5rem;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .account-tabs__list {
   display: flex;
   gap: 0.5rem;
   overflow-x: auto;
-  padding-bottom: 0.25rem;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 0 0.25rem;
   scrollbar-width: thin;
   list-style: none;
   margin: 0;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.account-tabs__list > li {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .account-tabs__link {
@@ -337,11 +353,18 @@ body.page-no-nav .account-section {
 }
 
 /* ── Layout grid ── */
+#account-tab-panel {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 1.5rem;
   align-items: start;
+  width: 100%;
+  min-width: 0;
 }
 
 .dashboard-col--main,
@@ -349,6 +372,8 @@ body.page-no-nav .account-section {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* ── Card ── */
@@ -358,6 +383,11 @@ body.page-no-nav .account-section {
   border: 1px solid rgba(74, 124, 89, 0.15);
   border-radius: 0.5rem;
   box-shadow: 0 8px 32px rgba(15, 15, 15, 0.06);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-wrap: break-word;
 }
 
 .dashboard-card--action {
@@ -1148,6 +1178,40 @@ a.dashboard-contact-item__value:hover {
 }
 
 @media (max-width: 600px) {
+  .dashboard-section,
+  .account-section {
+    padding: 1.5rem 1rem 3rem;
+  }
+
+  .account-breadcrumb-bar {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .dashboard-card {
+    padding: 1.15rem;
+  }
+
+  .dashboard-grid,
+  .dashboard-col--main,
+  .dashboard-col--side {
+    gap: 1rem;
+  }
+
+  .auth-account-card,
+  .auth-account-card--payment,
+  .auth-renewal-panel {
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .dashboard-card .btn,
+  .dashboard-card .w-full {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
   .account-profile-card__actions,
   .account-profile-card__actions form,
   .account-profile-card__actions .btn {
