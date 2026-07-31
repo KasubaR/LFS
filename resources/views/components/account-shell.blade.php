@@ -113,7 +113,7 @@
         </div>
 
         <div class="account-profile-card__actions">
-          <a href="{{ route('account.settings.personal') }}" class="btn btn-primary">
+          <a href="{{ route('account.settings.personal') }}" class="btn btn-primary" data-full-reload>
             <i class="fas fa-user-pen" aria-hidden="true"></i>
             Edit Profile
           </a>

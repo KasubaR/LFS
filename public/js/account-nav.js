@@ -79,7 +79,7 @@
         window.history.pushState({}, '', url);
       }
 
-      window.scrollTo(0, 0);
+      swapTarget.scrollIntoView({ block: 'start' });
       window.dispatchEvent(new CustomEvent('lfs:account-nav', { detail: { container: swapTarget } }));
     } catch (err) {
       if (err.name === 'AbortError') return;
