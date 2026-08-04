@@ -26,9 +26,17 @@ class MembershipVerifyController extends Controller
             'hideNavbar' => true,
             'membership' => $membership,
             'member' => $membership->user,
+            'memberFirstName' => $this->firstName((string) $membership->user->name),
             'displayStatus' => $membership->cardDisplayStatus(),
             'isActive' => $membership->isCardActive(),
             'extraStyles' => '<link rel="stylesheet" href="'.asset('css/membership-card.css').'">',
         ]);
+    }
+
+    private function firstName(string $fullName): string
+    {
+        $parts = preg_split('/\s+/', trim($fullName)) ?: [];
+
+        return ($parts[0] ?? '') !== '' ? $parts[0] : '—';
     }
 }

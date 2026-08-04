@@ -50,6 +50,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'api.log' => LogApiRequest::class,
             'member' => EnsureMember::class,
             'force.password.change' => EnsurePasswordChanged::class,
+            // Soft-gated on most account pages; use only where unpaid must be blocked.
             'membership.active' => EnsureActiveMembership::class,
         ]);
 

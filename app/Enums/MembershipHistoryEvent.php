@@ -20,6 +20,10 @@ class MembershipHistoryEvent
 
     public const PaymentReceived = 'payment_received';
 
+    /** Application row created (Draft). */
+    public const Created = 'created';
+
+    /** Draft submitted for payment (PendingPayment). */
     public const Submitted = 'submitted';
 
     public const Cancelled = 'cancelled';
@@ -34,6 +38,7 @@ class MembershipHistoryEvent
         self::Imported,
         self::AdminEdit,
         self::PaymentReceived,
+        self::Created,
         self::Submitted,
         self::Cancelled,
     ];

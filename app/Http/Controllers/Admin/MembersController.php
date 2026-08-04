@@ -110,6 +110,10 @@ class MembersController extends Controller
         abort_if($member === null, 404);
         $this->assertMemberInScope($member['user']['satelliteId'] ?? null);
 
+        $ownsMembership = collect($member['memberships'] ?? [])
+            ->contains(fn (array $row) => ($row['id'] ?? null) === $membershipId);
+        abort_if(! $ownsMembership, 404, 'Membership not found for this member.');
+
         $admin = $this->permissions->currentAdmin($request);
 
         try {

@@ -21,9 +21,9 @@ class VerifyMemberRequest extends FormRequest
         return [
             'membership_number' => ['required', 'string', 'max:40'],
             // Exactly one second factor. Membership numbers are sequential and
-            // therefore guessable, so one is always required.
-            'surname' => ['required_without:email', 'nullable', 'string', 'max:120'],
-            'email' => ['required_without:surname', 'nullable', 'string', 'email', 'max:255'],
+            // therefore guessable, so one is always required — never both.
+            'surname' => ['required_without:email', 'prohibits:email', 'nullable', 'string', 'max:120'],
+            'email' => ['required_without:surname', 'prohibits:surname', 'nullable', 'string', 'email', 'max:255'],
         ];
     }
 
@@ -36,6 +36,8 @@ class VerifyMemberRequest extends FormRequest
             'membership_number.required' => 'A membership_number is required.',
             'surname.required_without' => 'Provide either a surname or an email address.',
             'email.required_without' => 'Provide either a surname or an email address.',
+            'surname.prohibits' => 'Provide either a surname or an email address, not both.',
+            'email.prohibits' => 'Provide either a surname or an email address, not both.',
         ];
     }
 

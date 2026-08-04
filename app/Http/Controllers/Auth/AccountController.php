@@ -472,7 +472,8 @@ class AccountController extends Controller
     {
         $hasCard = $membership !== null
             && $membership->membership_number !== null
-            && $membership->membership_number !== '';
+            && $membership->membership_number !== ''
+            && $membership->isCardActive();
 
         $qrSvg = null;
         $verifyUrl = null;

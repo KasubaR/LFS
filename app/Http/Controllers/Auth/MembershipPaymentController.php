@@ -32,6 +32,7 @@ class MembershipPaymentController extends Controller
         $user = Auth::user();
 
         $membership = Membership::query()
+            ->with('plan')
             ->where('user_id', $user->id)
             ->orderByDesc('created_at')
             ->first();
@@ -46,8 +47,27 @@ class MembershipPaymentController extends Controller
         }
 
         $payment = $this->paymentService->findLatestForMembership($membership->id);
+
+        // A prior MoMo attempt may have failed — create a fresh pending row so
+        // initiate is not blocked by the terminal Failed payment.
+        if ($payment && $payment['status'] === MembershipPaymentStatus::Failed) {
+            $paymentId = $this->paymentService->create($membership->id, (int) $membership->current_plan_id, [
+                'amount' => (float) ($membership->plan?->price ?? $payment['amount']),
+            ]);
+            $payment = $this->paymentService->findById($paymentId);
+        }
+
         if (! $payment || MembershipPaymentStatus::isTerminal($payment['status'])) {
             return $this->jsonError('No pending payment found for this membership.', 403);
+        }
+
+        // Do not start a second Lenco session while one is already in flight —
+        // overwriting refs would orphan the first MoMo prompt.
+        if (filled($payment['paymentReference'])) {
+            return $this->jsonError(
+                'A mobile money payment is already in progress. Approve it on your phone, or wait a few minutes and try again.',
+                409
+            );
         }
 
         // membership_number may still be null pre-payment for a brand-new
@@ -125,6 +145,11 @@ class MembershipPaymentController extends Controller
             if ($result['internalStatus'] === 'completed') {
                 $this->membershipService->handlePaymentUpdate((int) $payment['id'], (float) $payment['amount'], [
                     'paidAt' => now(),
+                    'lencoStatus' => $result['status'],
+                    'lencoResponse' => $result['rawResponse'] ?? [],
+                ]);
+            } elseif (in_array($result['internalStatus'], ['failed', 'cancelled'], true)) {
+                $this->paymentService->markFailed((int) $payment['id'], [
                     'lencoStatus' => $result['status'],
                     'lencoResponse' => $result['rawResponse'] ?? [],
                 ]);
@@ -212,6 +237,13 @@ class MembershipPaymentController extends Controller
         if ($internalStatus === 'completed') {
             $this->membershipService->handlePaymentUpdate((int) $payment['id'], (float) $payment['amount'], [
                 'paidAt' => now(),
+                'lencoStatus' => $payload['status'],
+                'webhookReceived' => true,
+                'webhookPayload' => $rawPayload,
+                'webhookReceivedAt' => now(),
+            ]);
+        } elseif (in_array($internalStatus, ['failed', 'cancelled'], true)) {
+            $this->paymentService->markFailed((int) $payment['id'], [
                 'lencoStatus' => $payload['status'],
                 'webhookReceived' => true,
                 'webhookPayload' => $rawPayload,

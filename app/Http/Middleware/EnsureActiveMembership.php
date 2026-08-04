@@ -8,6 +8,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Hard-gate: user must have a currently active (non-expired) membership.
+ *
+ * Registered as `membership.active`. Most member account pages intentionally
+ * use soft gating instead (AccountController hasPaidMembership / empty
+ * document lists) so unpaid members can still reach the dashboard and pay.
+ * Apply this alias only to routes that must reject unpaid/expired users.
+ */
 class EnsureActiveMembership
 {
     public function __construct(

@@ -60,8 +60,7 @@ Route::prefix('shop')->group(function (): void {
         ->middleware('throttle:10,1');
     Route::get('/checkout/verify', [OrderController::class, 'verifyPayment'])
         ->middleware('throttle:30,1');
-    Route::post('/checkout/webhook', [OrderController::class, 'handleWebhook'])
-        ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class]);
+    Route::post('/checkout/webhook', [OrderController::class, 'handleWebhook']);
 
     Route::get('/order/{orderNumber}', [OrderController::class, 'orderConfirmation'])
         ->where('orderNumber', '[^/]+');

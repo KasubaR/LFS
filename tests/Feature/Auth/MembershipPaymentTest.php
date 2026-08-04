@@ -242,4 +242,85 @@ class MembershipPaymentTest extends TestCase
         $accountResponse->assertOk();
         $accountResponse->assertSee('Pay with Mobile Money', false);
     }
+
+    public function test_reinitiate_while_gateway_session_active_returns_conflict(): void
+    {
+        $user = User::factory()->create();
+        $membership = $this->createDraftMembership($user);
+
+        $this->mock(LencoService::class, function ($mock) {
+            $mock->shouldReceive('generateReference')->andReturn('LFS-REF-1');
+            $mock->shouldReceive('initiateMobileMoneyPayment')->once()->andReturn([
+                'transactionId' => 'txn-1',
+                'lencoReference' => 'lenco-ref-1',
+                'reference' => 'LFS-REF-1',
+                'status' => 'pay-offline',
+                'paymentInstructions' => 'Approve on your phone',
+                'paymentUrl' => null,
+                'expiresAt' => null,
+                'rawResponse' => [],
+            ]);
+        });
+
+        $this->actingAs($user)->postJson('/account/payment/initiate', [
+            'provider' => 'mtn',
+            'phone' => '+260971234567',
+        ])->assertOk();
+
+        $this->actingAs($user)->postJson('/account/payment/initiate', [
+            'provider' => 'mtn',
+            'phone' => '+260971234567',
+        ])->assertStatus(409);
+    }
+
+    public function test_failed_payment_can_be_retried_with_new_row(): void
+    {
+        $user = User::factory()->create();
+        $membership = $this->createDraftMembership($user);
+
+        $this->mock(LencoService::class, function ($mock) {
+            $mock->shouldReceive('generateReference')->andReturnUsing(fn ($seed) => 'LFS-REF-'.substr(md5((string) $seed.microtime()), 0, 8));
+            $call = 0;
+            $mock->shouldReceive('initiateMobileMoneyPayment')->twice()->andReturnUsing(function () use (&$call) {
+                $call++;
+                $ref = $call === 1 ? 'LFS-REF-FAIL' : 'LFS-REF-RETRY';
+
+                return [
+                    'transactionId' => 'txn-'.$call,
+                    'lencoReference' => 'lenco-'.$call,
+                    'reference' => $ref,
+                    'status' => 'pay-offline',
+                    'paymentInstructions' => 'Approve on your phone',
+                    'paymentUrl' => null,
+                    'expiresAt' => null,
+                    'rawResponse' => [],
+                ];
+            });
+            $mock->shouldReceive('verifyPayment')->once()->with('LFS-REF-FAIL', true)->andReturn([
+                'status' => 'declined',
+                'internalStatus' => 'failed',
+                'rawResponse' => [],
+            ]);
+        });
+
+        $this->actingAs($user)->postJson('/account/payment/initiate', [
+            'provider' => 'mtn',
+            'phone' => '+260971234567',
+        ])->assertOk();
+
+        $this->actingAs($user)->getJson('/account/payment/verify?reference=LFS-REF-FAIL')
+            ->assertOk()
+            ->assertJson(['status' => 'failed']);
+
+        $failed = MembershipPayment::query()->where('membership_id', $membership->id)->latest('id')->first();
+        $this->assertSame('failed', $failed->status);
+
+        $this->actingAs($user)->postJson('/account/payment/initiate', [
+            'provider' => 'mtn',
+            'phone' => '+260971234567',
+        ])->assertOk()->assertJson(['reference' => 'LFS-REF-RETRY']);
+
+        $this->assertSame(2, MembershipPayment::query()->where('membership_id', $membership->id)->count());
+        $this->assertSame(MembershipStatus::PendingPayment, $membership->fresh()->status);
+    }
 }

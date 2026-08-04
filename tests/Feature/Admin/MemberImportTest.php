@@ -73,6 +73,36 @@ class MemberImportTest extends TestCase
         $this->assertSame(0, User::query()->where('email', 'bob.import@test.com')->count());
     }
 
+    public function test_import_skips_duplicate_membership_numbers(): void
+    {
+        Membership::query()->create([
+            'id' => (string) \Illuminate\Support\Str::uuid(),
+            'user_id' => User::factory()->create()->id,
+            'membership_number' => '13239',
+            'status' => 'active',
+            'current_plan_id' => \App\Models\MembershipPlan::query()->first()->id,
+            'approval_status' => 'approved',
+        ]);
+
+        $result = app(MemberImportService::class)->importFromFile($this->fixturePath, 'test:import');
+
+        $this->assertSame(1, $result['importedRows']);
+        $this->assertTrue(
+            collect($result['errors'])->contains(fn ($msg) => str_contains($msg, 'membership number 13239 already exists'))
+        );
+    }
+
+    public function test_import_does_not_persist_temp_passwords_on_batch(): void
+    {
+        $result = app(MemberImportService::class)->importFromFile($this->fixturePath, 'test:import');
+
+        $this->assertNotEmpty($result['tempPasswords']);
+
+        $batch = MembershipImportBatch::query()->find($result['batchId']);
+        $notes = $batch->notes ?? [];
+        $this->assertArrayNotHasKey('tempPasswords', $notes);
+    }
+
     public function test_imported_user_can_complete_auth_flow(): void
     {
         $service = app(MemberImportService::class);

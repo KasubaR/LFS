@@ -16,6 +16,7 @@ class MemberDashboardService
         MembershipHistoryEvent::Imported => 'Membership imported',
         MembershipHistoryEvent::AdminEdit => 'Membership edited by admin',
         MembershipHistoryEvent::PaymentReceived => 'Payment received',
+        MembershipHistoryEvent::Created => 'Application started',
         MembershipHistoryEvent::Submitted => 'Application submitted',
         MembershipHistoryEvent::Cancelled => 'Membership cancelled',
     ];

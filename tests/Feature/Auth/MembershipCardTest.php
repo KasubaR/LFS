@@ -105,14 +105,31 @@ class MembershipCardTest extends TestCase
 
         $response = $this->get('/membership/verify/'.$membership->public_token);
 
+        $firstName = explode(' ', trim($user->name), 2)[0];
+
         $response->assertOk();
-        $response->assertSee($user->name, false);
+        $response->assertSee($firstName, false);
         $response->assertSee('LFS-CARD-001', false);
         $response->assertSee('Active', false);
         $response->assertSee($user->satellite->name, false);
         $response->assertSee($membership->expiry_date->format('j M Y'), false);
         $response->assertDontSee($user->email, false);
         $response->assertDontSee($user->phone, false);
+    }
+
+    public function test_expired_membership_does_not_show_downloadable_card(): void
+    {
+        [$user] = $this->member([
+            'status' => MembershipStatus::Expired,
+            'expiry_date' => now()->subDays(10)->toDateString(),
+        ]);
+
+        $this->actingAs($user)->get('/account/card')
+            ->assertOk()
+            ->assertSee('Card not ready yet', false)
+            ->assertDontSee('Save as PDF', false);
+
+        $this->actingAs($user)->get('/account/card/pdf')->assertNotFound();
     }
 
     public function test_expired_membership_shows_expired_badge_on_verify_page(): void

@@ -10,6 +10,7 @@ use App\Enums\MembershipStatus;
 use App\Exceptions\CodeException;
 use App\Models\Membership;
 use App\Models\MembershipHistory;
+use App\Models\MembershipPayment;
 use App\Models\MembershipPlan;
 use App\Models\Satellite;
 use App\Models\User;
@@ -162,6 +163,7 @@ class MembershipLifecycleTest extends TestCase
             ->pluck('event')
             ->all();
 
+        $this->assertContains(MembershipHistoryEvent::Created, $events);
         $this->assertContains(MembershipHistoryEvent::Submitted, $events);
         $this->assertContains(MembershipHistoryEvent::Activated, $events);
         $this->assertContains(MembershipHistoryEvent::PaymentReceived, $events);
@@ -202,5 +204,75 @@ class MembershipLifecycleTest extends TestCase
         $this->assertCount(1, $activeMembers);
         $this->assertSame('active', $activeMembers[0]['status']);
         $this->assertSame($activated['membershipNumber'], $activeMembers[0]['membershipNumber']);
+    }
+
+    public function test_paid_pending_membership_recovers_activation_on_retry(): void
+    {
+        $created = $this->membershipService->createApplication($this->user->id, $this->annualPlan->id);
+        $submitted = $this->membershipService->submitApplication($created['membershipId']);
+        $paymentId = $submitted['latestPayment']['id'];
+
+        app(\App\Services\MembershipPaymentService::class)->recordAmountPaid($paymentId, 1000.00, [
+            'paidAt' => now(),
+        ]);
+
+        $this->assertSame(MembershipStatus::PendingPayment, Membership::query()->find($created['membershipId'])->status);
+        $this->assertSame(MembershipPaymentStatus::Paid, MembershipPayment::query()->find($paymentId)->status);
+
+        $recovered = $this->membershipService->handlePaymentUpdate($paymentId, 1000.00);
+
+        $this->assertSame(MembershipStatus::Active, $recovered['status']);
+        $this->assertNotNull($recovered['membershipNumber']);
+    }
+
+    public function test_plan_change_blocked_after_payment_initiated(): void
+    {
+        $created = $this->membershipService->createApplication($this->user->id, $this->annualPlan->id);
+        $submitted = $this->membershipService->submitApplication($created['membershipId']);
+
+        \App\Models\MembershipPayment::query()->whereKey($submitted['latestPayment']['id'])->update([
+            'payment_reference' => 'LFS-LOCKED-REF',
+        ]);
+
+        $quarterly = MembershipPlan::query()->where('billing_cycle', BillingCycle::Quarterly)->first();
+
+        $this->expectException(CodeException::class);
+        $this->expectExceptionMessage('Cannot change plan after payment has been initiated');
+
+        $this->membershipService->changePlan($this->user->id, $quarterly->id);
+    }
+
+    public function test_renewal_transfers_public_token(): void
+    {
+        $created = $this->membershipService->createApplication($this->user->id, $this->annualPlan->id);
+        $submitted = $this->membershipService->submitApplication($created['membershipId']);
+        $this->membershipService->handlePaymentUpdate($submitted['latestPayment']['id'], 1000.00);
+
+        $first = Membership::query()->find($created['membershipId']);
+        $token = $first->public_token;
+        $this->assertNotNull($token);
+
+        $this->membershipService->expire($first->id);
+
+        $renewal = $this->membershipService->startRenewal($this->user->id, $this->annualPlan->id);
+        $renewalRow = Membership::query()->find($renewal['membershipId']);
+
+        $this->assertNull($first->fresh()->public_token);
+        $this->assertSame($token, $renewalRow->public_token);
+    }
+
+    public function test_membership_numbers_are_unique_across_activations(): void
+    {
+        $userB = User::factory()->create(['satellite_id' => $this->user->satellite_id]);
+
+        $a = $this->membershipService->createApplication($this->user->id, $this->annualPlan->id);
+        $aPay = $this->membershipService->submitApplication($a['membershipId']);
+        $activeA = $this->membershipService->handlePaymentUpdate($aPay['latestPayment']['id'], 1000.00);
+
+        $b = $this->membershipService->createApplication($userB->id, $this->annualPlan->id);
+        $bPay = $this->membershipService->submitApplication($b['membershipId']);
+        $activeB = $this->membershipService->handlePaymentUpdate($bPay['latestPayment']['id'], 1000.00);
+
+        $this->assertNotSame($activeA['membershipNumber'], $activeB['membershipNumber']);
     }
 }

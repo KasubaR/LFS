@@ -34,7 +34,7 @@
     <dl class="membership-verify__details">
       <div class="membership-verify__row">
         <dt>Member name</dt>
-        <dd>{{ $member->name }}</dd>
+        <dd>{{ $memberFirstName }}</dd>
       </div>
       <div class="membership-verify__row">
         <dt>Membership number</dt>

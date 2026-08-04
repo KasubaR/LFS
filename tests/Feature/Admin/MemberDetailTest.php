@@ -98,4 +98,67 @@ class MemberDetailTest extends TestCase
         $service = app(MembershipService::class);
         $this->assertFalse($service->userHasOpenMembership($user->id));
     }
+
+    public function test_admin_cannot_cancel_membership_belonging_to_another_user(): void
+    {
+        $userA = User::factory()->create();
+        $userB = User::factory()->create();
+        $planId = MembershipPlan::query()->first()->id;
+
+        Membership::query()->create([
+            'id' => '00000000-0000-4000-8000-000000000030',
+            'user_id' => $userA->id,
+            'membership_number' => '30010',
+            'status' => 'active',
+            'current_plan_id' => $planId,
+            'approval_status' => 'approved',
+            'joined_at' => now(),
+            'start_date' => now()->toDateString(),
+            'expiry_date' => now()->addYear()->toDateString(),
+        ]);
+
+        Membership::query()->create([
+            'id' => '00000000-0000-4000-8000-000000000031',
+            'user_id' => $userB->id,
+            'membership_number' => '30011',
+            'status' => 'active',
+            'current_plan_id' => $planId,
+            'approval_status' => 'approved',
+            'joined_at' => now(),
+            'start_date' => now()->toDateString(),
+            'expiry_date' => now()->addYear()->toDateString(),
+        ]);
+
+        $response = $this->actingAsAdmin()->post(
+            '/admin/members/'.$userA->id.'/memberships/00000000-0000-4000-8000-000000000031/cancel',
+            ['reason' => 'Cross-user cancel attempt']
+        );
+
+        $response->assertNotFound();
+        $this->assertSame('active', Membership::query()->find('00000000-0000-4000-8000-000000000031')->status);
+    }
+
+    public function test_admin_can_cancel_an_expired_membership(): void
+    {
+        $user = User::factory()->create();
+
+        Membership::query()->create([
+            'id' => '00000000-0000-4000-8000-000000000032',
+            'user_id' => $user->id,
+            'membership_number' => '30012',
+            'status' => 'expired',
+            'current_plan_id' => MembershipPlan::query()->first()->id,
+            'approval_status' => 'approved',
+            'joined_at' => now()->subYear(),
+            'start_date' => now()->subYear()->toDateString(),
+            'expiry_date' => now()->subDay()->toDateString(),
+        ]);
+
+        $this->actingAsAdmin()->post(
+            '/admin/members/'.$user->id.'/memberships/00000000-0000-4000-8000-000000000032/cancel',
+            ['reason' => 'Expired cleanup']
+        )->assertRedirect('/admin/members/'.$user->id);
+
+        $this->assertSame('cancelled', Membership::query()->find('00000000-0000-4000-8000-000000000032')->status);
+    }
 }

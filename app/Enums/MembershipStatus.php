@@ -30,7 +30,7 @@ class MembershipStatus
         self::Draft => [self::PendingPayment, self::Cancelled],
         self::PendingPayment => [self::Active, self::Cancelled],
         self::Active => [self::Expired, self::Cancelled],
-        self::Expired => [self::PendingPayment],
+        self::Expired => [self::PendingPayment, self::Cancelled],
     ];
 
     /**

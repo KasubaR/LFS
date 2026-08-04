@@ -89,4 +89,39 @@ class PaymentIdempotencyTest extends TestCase
         $second = $service->recordAmountPaid($payment->id, (float) $plan->price, ['paidAt' => now()]);
         $this->assertNull($second);
     }
+
+    public function test_handle_payment_update_activates_when_payment_already_paid(): void
+    {
+        $user = User::factory()->create();
+        $plan = MembershipPlan::query()->first();
+
+        $membership = Membership::query()->create([
+            'id' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'membership_number' => null,
+            'status' => MembershipStatus::PendingPayment,
+            'current_plan_id' => $plan->id,
+            'approval_status' => 'pending',
+        ]);
+
+        $payment = MembershipPayment::query()->create([
+            'membership_id' => $membership->id,
+            'plan_id' => $plan->id,
+            'amount' => $plan->price,
+            'amount_paid' => $plan->price,
+            'currency' => 'ZMW',
+            'payment_reference' => 'LFS-RACE-REF-3',
+            'payment_gateway' => 'lenco',
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+
+        $result = app(\App\Services\MembershipService::class)->handlePaymentUpdate(
+            $payment->id,
+            (float) $plan->price
+        );
+
+        $this->assertSame(MembershipStatus::Active, $result['status']);
+        $this->assertNotNull($result['membershipNumber']);
+    }
 }

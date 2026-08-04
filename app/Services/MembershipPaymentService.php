@@ -93,6 +93,51 @@ class MembershipPaymentService
     }
 
     /**
+     * Mark a non-terminal payment as failed (gateway declined / cancelled).
+     * Membership stays PendingPayment so the member can initiate a fresh attempt.
+     *
+     * @param  array<string, mixed>  $extra
+     */
+    public function markFailed(int $id, array $extra = []): ?array
+    {
+        $payment = MembershipPayment::query()->find($id);
+        if (! $payment || MembershipPaymentStatus::isTerminal($payment->status)) {
+            return null;
+        }
+
+        $updates = [
+            'status' => MembershipPaymentStatus::Failed,
+            'updated_at' => now(),
+        ];
+
+        $map = [
+            'lencoStatus' => 'lenco_status',
+            'lencoResponse' => 'lenco_response',
+            'webhookReceived' => 'webhook_received',
+            'webhookPayload' => 'webhook_payload',
+            'webhookReceivedAt' => 'webhook_received_at',
+            'metadata' => 'metadata',
+        ];
+
+        foreach ($map as $camel => $column) {
+            if (array_key_exists($camel, $extra)) {
+                $updates[$column] = $extra[$camel];
+            }
+        }
+
+        $applied = MembershipPayment::query()
+            ->whereKey($id)
+            ->whereNotIn('status', MembershipPaymentStatus::TERMINAL)
+            ->update($updates) > 0;
+
+        if (! $applied) {
+            return null;
+        }
+
+        return $this->findById($id);
+    }
+
+    /**
      * Persist gateway identifiers returned when a payment is initiated with Lenco,
      * without touching amount_paid/status (the payment is still Pending at this point).
      *

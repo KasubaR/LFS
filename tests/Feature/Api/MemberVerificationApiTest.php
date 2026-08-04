@@ -343,6 +343,19 @@ class MemberVerificationApiTest extends TestCase
             ->assertJsonPath('error.code', 'invalid_request');
     }
 
+    public function test_providing_both_surname_and_email_is_rejected(): void
+    {
+        $this->makeMembership();
+
+        $this->verify([
+            'membership_number' => 'LFS-000412',
+            'surname' => 'Mwale',
+            'email' => 'chanda@example.com',
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('error.code', 'invalid_request');
+    }
+
     // ── Token lookup ─────────────────────────────────────────────────────────
 
     public function test_card_token_lookup_returns_member(): void

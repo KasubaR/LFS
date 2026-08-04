@@ -26,6 +26,10 @@ class MembershipService
 
     public const NO_OPEN_MEMBERSHIP_CODE = 'NO_OPEN_MEMBERSHIP';
 
+    public const OPEN_MEMBERSHIP_EXISTS_CODE = 'OPEN_MEMBERSHIP_EXISTS';
+
+    public const PLAN_CHANGE_LOCKED_CODE = 'PLAN_CHANGE_LOCKED';
+
     public function __construct(
         private readonly MembershipPaymentService $paymentService,
         private readonly MembershipPlanService $planService
@@ -38,11 +42,15 @@ class MembershipService
     {
         $plan = $this->findPlanOrFail($planId);
 
-        if ($this->hasOpenMembership($userId)) {
-            throw new CodeException('User already has an open membership application.', 'OPEN_MEMBERSHIP_EXISTS');
-        }
-
         return DB::transaction(function () use ($userId, $plan) {
+            // Serialize concurrent apply attempts for the same user so two
+            // Drafts cannot slip past a TOCTOU check.
+            User::query()->whereKey($userId)->lockForUpdate()->first();
+
+            if ($this->hasOpenMembership($userId)) {
+                throw new CodeException('User already has an open membership application.', self::OPEN_MEMBERSHIP_EXISTS_CODE);
+            }
+
             $membershipId = Uuid::v4();
 
             // No membership_number yet — it's only allocated once payment is
@@ -60,7 +68,7 @@ class MembershipService
             $this->logHistory(
                 $membershipId,
                 $userId,
-                MembershipHistoryEvent::Submitted,
+                MembershipHistoryEvent::Created,
                 null,
                 MembershipStatus::Draft,
                 $plan->id,
@@ -103,6 +111,24 @@ class MembershipService
 
         return DB::transaction(function () use ($membership, $plan) {
             $fromPlanId = (int) $membership->current_plan_id;
+
+            if ($membership->status === MembershipStatus::PendingPayment) {
+                $pendingPayment = MembershipPayment::query()
+                    ->where('membership_id', $membership->id)
+                    ->whereNotIn('status', MembershipPaymentStatus::TERMINAL)
+                    ->orderByDesc('created_at')
+                    ->lockForUpdate()
+                    ->first();
+
+                // Once MoMo has been initiated, the gateway holds the old amount —
+                // changing the plan here would activate at the wrong price.
+                if ($pendingPayment && filled($pendingPayment->payment_reference)) {
+                    throw new CodeException(
+                        'Cannot change plan after payment has been initiated. Complete or wait for the current payment to finish.',
+                        self::PLAN_CHANGE_LOCKED_CODE
+                    );
+                }
+            }
 
             Membership::query()->whereKey($membership->id)->update([
                 'current_plan_id' => $plan->id,
@@ -251,22 +277,44 @@ class MembershipService
 
     public function handlePaymentUpdate(int $paymentId, float $amountPaid, array $extra = []): array
     {
-        $payment = $this->paymentService->recordAmountPaid($paymentId, $amountPaid, $extra);
-        if (! $payment) {
-            throw new CodeException('Payment not found or already terminal.', 'PAYMENT_NOT_UPDATABLE');
-        }
+        return DB::transaction(function () use ($paymentId, $amountPaid, $extra) {
+            $payment = $this->paymentService->recordAmountPaid($paymentId, $amountPaid, $extra);
 
-        $membership = $this->findMembershipOrFail($payment['membershipId']);
+            // Recovery: a prior attempt may have marked the payment Paid and then
+            // crashed before activateOnPayment finished. Terminal payments normally
+            // short-circuit, but PendingPayment + Paid must still activate once.
+            if (! $payment) {
+                $existing = $this->paymentService->findById($paymentId);
+                if (
+                    $existing
+                    && $existing['status'] === MembershipPaymentStatus::Paid
+                ) {
+                    $membership = $this->findMembershipOrFail($existing['membershipId']);
+                    if ($membership->status === MembershipStatus::PendingPayment) {
+                        $this->activateOnPayment($membership, $existing);
 
-        if (
-            $membership->status === MembershipStatus::PendingPayment
-            && $payment['status'] === MembershipPaymentStatus::Paid
-        ) {
-            $this->activateOnPayment($membership, $payment);
-            $membership->refresh();
-        }
+                        return $this->toMembership($membership->fresh(['user', 'plan']), $paymentId);
+                    }
+                    if ($membership->status === MembershipStatus::Active) {
+                        return $this->toMembership($membership->fresh(['user', 'plan']), $paymentId);
+                    }
+                }
 
-        return $this->toMembership($membership->fresh(['user', 'plan']), $paymentId);
+                throw new CodeException('Payment not found or already terminal.', 'PAYMENT_NOT_UPDATABLE');
+            }
+
+            $membership = $this->findMembershipOrFail($payment['membershipId']);
+
+            if (
+                $membership->status === MembershipStatus::PendingPayment
+                && $payment['status'] === MembershipPaymentStatus::Paid
+            ) {
+                $this->activateOnPayment($membership, $payment);
+                $membership->refresh();
+            }
+
+            return $this->toMembership($membership->fresh(['user', 'plan']), $paymentId);
+        });
     }
 
     /**
@@ -281,11 +329,13 @@ class MembershipService
             throw new CodeException('No expired membership to renew.', 'NO_EXPIRED_MEMBERSHIP');
         }
 
-        if ($this->hasOpenMembership($userId)) {
-            throw new CodeException('User already has an open membership application.', 'OPEN_MEMBERSHIP_EXISTS');
-        }
-
         return DB::transaction(function () use ($userId, $plan, $latest) {
+            User::query()->whereKey($userId)->lockForUpdate()->first();
+
+            if ($this->hasOpenMembership($userId)) {
+                throw new CodeException('User already has an open membership application.', self::OPEN_MEMBERSHIP_EXISTS_CODE);
+            }
+
             $membershipId = Uuid::v4();
             $publicToken = $latest->public_token ?: Uuid::v4();
 
@@ -388,15 +438,38 @@ class MembershipService
     public function generateMembershipNumber(): string
     {
         $prefix = config('membership.membership_number_prefix', 'LFS');
-        $latest = Membership::query()
-            ->where('membership_number', 'like', $prefix.'-%')
-            ->orderByDesc('membership_number')
-            ->value('membership_number');
 
-        $sequence = 1;
-        if ($latest && preg_match('/-(\d+)$/', $latest, $matches)) {
-            $sequence = (int) $matches[1] + 1;
+        // Counter row + lockForUpdate serializes allocation inside the caller's
+        // transaction (renewals reuse numbers and cannot use a UNIQUE column).
+        $counter = DB::table('membership_number_counters')
+            ->where('prefix', $prefix)
+            ->lockForUpdate()
+            ->first();
+
+        if ($counter === null) {
+            $latest = Membership::query()
+                ->where('membership_number', 'like', $prefix.'-%')
+                ->orderByDesc('membership_number')
+                ->value('membership_number');
+
+            $sequence = 1;
+            if ($latest && preg_match('/-(\d+)$/', $latest, $matches)) {
+                $sequence = (int) $matches[1] + 1;
+            }
+
+            DB::table('membership_number_counters')->insert([
+                'prefix' => $prefix,
+                'next_value' => $sequence + 1,
+            ]);
+
+            return sprintf('%s-%06d', $prefix, $sequence);
         }
+
+        $sequence = (int) $counter->next_value;
+
+        DB::table('membership_number_counters')
+            ->where('prefix', $prefix)
+            ->update(['next_value' => $sequence + 1]);
 
         return sprintf('%s-%06d', $prefix, $sequence);
     }

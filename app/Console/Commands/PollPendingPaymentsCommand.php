@@ -164,6 +164,16 @@ class PollPendingPaymentsCommand extends Command
             }
 
             if ($result['internalStatus'] !== 'completed') {
+                if (in_array($result['internalStatus'], ['failed', 'cancelled'], true)) {
+                    $membershipPayments->markFailed($payment->id, [
+                        'lencoStatus' => $result['status'],
+                        'lencoResponse' => $result['rawResponse'] ?? [],
+                    ]);
+                    $resolved++;
+
+                    continue;
+                }
+
                 if ($result['internalStatus'] !== $payment->lenco_status) {
                     $membershipPayments->recordGatewayInitiation($payment->id, [
                         'lencoStatus' => $result['status'],

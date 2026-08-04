@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\BillingCycle;
 use App\Enums\TShirtSize;
+use App\Models\Membership;
 use App\Models\MembershipImportBatch;
 use App\Models\MembershipImportRecord;
 use App\Models\User;
@@ -47,7 +48,7 @@ class MemberImportService
             'imported_at' => now(),
             'total_rows' => count($deduped),
             'status' => 'completed',
-            'notes' => ['errors' => [], 'tempPasswords' => []],
+            'notes' => ['errors' => []],
         ]);
 
         $imported = 0;
@@ -80,13 +81,14 @@ class MemberImportService
             }
         }
 
+        // Never persist plaintext temp passwords on the batch — they are returned
+        // once in the flash result for the admin UI to display.
         $batch->update([
             'imported_rows' => $imported,
             'skipped_rows' => $skipped,
             'error_rows' => $errors,
             'notes' => [
                 'errors' => $errorMessages,
-                'tempPasswords' => $tempPasswords,
             ],
         ]);
 
@@ -268,6 +270,11 @@ class MemberImportService
 
         if (User::query()->where('email', $row['email'])->exists()) {
             return ['status' => 'skipped', 'message' => $row['email'].': email already exists'];
+        }
+
+        $membershipNumber = trim((string) ($row['ref'] ?? ''));
+        if ($membershipNumber !== '' && Membership::query()->where('membership_number', $membershipNumber)->exists()) {
+            return ['status' => 'skipped', 'message' => $row['email'].': membership number '.$membershipNumber.' already exists'];
         }
 
         $rawTShirtSize = trim((string) ($row['tShirtSize'] ?? ''));
