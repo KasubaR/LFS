@@ -12,11 +12,13 @@ $breadcrumbs = $breadcrumbs ?? [
 $evList          = $events          ?? [];
 $eventCategories = $eventCategories ?? [];
 $filterCategory  = $filterCategory  ?? '';
+$filterFromDate  = $filterFromDate  ?? '';
+$filterToDate    = $filterToDate    ?? '';
 
 $now           = new DateTime();
 $upcomingCount = 0;
 foreach ($evList as $ev) {
-    if (!empty($ev['eventDate']) && new DateTime($ev['eventDate']) >= $now) {
+    if (empty($ev['eventDate']) || new DateTime($ev['eventDate']) >= $now) {
         $upcomingCount++;
     }
 }
@@ -67,6 +69,16 @@ if (! function_exists('formatEventDate')) {
         </option>
       @endforeach
     </select>
+    <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.8rem; color:var(--text-dim);">
+      From
+      <input type="date" name="fromDate" value="{{ $filterFromDate }}"
+             style="padding:0.5rem 0.65rem; background:var(--black-soft); border:1px solid var(--border-mid); border-radius:8px; color:var(--off-white); font-family:var(--font-body); font-size:0.85rem;" />
+    </label>
+    <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.8rem; color:var(--text-dim);">
+      To
+      <input type="date" name="toDate" value="{{ $filterToDate }}"
+             style="padding:0.5rem 0.65rem; background:var(--black-soft); border:1px solid var(--border-mid); border-radius:8px; color:var(--off-white); font-family:var(--font-body); font-size:0.85rem;" />
+    </label>
     <button type="submit"
             style="padding:0.55rem 1rem; background:var(--flag-green); color:#fff; border:none; border-radius:8px; font-family:var(--font-body); font-size:0.85rem; cursor:pointer;">
       Filter

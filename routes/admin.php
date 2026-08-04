@@ -73,6 +73,7 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
 
         Route::get('upload', [GalleryController::class, 'uploadPage']);
         Route::post('upload', [GalleryController::class, 'handleUpload']);
+        Route::post('cover-upload', [GalleryController::class, 'coverUpload']);
 
         Route::prefix('albums')->group(function (): void {
             Route::get('/', [GalleryController::class, 'albums']);

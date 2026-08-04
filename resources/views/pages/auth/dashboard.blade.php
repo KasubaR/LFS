@@ -3,7 +3,6 @@
 @section('content')
 @php
   $announcements      = $announcements      ?? [];
-  $upcomingEvents     = $upcomingEvents     ?? [];
   $hasPaidMembership  = $hasPaidMembership  ?? false;
 @endphp
 
@@ -166,31 +165,11 @@
       </div>
 
       <div class="dashboard-card">
-        <h2 class="dashboard-card__title"><i class="fas fa-calendar-days" aria-hidden="true"></i> Upcoming Events</h2>
-
-        @if(!$hasPaidMembership)
-          <p class="dashboard-empty">Upcoming events unlock once your membership payment is confirmed.</p>
-        @elseif(empty($upcomingEvents))
-          <p class="dashboard-empty">
-            You're not registered for any upcoming events.
-            <a href="{{ url('/events') }}" class="auth-account-card__link">Browse events</a>.
-          </p>
-        @else
-          <ul class="dashboard-event-list">
-            @foreach($upcomingEvents as $event)
-              <li class="dashboard-event">
-                <div class="dashboard-event__title">{{ $event['title'] }}</div>
-                <div class="dashboard-event__meta">
-                  <i class="fas fa-calendar-day" aria-hidden="true"></i>
-                  {{ date('j M Y', strtotime($event['eventDate'])) }}
-                  @if(!empty($event['location']))
-                    &nbsp;·&nbsp;<i class="fas fa-location-dot" aria-hidden="true"></i> {{ $event['location'] }}
-                  @endif
-                </div>
-              </li>
-            @endforeach
-          </ul>
-        @endif
+        <h2 class="dashboard-card__title"><i class="fas fa-calendar-days" aria-hidden="true"></i> Events</h2>
+        <p class="dashboard-empty">
+          Browse the LFS events calendar and register directly on each event's page.
+          <a href="{{ url('/events') }}" class="auth-account-card__link">View events</a>.
+        </p>
       </div>
     </div>
 

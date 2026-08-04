@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\Product;
 use App\Services\LencoService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class OrderPaymentVerifyTest extends TestCase
@@ -36,9 +38,11 @@ class OrderPaymentVerifyTest extends TestCase
 
         // No /shop/checkout/place-order call was made in this session, so no
         // order_access grant exists for this txId — probing it must be rejected.
+        // Returns 404 (same as an unknown txId) rather than 403, so a caller can't
+        // use the status code to distinguish "doesn't exist" from "exists, not yours".
         $response = $this->getJson('/shop/checkout/verify?txId=LFS-NOACCESS-REF');
 
-        $response->assertStatus(403);
+        $response->assertStatus(404);
     }
 
     public function test_verify_returns_404_for_unknown_txid(): void
@@ -70,8 +74,20 @@ class OrderPaymentVerifyTest extends TestCase
             ]);
         });
 
+        $product = Product::query()->create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Test Jersey',
+            'slug' => 'test-jersey-'.Str::random(8),
+            'price' => 100,
+            'category' => 'jerseys',
+            'gender' => 'unisex',
+            'sizes' => [['size' => 'M', 'stock' => 5]],
+            'total_stock' => 5,
+            'is_active' => true,
+        ]);
+
         $placeResponse = $this->withSession([
-            'cart' => [['price' => 100, 'qty' => 1]],
+            'cart' => [['price' => 100, 'qty' => 1, 'productId' => $product->id, 'size' => 'M']],
         ])->postJson('/shop/checkout/place-order', [
             'customerInfo' => ['name' => 'Jane Doe', 'email' => 'jane@example.com'],
             'paymentMethod' => 'mobile_money',

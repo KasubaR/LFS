@@ -31,7 +31,7 @@ $orderLabel = $statusLabels[$order['status']] ?? $order['status'];
 $breadcrumbs = [
     ['label' => 'Admin',  'url' => '/admin/dashboard'],
     ['label' => 'Orders', 'url' => '/admin/orders'],
-    ['label' => $order['order_number']],
+    ['label' => $order['orderNumber']],
 ];
 @endphp
 
@@ -41,7 +41,7 @@ $breadcrumbs = [
     <i class="fas fa-arrow-left" aria-hidden="true"></i> Back to orders
   </a>
   <h2 class="admin-page-header__heading">
-    {{ $order['order_number'] }}
+    {{ $order['orderNumber'] }}
   </h2>
 </div>
 
@@ -63,8 +63,8 @@ $breadcrumbs = [
               </span>
             </td>
           </tr>
-          <tr><th>Placed</th>    <td>{{ date('d M Y, H:i', strtotime($order['created_at'])) }}</td></tr>
-          <tr><th>Updated</th>   <td>{{ date('d M Y, H:i', strtotime($order['updated_at'])) }}</td></tr>
+          <tr><th>Placed</th>    <td>{{ date('d M Y, H:i', strtotime($order['createdAt'])) }}</td></tr>
+          <tr><th>Updated</th>   <td>{{ date('d M Y, H:i', strtotime($order['updatedAt'])) }}</td></tr>
           <tr><th>Subtotal</th>  <td>{{ ($formatPrice)($order['subtotal'] ?? 0) }}</td></tr>
           <tr>
             <th>Total</th>
@@ -79,21 +79,21 @@ $breadcrumbs = [
       <p class="admin-card__title">Customer</p>
       <table class="admin-table admin-table--compact">
         <tbody>
-          <tr><th>Name</th>  <td>{{ $order['customer_name'] }}</td></tr>
+          <tr><th>Name</th>  <td>{{ $order['customerName'] }}</td></tr>
           <tr>
             <th>Email</th>
             <td>
-              <a href="mailto:{{ $order['customer_email'] }}">
-                {{ $order['customer_email'] }}
+              <a href="mailto:{{ $order['customerEmail'] }}">
+                {{ $order['customerEmail'] }}
               </a>
             </td>
           </tr>
-          @if(!empty($order['customer_phone']))
+          @if(!empty($order['customerPhone']))
           <tr>
             <th>Phone</th>
             <td>
-              <a href="tel:{{ $order['customer_phone'] }}">
-                {{ $order['customer_phone'] }}
+              <a href="tel:{{ $order['customerPhone'] }}">
+                {{ $order['customerPhone'] }}
               </a>
             </td>
           </tr>
@@ -198,25 +198,25 @@ $breadcrumbs = [
                 </span>
               </td>
             </tr>
-            <tr><th>Method</th>   <td>{{ $payment['payment_method'] ?? '—' }}</td></tr>
+            <tr><th>Method</th>   <td>{{ $payment['paymentMethod'] ?? '—' }}</td></tr>
             <tr><th>Amount</th>   <td>{{ ($formatPrice)($payment['amount'] ?? 0) }}</td></tr>
-            @if(!empty($payment['lenco_reference']))
-            <tr><th>Ref</th>      <td><code>{{ $payment['lenco_reference'] }}</code></td></tr>
+            @if(!empty($payment['lencoReference']))
+            <tr><th>Ref</th>      <td><code>{{ $payment['lencoReference'] }}</code></td></tr>
             @endif
-            @if(!empty($payment['lenco_provider']))
-            <tr><th>Provider</th> <td>{{ strtoupper($payment['lenco_provider']) }}</td></tr>
+            @if(!empty($payment['lencoProvider']))
+            <tr><th>Provider</th> <td>{{ strtoupper($payment['lencoProvider']) }}</td></tr>
             @endif
-            @if(!empty($payment['lenco_status']))
-            <tr><th>Lenco</th>    <td>{{ $payment['lenco_status'] }}</td></tr>
+            @if(!empty($payment['lencoStatus']))
+            <tr><th>Lenco</th>    <td>{{ $payment['lencoStatus'] }}</td></tr>
             @endif
-            @if(!empty($payment['completed_at']))
-            <tr><th>Paid at</th>  <td>{{ date('d M Y, H:i', strtotime($payment['completed_at'])) }}</td></tr>
+            @if(!empty($payment['completedAt']))
+            <tr><th>Paid at</th>  <td>{{ date('d M Y, H:i', strtotime($payment['completedAt'])) }}</td></tr>
             @endif
-            @if(!empty($payment['failed_at']))
-            <tr><th>Failed at</th><td>{{ date('d M Y, H:i', strtotime($payment['failed_at'])) }}</td></tr>
+            @if(!empty($payment['failedAt']))
+            <tr><th>Failed at</th><td>{{ date('d M Y, H:i', strtotime($payment['failedAt'])) }}</td></tr>
             @endif
-            @if(!empty($payment['failure_reason']))
-            <tr><th>Reason</th>   <td>{{ $payment['failure_reason'] }}</td></tr>
+            @if(!empty($payment['failureReason']))
+            <tr><th>Reason</th>   <td>{{ $payment['failureReason'] }}</td></tr>
             @endif
           </tbody>
         </table>

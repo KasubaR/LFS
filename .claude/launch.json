@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "artisan-serve",
-      "runtimeExecutable": "php",
+      "runtimeExecutable": "C:\\xampp\\php\\php.exe",
       "runtimeArgs": ["artisan", "serve", "--port=8123"],
       "port": 8123
     }

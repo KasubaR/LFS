@@ -7,17 +7,27 @@ use Illuminate\Http\Response;
 use App\Enums\EventCategory;
 use App\Http\Controllers\Controller;
 use Illuminate\Contracts\View\View;
+use App\Services\AdminPermissionService;
 use App\Services\EventService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 
 use Throwable;
 
 class EventController extends Controller
 {
+    /** Max upload size for banner/route images, in kilobytes (5 MB). */
+    private const IMAGE_MAX_KB = 5120;
+
+    /** Max upload size for the event brochure PDF, in kilobytes (50 MB). */
+    private const BROCHURE_MAX_KB = 51200;
+
     public function __construct(
         private readonly EventService $eventService,
+        private readonly AdminPermissionService $permissions,
     ) {}
 
     public function index(Request $request): View
@@ -99,7 +109,9 @@ class EventController extends Controller
 
         try {
             $distRoutes = $this->collectDistanceRoutesFromRequest($request);
-            $created = $this->eventService->createEvent($this->buildEventPayload($body, null, $distRoutes));
+            $payload = $this->buildEventPayload($body, null, $distRoutes);
+            $payload['createdBy'] = $this->permissions->currentAdmin($request)?->id;
+            $created = $this->eventService->createEvent($payload);
             $this->eventService->replaceEventDistanceRoutes(
                 (string) $created['id'],
                 $distRoutes
@@ -229,8 +241,25 @@ class EventController extends Controller
         ];
     }
 
+    /**
+     * Server-side validation for every uploaded file on the event form.
+     * The `accept` attribute on the file inputs is a UI hint only — it does
+     * not stop a crafted request from uploading an arbitrary file, so the
+     * actual file content/mime type must be checked here before anything
+     * is moved into the public webroot.
+     */
     private function uploadError(Request $request): ?string
     {
+        $validator = Validator::make($request->all(), [
+            'bannerImageFile' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:'.self::IMAGE_MAX_KB],
+            'dist_route_file.*' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:'.self::IMAGE_MAX_KB],
+            'brochurePdfFile' => ['nullable', 'file', 'mimes:pdf', 'max:'.self::BROCHURE_MAX_KB],
+        ]);
+
+        if ($validator->fails()) {
+            return (string) $validator->errors()->first();
+        }
+
         return $request->input('_bannerUploadError')
             ?: $request->input('_distanceRouteUploadError')
             ?: $request->input('_brochureUploadError');
@@ -274,7 +303,7 @@ class EventController extends Controller
                 if (! is_dir($dir)) {
                     mkdir($dir, 0775, true);
                 }
-                $ext      = strtolower($file->getClientOriginalExtension() ?: 'jpg');
+                $ext      = $this->safeImageExtension($file);
                 $filename = 'route_'.uniqid().'.'.$ext;
                 $file->move($dir, $filename);
                 $img = '/images/events/routes/'.$filename;
@@ -304,7 +333,15 @@ class EventController extends Controller
             }
         }
 
-        return $labels === [] ? '' : implode(', ', $labels);
+        if ($labels === []) {
+            return '';
+        }
+
+        $summary = implode(', ', $labels);
+
+        // events.distance is varchar(255) — guard against truncation/SQL
+        // errors on events with many or long distance labels.
+        return mb_strlen($summary) > 255 ? mb_substr($summary, 0, 252).'…' : $summary;
     }
 
   /**
@@ -340,6 +377,20 @@ class EventController extends Controller
         return $existing['brochurePdf'] ?? null;
     }
 
+    /**
+     * Derives a safe filename extension from the file's actual (sniffed)
+     * mime type rather than the client-supplied original filename — the
+     * latter is attacker-controlled and could otherwise be used to plant an
+     * executable file (e.g. ".php") in a publicly served directory.
+     */
+    private function safeImageExtension(UploadedFile $file): string
+    {
+        $allowed = ['jpg', 'jpeg', 'png', 'webp'];
+        $guessed = strtolower((string) ($file->extension() ?: $file->guessExtension() ?: ''));
+
+        return in_array($guessed, $allowed, true) ? $guessed : 'jpg';
+    }
+
     private function resolveUploadedBanner(?string $bodyUrl): ?string
     {
         $file = request()->file('bannerImageFile');
@@ -348,7 +399,7 @@ class EventController extends Controller
             if (! is_dir($dir)) {
                 mkdir($dir, 0775, true);
             }
-            $ext      = strtolower($file->getClientOriginalExtension() ?: 'jpg');
+            $ext      = $this->safeImageExtension($file);
             $filename = 'banner_'.uniqid().'.'.$ext;
             $file->move($dir, $filename);
 
@@ -380,13 +431,19 @@ class EventController extends Controller
 
     private function deleteLocalFile(?string $path, string $prefix): void
     {
-        if (! $path || ! str_starts_with($path, $prefix)) {
+        if (! $path || str_contains($path, '..') || ! str_starts_with($path, $prefix)) {
             return;
         }
+
         $full = public_path(ltrim($path, '/'));
-        if (file_exists($full)) {
-            @unlink($full);
+        $realFull = realpath($full);
+        $realDir = realpath(public_path(ltrim($prefix, '/')));
+
+        if ($realFull === false || $realDir === false || ! str_starts_with($realFull, $realDir)) {
+            return;
         }
+
+        @unlink($realFull);
     }
 
     /**

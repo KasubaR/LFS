@@ -36,16 +36,25 @@ if (! function_exists('getEventStatus')) {
 /* ── Partition events ────────────────────────────────────── */
 $allEvents = $events ?? [];
 
+/* Recurring events may have no fixed "next occurrence" date — treat those
+   as ongoing/upcoming rather than hiding them entirely. */
 $upcomingList = array_filter($allEvents, fn($ev) =>
-  !empty($ev['eventDate']) && new DateTime($ev['eventDate']) >= $now
+  empty($ev['eventDate']) || new DateTime($ev['eventDate']) >= $now
 );
 $pastList = array_filter($allEvents, fn($ev) =>
   !empty($ev['eventDate']) && new DateTime($ev['eventDate']) < $now
 );
 
-/* Sort upcoming ASC, past DESC */
-usort($upcomingList, fn($a, $b) => new DateTime($a['eventDate']) <=> new DateTime($b['eventDate']));
-usort($pastList,     fn($a, $b) => new DateTime($b['eventDate']) <=> new DateTime($a['eventDate']));
+/* Sort upcoming ASC (dateless/ongoing events float to the top), past DESC */
+usort($upcomingList, function ($a, $b) {
+  $da = !empty($a['eventDate']) ? new DateTime($a['eventDate']) : null;
+  $db = !empty($b['eventDate']) ? new DateTime($b['eventDate']) : null;
+  if ($da === null && $db === null) return 0;
+  if ($da === null) return -1;
+  if ($db === null) return 1;
+  return $da <=> $db;
+});
+usort($pastList, fn($a, $b) => new DateTime($b['eventDate']) <=> new DateTime($a['eventDate']));
 
 $upcomingList = array_values($upcomingList);
 $pastList     = array_values($pastList);

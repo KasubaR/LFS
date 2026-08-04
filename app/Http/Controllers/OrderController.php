@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\InsufficientStockException;
 use App\Http\Controllers\Concerns\RespondsWithJson;
 use App\Http\Requests\PlaceOrderRequest;
 use App\Services\LencoService;
 use App\Services\OrderService;
 use App\Services\PaymentService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -47,25 +49,45 @@ class OrderController extends Controller
             return $this->jsonError('Cart total must be greater than zero.', 400);
         }
 
-        $orderNumber = $this->generateOrderNumber();
+        $orderId = null;
+        $orderNumber = null;
+        $maxAttempts = 5;
 
-        try {
-            $orderId = $this->orders->create([
-                'userId' => Auth::id(),
-                'orderNumber' => $orderNumber,
-                'customerName' => $customerInfo['name'],
-                'customerEmail' => $customerInfo['email'],
-                'customerPhone' => $customerInfo['phone'] ?? '',
-                'notes' => $customerInfo['notes'] ?? '',
-                'items' => $cart,
-                'subtotal' => $subtotal,
-                'total' => $subtotal,
-                'status' => 'pending_payment',
-            ]);
-        } catch (Throwable $e) {
-            Log::error('[OrderController] Failed to create order: '.$e->getMessage());
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            $candidateOrderNumber = $this->generateOrderNumber();
 
-            return $this->jsonError('Could not create your order. Please try again.', 500);
+            try {
+                // Server re-prices every line from the current product DB row (see
+                // OrderService::create) — the client-submitted $subtotal above is only
+                // used for the cheap empty-cart guard, never trusted for the charge.
+                $result = $this->orders->create([
+                    'userId' => Auth::id(),
+                    'orderNumber' => $candidateOrderNumber,
+                    'customerName' => $customerInfo['name'],
+                    'customerEmail' => $customerInfo['email'],
+                    'customerPhone' => $customerInfo['phone'] ?? '',
+                    'notes' => $customerInfo['notes'] ?? '',
+                    'items' => $cart,
+                    'status' => 'pending_payment',
+                ]);
+                $orderId = $result['id'];
+                $subtotal = $result['subtotal'];
+                $orderNumber = $candidateOrderNumber;
+                break;
+            } catch (InsufficientStockException $e) {
+                return $this->jsonError($e->getMessage(), 409);
+            } catch (QueryException $e) {
+                if ($this->isDuplicateOrderNumber($e) && $attempt < $maxAttempts) {
+                    continue;
+                }
+                Log::error('[OrderController] Failed to create order: '.$e->getMessage());
+
+                return $this->jsonError('Could not create your order. Please try again.', 500);
+            } catch (Throwable $e) {
+                Log::error('[OrderController] Failed to create order: '.$e->getMessage());
+
+                return $this->jsonError('Could not create your order. Please try again.', 500);
+            }
         }
 
         // Grants this browser session permission to poll this order's payment status —
@@ -84,6 +106,7 @@ class OrderController extends Controller
         } catch (Throwable $e) {
             Log::error('[OrderController] Lenco initiation failed: '.$e->getMessage());
             $this->orders->updateStatus($orderId, 'payment_failed');
+            $this->orders->restoreStockForOrder($orderNumber);
 
             return $this->jsonError(
                 $e->getMessage() ?: 'Could not connect to payment provider. Please try again.',
@@ -91,29 +114,56 @@ class OrderController extends Controller
             );
         }
 
+        $paymentData = [
+            'orderNumber' => $orderNumber,
+            'paymentMethod' => 'mobile_money',
+            'amount' => $subtotal,
+            'currency' => $lencoResult['currency'] ?? 'ZMW',
+            'status' => $lencoResult['internalStatus'],
+            'customerInfo' => $customerInfo,
+            'lencoTransactionId' => $lencoResult['transactionId'],
+            'lencoReference' => $lencoResult['lencoReference'],
+            'lencoProvider' => $provider,
+            'lencoStatus' => $lencoResult['status'],
+            'lencoResponse' => $lencoResult['rawResponse'] ?? [],
+            'transactionId' => $lencoResult['reference'],
+            'paymentInstructions' => $lencoResult['paymentInstructions'],
+            'expiresAt' => $lencoResult['expiresAt'],
+            'metadata' => [
+                'provider' => $provider,
+                'customerPhone' => $customerPhone,
+            ],
+        ];
+
         try {
-            $this->payments->create([
-                'orderNumber' => $orderNumber,
-                'paymentMethod' => 'mobile_money',
-                'amount' => $subtotal,
-                'currency' => $lencoResult['currency'] ?? 'ZMW',
-                'status' => $lencoResult['internalStatus'],
-                'customerInfo' => $customerInfo,
-                'lencoTransactionId' => $lencoResult['transactionId'],
-                'lencoReference' => $lencoResult['lencoReference'],
-                'lencoProvider' => $provider,
-                'lencoStatus' => $lencoResult['status'],
-                'lencoResponse' => $lencoResult['rawResponse'] ?? [],
-                'transactionId' => $lencoResult['reference'],
-                'paymentInstructions' => $lencoResult['paymentInstructions'],
-                'expiresAt' => $lencoResult['expiresAt'],
-                'metadata' => [
-                    'provider' => $provider,
-                    'customerPhone' => $customerPhone,
-                ],
-            ]);
+            $this->payments->create($paymentData);
         } catch (Throwable $e) {
-            Log::error('[OrderController] Failed to save payment record: '.$e->getMessage());
+            Log::error('[OrderController] Failed to save payment record, retrying once: '.$e->getMessage(), [
+                'orderNumber' => $orderNumber,
+            ]);
+
+            try {
+                $this->payments->create($paymentData);
+            } catch (Throwable $e2) {
+                // The Lenco payment is already live but we have no payment row to reconcile
+                // it against later — webhook/verify/poller all look up payments by
+                // transaction id and will find nothing. Fail the order instead of silently
+                // returning ok:true, and flag it loudly for manual reconciliation.
+                Log::critical('[OrderController] Payment record could not be saved after retry; order left unreconciled', [
+                    'orderNumber' => $orderNumber,
+                    'lencoTransactionId' => $lencoResult['transactionId'] ?? null,
+                    'error' => $e2->getMessage(),
+                ]);
+
+                $this->orders->updateStatus($orderId, 'payment_failed');
+                $this->orders->restoreStockForOrder($orderNumber);
+
+                return $this->jsonError(
+                    'We could not finish setting up your order. If money was deducted, it was not confirmed — '
+                    .'please contact support with order number '.$orderNumber.' before trying again.',
+                    500
+                );
+            }
         }
 
         session(['cart' => []]);
@@ -144,9 +194,12 @@ class OrderController extends Controller
             return $this->jsonError('Payment not found.', 404);
         }
 
+        // Same status/message as the "unknown txId" branch above — a distinct 403 would
+        // let a caller distinguish "doesn't exist" from "exists, not yours" and probe
+        // transaction IDs for validity.
         $orderNumber = $payment['orderNumber'] ?? null;
         if (! $orderNumber || ! session()->get("order_access.{$orderNumber}")) {
-            return $this->jsonError('Payment not found.', 403);
+            return $this->jsonError('Payment not found.', 404);
         }
 
         if (in_array($payment['status'], self::PAYMENT_TERMINAL_STATUSES, true)) {
@@ -166,9 +219,20 @@ class OrderController extends Controller
                 $extra = ['lencoStatus' => $result['status']];
                 if ($result['internalStatus'] === 'completed') {
                     $extra['completedAt'] = now()->toDateTimeString();
-                    $this->orders->updateStatus($orderNumber, 'paid', byOrderNumber: true);
                 }
-                $this->payments->updateStatus($payment['id'], $result['internalStatus'], $extra);
+
+                $updated = $this->payments->updateStatus($payment['id'], $result['internalStatus'], $extra);
+
+                if ($updated && $result['internalStatus'] === 'completed') {
+                    $this->orders->updateStatus($orderNumber, 'paid', byOrderNumber: true);
+                } elseif ($updated && in_array($result['internalStatus'], ['failed', 'cancelled'], true)) {
+                    $this->orders->updateStatus(
+                        $orderNumber,
+                        $result['internalStatus'] === 'cancelled' ? 'cancelled' : 'payment_failed',
+                        byOrderNumber: true
+                    );
+                    $this->orders->restoreStockForOrder($orderNumber);
+                }
             }
 
             return $this->jsonResponse([
@@ -219,6 +283,21 @@ class OrderController extends Controller
     {
         $order = $this->orders->findByOrderNumber($orderNumber);
         if (! $order) {
+            abort(404, 'Order not found.');
+        }
+
+        // Same guard as verifyPayment(): either this browser session placed the order
+        // (order_access grant) or the logged-in account owns it. Otherwise 404 rather
+        // than leaking the customer's name/items/total to anyone who guesses the number.
+        $hasSessionAccess = (bool) session()->get("order_access.{$orderNumber}");
+        $hasOwnerAccess = false;
+        $user = Auth::user();
+        if ($user !== null) {
+            $hasOwnerAccess = (int) ($order['userId'] ?? 0) === (int) $user->id
+                || strtolower((string) ($order['customerEmail'] ?? '')) === strtolower((string) $user->email);
+        }
+
+        if (! $hasSessionAccess && ! $hasOwnerAccess) {
             abort(404, 'Order not found.');
         }
 
@@ -282,17 +361,31 @@ class OrderController extends Controller
             $extra['failedAt'] = $data['failedAt'] ?? now()->toDateTimeString();
         }
 
-        $this->payments->updateStatus($payment['id'], $internalStatus, $extra);
+        $updated = $this->payments->updateStatus($payment['id'], $internalStatus, $extra);
+
+        if (! $updated) {
+            return;
+        }
 
         if ($internalStatus === 'completed') {
             $this->orders->updateStatus($orderNumber, 'paid', byOrderNumber: true);
-        } elseif ($internalStatus === 'failed') {
-            $this->orders->updateStatus($orderNumber, 'payment_failed', byOrderNumber: true);
+        } elseif (in_array($internalStatus, ['failed', 'cancelled'], true)) {
+            $this->orders->updateStatus(
+                $orderNumber,
+                $internalStatus === 'cancelled' ? 'cancelled' : 'payment_failed',
+                byOrderNumber: true
+            );
+            $this->orders->restoreStockForOrder($orderNumber);
         }
     }
 
     private function generateOrderNumber(): string
     {
         return 'LFS-'.date('Ymd').'-'.strtoupper(substr(bin2hex(random_bytes(3)), 0, 5));
+    }
+
+    private function isDuplicateOrderNumber(QueryException $e): bool
+    {
+        return (int) ($e->errorInfo[1] ?? 0) === 1062 && str_contains($e->getMessage(), 'order_number');
     }
 }

@@ -56,8 +56,10 @@ Route::prefix('shop')->group(function (): void {
     Route::post('/cart/update', [ShopController::class, 'updateCart']);
     Route::post('/cart/remove', [ShopController::class, 'removeFromCart']);
 
-    Route::post('/checkout/place-order', [OrderController::class, 'placeOrder']);
-    Route::get('/checkout/verify', [OrderController::class, 'verifyPayment']);
+    Route::post('/checkout/place-order', [OrderController::class, 'placeOrder'])
+        ->middleware('throttle:10,1');
+    Route::get('/checkout/verify', [OrderController::class, 'verifyPayment'])
+        ->middleware('throttle:30,1');
     Route::post('/checkout/webhook', [OrderController::class, 'handleWebhook'])
         ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class]);
 

@@ -316,7 +316,11 @@ class GalleryService
 
         if ($updates !== []) {
             $updates['updated_at'] = now();
-            Media::query()->whereKey($id)->update($updates);
+            $query = Media::query()->whereKey($id);
+            if (! empty($opts['albumId'])) {
+                $query->where('album_id', $opts['albumId']);
+            }
+            $query->update($updates);
         }
 
         return ! empty($opts['new']) ? $this->getMediaById($id) : null;

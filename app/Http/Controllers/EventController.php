@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Services\EventService;
 use Illuminate\Contracts\View\View;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -34,7 +33,7 @@ class EventController extends Controller
         ]);
     }
 
-    public function show(string $slug): View|RedirectResponse
+    public function show(string $slug): View
     {
         try {
             $event = $this->eventService->getEventBySlug($slug);
@@ -44,7 +43,7 @@ class EventController extends Controller
         }
 
         if (! $event) {
-            return redirect('/events');
+            abort(404);
         }
 
         return view('pages.event-details', [

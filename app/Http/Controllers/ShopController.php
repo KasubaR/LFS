@@ -249,7 +249,11 @@ class ShopController extends Controller
                 if ($newQty <= 0) {
                     array_splice($cart, $i, 1);
                 } else {
-                    $cart[$i]['qty'] = $newQty;
+                    $stock = $this->productService->getAvailableStock(
+                        (string) ($item['productId'] ?? ''),
+                        (string) ($item['size'] ?? '')
+                    );
+                    $cart[$i]['qty'] = $stock !== null ? min($newQty, max(1, $stock)) : $newQty;
                 }
                 break;
             }

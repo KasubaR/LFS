@@ -117,6 +117,15 @@ $media   = $media ?? [];
       <button type="button" class="btn-action btn-action--ghost" onclick="toggleMoveDropdown()">
         <i class="fas fa-folder-arrow-up"></i> Move to Album
       </button>
+      <div id="moveDropdownMenu" class="move-dropdown-menu">
+        @forelse($otherAlbums ?? [] as $oa)
+          <button type="button" onclick="moveSelectedTo('{{ htmlspecialchars($oa['id']) }}')">
+            {{ $oa['title'] }}
+          </button>
+        @empty
+          <span class="move-dropdown-menu__empty">No other albums</span>
+        @endforelse
+      </div>
     </div>
     <button type="button" class="btn-action btn-action--ghost" onclick="bulkFeature()">
       <i class="fas fa-star"></i> Feature Selected
@@ -136,11 +145,12 @@ $media   = $media ?? [];
   </div>
 
   <!-- Sort -->
+  @php $sortValue = $sort ?? 'newest'; @endphp
   <select id="sortSelect" onchange="sortMedia(this.value)"
           style="padding:0.45rem 0.65rem; background:var(--black-soft); border:1px solid var(--border-mid); border-radius:8px; color:var(--off-white); font-size:0.8rem; font-family:var(--font-body);">
-    <option value="newest">Newest first</option>
-    <option value="oldest">Oldest first</option>
-    <option value="featured">Featured first</option>
+    <option value="newest" {{ $sortValue === 'newest' ? 'selected' : '' }}>Newest first</option>
+    <option value="oldest" {{ $sortValue === 'oldest' ? 'selected' : '' }}>Oldest first</option>
+    <option value="featured" {{ $sortValue === 'featured' ? 'selected' : '' }}>Featured first</option>
   </select>
 
 </div>
@@ -190,9 +200,6 @@ $media   = $media ?? [];
           @if(!empty($item['homepageSlider']))
             <span class="media-item__flag-badge media-item__flag-badge--slider" title="Homepage slider">Slider</span>
           @endif
-          @if(!empty($item['eventHighlight']))
-            <span class="media-item__flag-badge media-item__flag-badge--event" title="Event highlight">Event</span>
-          @endif
 
           <div class="media-item__drag-handle" title="Drag to reorder">
             <i class="fas fa-grip-dots-vertical"></i>
@@ -212,10 +219,6 @@ $media   = $media ?? [];
           <button type="button" class="icon-btn" title="{{ !empty($item['homepageSlider']) ? 'Remove from homepage slider' : 'Add to homepage slider' }}"
                   onclick="toggleMediaHomepageSlider('{{ $itemId }}', this)">
             <i class="fas fa-sliders" style="color:{{ !empty($item['homepageSlider']) ? 'var(--flag-green)' : 'var(--text-dim)' }}"></i>
-          </button>
-          <button type="button" class="icon-btn" title="{{ !empty($item['eventHighlight']) ? 'Remove from event highlight' : 'Add to event highlight' }}"
-                  onclick="toggleMediaEventHighlight('{{ $itemId }}', this)">
-            <i class="fas fa-calendar-day" style="color:{{ !empty($item['eventHighlight']) ? 'var(--flag-orange)' : 'var(--text-dim)' }}"></i>
           </button>
           <button type="button" class="icon-btn icon-btn--danger" title="Delete"
                   onclick="deleteMedia('{{ $itemId }}')">
@@ -344,6 +347,13 @@ $media   = $media ?? [];
 .view-btn { padding:0.4rem 0.6rem; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:6px; color:var(--text-dim); cursor:pointer; font-size:0.8rem; transition:background var(--trans-fast); }
 .view-btn.active { background:var(--flag-green); color:#fff; border-color:var(--flag-green); }
 
+/* Move-to-album dropdown */
+.move-dropdown-menu { display:none; position:absolute; top:calc(100% + 0.35rem); left:0; z-index:20; min-width:180px; max-height:260px; overflow-y:auto; background:var(--black-soft); border:1px solid var(--border-mid); border-radius:8px; box-shadow:0 12px 30px rgba(0,0,0,0.5); padding:0.35rem; }
+.move-dropdown-menu.open { display:block; }
+.move-dropdown-menu button { display:block; width:100%; text-align:left; padding:0.45rem 0.6rem; background:transparent; border:none; border-radius:6px; color:var(--off-white); font-family:var(--font-body); font-size:0.82rem; cursor:pointer; }
+.move-dropdown-menu button:hover { background:rgba(255,255,255,0.08); }
+.move-dropdown-menu__empty { display:block; padding:0.45rem 0.6rem; color:var(--text-dim); font-size:0.8rem; }
+
 /* Media grid */
 .mgmt-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:0.75rem; }
 .mgmt-grid.list-view { grid-template-columns:1fr; }
@@ -364,7 +374,6 @@ $media   = $media ?? [];
 .media-item__featured-badge { position:absolute; top:0.4rem; right:0.4rem; background:rgba(201,168,76,0.9); color:#0f0f0f; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.65rem; }
 .media-item__flag-badge { position:absolute; top:0.4rem; left:0.4rem; font-size:0.55rem; font-weight:700; padding:0.15rem 0.35rem; border-radius:4px; text-transform:uppercase; }
 .media-item__flag-badge--slider { background:rgba(25,138,78,0.9); color:#fff; }
-.media-item__flag-badge--event { background:rgba(224,123,57,0.9); color:#fff; top:2rem; }
 .media-item__drag-handle { position:absolute; bottom:0.35rem; right:0.35rem; color:rgba(255,255,255,0.4); font-size:0.75rem; cursor:grab; opacity:0; transition:opacity var(--trans-fast); }
 .media-item:hover .media-item__drag-handle { opacity:1; }
 .media-item__actions { display:flex; justify-content:center; gap:0.2rem; padding:0.35rem 0.4rem 0; }
@@ -458,7 +467,6 @@ $mediaPayload = array_map(function ($m) {
         'caption'        => $m['caption']  ?? '',
         'featured'       => !empty($m['featured']),
         'homepageSlider' => !empty($m['homepageSlider']),
-        'eventHighlight' => !empty($m['eventHighlight']),
         'urls'           => $m['urls']     ?? [],
     ];
 }, $media);
@@ -512,14 +520,35 @@ async function bulkFeature() {
   await fetch('/admin/gallery/media/bulk-feature', {
     method:  'POST',
     headers: withCsrf({ 'Content-Type': 'application/json' }),
-    body:    JSON.stringify({ ids }),
+    body:    JSON.stringify({ ids, featured: true }),
   });
   alert(ids.length + ' item(s) marked as featured.');
 }
 
 function toggleMoveDropdown() {
-  alert('Move to album: feature coming soon.');
+  const ids = getSelectedIds();
+  if (!ids.length) return;
+  document.getElementById('moveDropdownMenu')?.classList.toggle('open');
 }
+
+async function moveSelectedTo(albumId) {
+  const ids = getSelectedIds();
+  if (!ids.length) return;
+  document.getElementById('moveDropdownMenu')?.classList.remove('open');
+  await fetch('/admin/gallery/media/bulk-move', {
+    method:  'POST',
+    headers: withCsrf({ 'Content-Type': 'application/json' }),
+    body:    JSON.stringify({ ids, albumId }),
+  });
+  location.reload();
+}
+
+document.addEventListener('click', function (e) {
+  const wrapper = document.getElementById('moveDropdownWrapper');
+  if (wrapper && !wrapper.contains(e.target)) {
+    document.getElementById('moveDropdownMenu')?.classList.remove('open');
+  }
+});
 
 /* ─── View toggle ─── */
 function setView(type) {
@@ -541,13 +570,28 @@ function dragStart(e, id) { dragSrcId = id; e.dataTransfer.effectAllowed = 'move
 function dragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
 async function dragDrop(e, targetId) {
   e.preventDefault();
-  if (dragSrcId === targetId) return;
+  if (!dragSrcId || dragSrcId === targetId) return;
+
+  const grid   = document.getElementById('mediaGrid');
+  const srcEl  = document.getElementById('mi_' + dragSrcId);
+  const tgtEl  = document.getElementById('mi_' + targetId);
+  if (!grid || !srcEl || !tgtEl) return;
+
+  const items  = Array.from(grid.children);
+  const srcIdx = items.indexOf(srcEl);
+  const tgtIdx = items.indexOf(tgtEl);
+  if (srcIdx < tgtIdx) {
+    tgtEl.after(srcEl);
+  } else {
+    tgtEl.before(srcEl);
+  }
+
+  const ids = Array.from(grid.querySelectorAll('.media-item')).map(el => el.id.replace(/^mi_/, ''));
   await fetch('/admin/gallery/media/reorder', {
     method:  'POST',
     headers: withCsrf({ 'Content-Type': 'application/json' }),
-    body:    JSON.stringify({ sourceId: dragSrcId, targetId, albumId: ALBUM_ID }),
+    body:    JSON.stringify({ ids, albumId: ALBUM_ID }),
   });
-  location.reload();
 }
 
 /* ─── Caption save ─── */
@@ -619,34 +663,6 @@ async function toggleMediaHomepageSlider(id, btn) {
   } catch { alert('An error occurred.'); }
 }
 
-/* ─── Event highlight toggle ─── */
-async function toggleMediaEventHighlight(id, btn) {
-  try {
-    const res = await fetch('/admin/gallery/media/' + id + '/event-highlight', {
-      method: 'PATCH',
-      headers: withCsrf(),
-    });
-    if (!res.ok) { alert('Unable to update event highlight.'); return; }
-    const data = await res.json();
-    const on = !!data.eventHighlight;
-    const itemEl = document.getElementById('mi_' + id);
-    if (itemEl) {
-      let badge = itemEl.querySelector('.media-item__flag-badge--event');
-      if (on && !badge) {
-        badge = document.createElement('span');
-        badge.className = 'media-item__flag-badge media-item__flag-badge--event';
-        badge.title = 'Event highlight';
-        badge.textContent = 'Event';
-        itemEl.querySelector('.media-item__thumb')?.appendChild(badge);
-      } else if (!on && badge) badge.remove();
-      const icon = btn?.querySelector('i');
-      if (icon) icon.style.color = on ? 'var(--flag-orange)' : 'var(--text-dim)';
-    }
-    const idx = MEDIA_DATA.findIndex(m => m._id === id);
-    if (idx !== -1) MEDIA_DATA[idx].eventHighlight = on;
-  } catch { alert('An error occurred.'); }
-}
-
 /* ─── Delete single ─── */
 async function deleteMedia(id) {
   openDeleteModal(id, 'single');
@@ -683,10 +699,19 @@ function renderPreview(idx) {
   const item = MEDIA_DATA[idx];
   if (!item) return;
   const content = document.getElementById('previewContent');
+  content.innerHTML = '';
   if (item.type === 'video') {
-    content.innerHTML = '<video src="' + (item.urls?.original || '') + '" controls style="max-width:80vw;max-height:75vh;"></video>';
+    const v = document.createElement('video');
+    v.src = item.urls?.original || '';
+    v.controls = true;
+    v.style.maxWidth = '80vw';
+    v.style.maxHeight = '75vh';
+    content.appendChild(v);
   } else {
-    content.innerHTML = '<img src="' + (item.urls?.large || item.urls?.medium || '') + '" alt="' + (item.caption || '') + '" />';
+    const img = document.createElement('img');
+    img.src = item.urls?.large || item.urls?.medium || '';
+    img.alt = item.caption || '';
+    content.appendChild(img);
   }
   document.getElementById('previewCaption').textContent  = item.caption   || '';
   document.getElementById('previewFilename').textContent = item.filename  || '';

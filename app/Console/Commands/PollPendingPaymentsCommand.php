@@ -24,6 +24,10 @@ class PollPendingPaymentsCommand extends Command
 
     private const BATCH_LIMIT = 50;
 
+    // If Lenco still reports a non-terminal status but the payment's own expiry has
+    // long passed, stop waiting on it — treat it as cancelled and release the stock.
+    private const EXPIRY_GRACE_MINUTES = 15;
+
     public function handle(
         LencoService $lenco,
         PaymentService $payments,
@@ -76,31 +80,54 @@ class PollPendingPaymentsCommand extends Command
                 continue;
             }
 
-            if (! in_array($result['internalStatus'], ['completed', 'failed'], true)) {
-                continue;
+            $internalStatus = $result['internalStatus'];
+
+            if (! in_array($internalStatus, ['completed', 'failed', 'cancelled'], true)) {
+                if (! $this->isExpired($payment)) {
+                    continue;
+                }
+                // Lenco is still saying "pending" but this payment blew past its own
+                // expiry window a while ago — the customer isn't coming back to it.
+                // Stop reserving stock against it.
+                $internalStatus = 'cancelled';
             }
 
             $extra = ['lencoStatus' => $result['status']];
-            if ($result['internalStatus'] === 'completed') {
+            if ($internalStatus === 'completed') {
                 $extra['completedAt'] = now()->toDateTimeString();
-            } else {
+            } elseif ($internalStatus === 'failed') {
                 $extra['failureReason'] = $result['failureReason'] ?? null;
                 $extra['failedAt'] = now()->toDateTimeString();
             }
 
-            if (! $payments->updateStatus($payment->id, $result['internalStatus'], $extra)) {
+            if (! $payments->updateStatus($payment->id, $internalStatus, $extra)) {
                 continue;
             }
 
-            $orders->updateStatus(
-                $payment->order_number,
-                $result['internalStatus'] === 'completed' ? 'paid' : 'payment_failed',
-                byOrderNumber: true,
-            );
+            $newOrderStatus = match ($internalStatus) {
+                'completed' => 'paid',
+                'cancelled' => 'cancelled',
+                default => 'payment_failed',
+            };
+            $orders->updateStatus($payment->order_number, $newOrderStatus, byOrderNumber: true);
+
+            if (in_array($internalStatus, ['failed', 'cancelled'], true)) {
+                $orders->restoreStockForOrder($payment->order_number);
+            }
+
             $resolved++;
         }
 
         return [$checked, $resolved];
+    }
+
+    private function isExpired(Payment $payment): bool
+    {
+        if ($payment->expires_at === null) {
+            return false;
+        }
+
+        return now()->greaterThan($payment->expires_at->copy()->addMinutes(self::EXPIRY_GRACE_MINUTES));
     }
 
     /**

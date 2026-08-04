@@ -22,6 +22,12 @@ class EventService
     public const FEATURE_ON_HOME_NO_BANNER_CODE = 'FEATURE_ON_HOME_NO_BANNER';
 
     /**
+     * Must match the directory Admin\EventController uploads distance-route
+     * images into ({@see \App\Http\Controllers\Admin\EventController::collectDistanceRoutesFromRequest()}).
+     */
+    private const ROUTE_IMAGE_PATH_PREFIX = '/images/events/routes/';
+
+    /**
      * @param  array<string, mixed>  $opts
      * @return list<array<string, mixed>>
      */
@@ -122,6 +128,9 @@ class EventService
             }
 
             $summary = $labels !== [] ? implode(', ', $labels) : '';
+            if (mb_strlen($summary) > 255) {
+                $summary = mb_substr($summary, 0, 252).'…';
+            }
             Event::query()->whereKey($eventId)->update([
                 'distance' => $summary,
                 'updated_at' => now(),
@@ -140,11 +149,8 @@ class EventService
         $newPaths = array_unique($newPaths);
 
         foreach ($prevPaths as $old) {
-            if ($old && str_starts_with($old, '/images/event-routes/') && ! in_array($old, $newPaths, true)) {
-                $full = public_path(ltrim($old, '/\\'));
-                if (is_file($full)) {
-                    @unlink($full);
-                }
+            if ($old && ! in_array($old, $newPaths, true)) {
+                $this->deleteLocalRouteImage($old);
             }
         }
     }
@@ -356,11 +362,8 @@ class EventService
     {
         foreach ($this->fetchDistanceRoutes($id) as $r) {
             $path = $r['routeImage'] ?? null;
-            if (is_string($path) && str_starts_with($path, '/images/event-routes/')) {
-                $full = public_path(ltrim($path, '/\\'));
-                if (is_file($full)) {
-                    @unlink($full);
-                }
+            if (is_string($path)) {
+                $this->deleteLocalRouteImage($path);
             }
         }
 
@@ -414,13 +417,49 @@ class EventService
         return $event;
     }
 
+    /**
+     * Deletes a route-image file from disk, confined to the route-image
+     * upload directory. Resolves the real path first so a '..' segment (or
+     * a symlink) can't be used to delete a file outside that directory —
+     * defense in depth alongside the '..' rejection in sanitiseRouteImageForStorage().
+     */
+    private function deleteLocalRouteImage(string $path): void
+    {
+        if ($path === '' || str_contains($path, '..') || ! str_starts_with($path, self::ROUTE_IMAGE_PATH_PREFIX)) {
+            return;
+        }
+
+        $full = public_path(ltrim($path, '/\\'));
+        $realFull = realpath($full);
+        $realDir = realpath(public_path(ltrim(self::ROUTE_IMAGE_PATH_PREFIX, '/')));
+
+        if ($realFull === false || $realDir === false || ! str_starts_with($realFull, $realDir)) {
+            return;
+        }
+
+        @unlink($realFull);
+    }
+
+    /**
+     * A same-site path is only "safe" if it's rooted at the public web root
+     * (starts with a single '/'), isn't protocol-relative ('//host/...'),
+     * and contains no '..' segment that could traverse outside the intended
+     * upload directory when later passed to public_path()/unlink().
+     */
+    private function isSafeLocalPath(string $value): bool
+    {
+        return str_starts_with($value, '/')
+            && ! str_starts_with($value, '//')
+            && ! str_contains($value, '..');
+    }
+
     private function sanitiseBannerUrl(mixed $url): ?string
     {
         $value = trim((string) ($url ?? ''));
         if ($value === '') {
             return null;
         }
-        if (str_starts_with($value, '/') && ! str_contains($value, '//')) {
+        if ($this->isSafeLocalPath($value)) {
             return $value;
         }
 
@@ -440,7 +479,7 @@ class EventService
         if ($value === '') {
             return null;
         }
-        if (str_starts_with($value, '/') && ! str_contains($value, '//')) {
+        if ($this->isSafeLocalPath($value)) {
             return $value;
         }
 
@@ -460,7 +499,7 @@ class EventService
         if ($value === '') {
             return;
         }
-        if (str_starts_with($value, '/') && ! str_contains($value, '//')) {
+        if ($this->isSafeLocalPath($value)) {
             return;
         }
 
@@ -476,7 +515,7 @@ class EventService
         if ($value === '') {
             return;
         }
-        if (str_starts_with($value, '/') && ! str_contains($value, '//')) {
+        if ($this->isSafeLocalPath($value)) {
             return;
         }
 

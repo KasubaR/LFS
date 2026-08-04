@@ -76,10 +76,10 @@ class OrderController extends Controller
             abort(404, 'Order not found.');
         }
 
-        $payment = $this->paymentService->findByOrderNumber($order['order_number']);
+        $payment = $this->paymentService->findByOrderNumber($order['orderNumber']);
 
         return view('admin.orders.show', [
-            'pageTitle' => 'Order '.$order['order_number'],
+            'pageTitle' => 'Order '.$order['orderNumber'],
             'activePage' => 'orders',
             'order' => $order,
             'payment' => $payment,
@@ -92,11 +92,17 @@ class OrderController extends Controller
             'breadcrumbs' => [
                 ['label' => 'Admin', 'url' => '/admin'],
                 ['label' => 'Orders', 'url' => '/admin/orders'],
-                ['label' => $order['order_number']],
+                ['label' => $order['orderNumber']],
             ],
             'formatPrice' => fn ($v) => 'ZMW '.number_format((float) $v, 2),
         ]);
     }
+
+    /** @var list<string> Once an order reaches one of these, admins can't move it further. */
+    private const TERMINAL_STATUSES = [OrderStatus::Collected, OrderStatus::Cancelled, OrderStatus::PaymentFailed];
+
+    /** @var list<string> Stock is already back in inventory once an order lands in either of these. */
+    private const STOCK_ALREADY_RESTORED_STATUSES = [OrderStatus::Cancelled, OrderStatus::PaymentFailed];
 
     public function updateStatus(Request $request, int $id): RedirectResponse
     {
@@ -105,7 +111,28 @@ class OrderController extends Controller
             abort(422, 'Invalid status value.');
         }
 
+        $order = $this->orderService->findById($id);
+        if ($order === null) {
+            abort(404, 'Order not found.');
+        }
+
+        $currentStatus = $order['status'];
+        if ($currentStatus === $newStatus) {
+            return redirect('/admin/orders/'.$id);
+        }
+
+        if (in_array($currentStatus, self::TERMINAL_STATUSES, true)) {
+            abort(422, 'This order is '.$currentStatus.' and its status can no longer be changed.');
+        }
+
         $this->orderService->updateStatus($id, $newStatus);
+
+        // Stock was reserved at order-creation time regardless of payment outcome; give
+        // it back the moment an admin cancels/fails an order that hadn't already released it.
+        $stockAlreadyReleased = in_array($currentStatus, self::STOCK_ALREADY_RESTORED_STATUSES, true);
+        if (! $stockAlreadyReleased && in_array($newStatus, self::STOCK_ALREADY_RESTORED_STATUSES, true)) {
+            $this->orderService->restoreStockForOrder($order['orderNumber']);
+        }
 
         return redirect('/admin/orders/'.$id);
     }

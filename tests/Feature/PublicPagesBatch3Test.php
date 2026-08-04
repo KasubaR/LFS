@@ -17,11 +17,11 @@ class PublicPagesBatch3Test extends TestCase
         $response->assertSee('id="upcoming"', false);
     }
 
-    public function test_missing_event_redirects_to_events_index(): void
+    public function test_missing_event_returns_404(): void
     {
         $response = $this->get('/events/nonexistent-slug-batch3');
 
-        $response->assertRedirect('/events');
+        $response->assertNotFound();
     }
 
     public function test_events_blade_view_renders_with_minimal_data(): void

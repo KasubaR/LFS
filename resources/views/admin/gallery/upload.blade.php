@@ -21,7 +21,7 @@ $selectedAlbum = $selectedAlbum ?? '';
   ════════════════════════════════════════════════ -->
   <div style="margin-bottom:1.75rem;">
     <p style="color:var(--text-dim); font-size:0.9rem; margin-top:0.25rem;">
-      Upload photos or videos to an album. Images are auto-optimised and converted to WebP.
+      Upload photos or videos to an album.
       Max 5 MB per image, 200 MB per video, 50 files per batch.
     </p>
   </div>

@@ -34,10 +34,17 @@ function lbKeydown(e) {
 function renderLightbox() {
   var item    = LB_MEDIA[lbIdx];
   var content = document.getElementById('lbContent');
+  content.innerHTML = '';
   if (item.type === 'video') {
-    content.innerHTML = '<video src="' + item.video + '" controls></video>';
+    var v = document.createElement('video');
+    v.src = item.video;
+    v.controls = true;
+    content.appendChild(v);
   } else {
-    content.innerHTML = '<img src="' + item.large + '" alt="' + item.caption.replace(/"/g, '&quot;') + '">';
+    var img = document.createElement('img');
+    img.src = item.large;
+    img.alt = item.caption;
+    content.appendChild(img);
   }
   document.getElementById('lbCounter').textContent = (lbIdx + 1) + ' / ' + LB_MEDIA.length;
   document.getElementById('lbCaption').textContent = item.caption;

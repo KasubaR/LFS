@@ -2,12 +2,123 @@
 
 namespace App\Services;
 
+use App\Exceptions\InsufficientStockException;
 use App\Models\Product;
 use App\Support\Uuid;
 use Illuminate\Database\Eloquent\Builder;
 
 class ProductService
 {
+    /**
+     * Look up the current stock for a product/size pair, for cart-time validation.
+     * Returns null if the product or size no longer exists/is inactive.
+     */
+    public function getAvailableStock(string $productId, string $size): ?int
+    {
+        $product = Product::query()->whereKey($productId)->where('is_active', true)->first();
+        if ($product === null) {
+            return null;
+        }
+
+        $sizes = is_array($product->sizes) ? $product->sizes : [];
+        foreach ($sizes as $s) {
+            if (($s['size'] ?? '') === $size) {
+                return (int) ($s['stock'] ?? 0);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Atomically verify and decrement stock for one order line. Locks the product
+     * row so concurrent checkouts for the same product/size serialize on it instead
+     * of both reading a stale stock figure. Must be called inside a DB transaction.
+     *
+     * Returns the product's current DB price so callers price the order line from
+     * the authoritative source rather than trusting a client-submitted cart price.
+     *
+     * @throws InsufficientStockException if the product/size/quantity can't be fulfilled
+     */
+    public function decrementStockForOrder(string $productId, string $size, int $qty): float
+    {
+        $product = Product::query()->whereKey($productId)->lockForUpdate()->first();
+
+        if ($product === null || ! $product->is_active) {
+            throw new InsufficientStockException("This product is no longer available.");
+        }
+
+        $sizes = is_array($product->sizes) ? $product->sizes : [];
+        $matched = false;
+
+        foreach ($sizes as &$s) {
+            if (($s['size'] ?? '') !== $size) {
+                continue;
+            }
+
+            $matched = true;
+            $available = (int) ($s['stock'] ?? 0);
+            if ($available < $qty) {
+                throw new InsufficientStockException(
+                    "Only {$available} left of \"{$product->name}\" (size {$size})."
+                );
+            }
+
+            $s['stock'] = $available - $qty;
+            break;
+        }
+        unset($s);
+
+        if (! $matched) {
+            throw new InsufficientStockException(
+                "Size {$size} of \"{$product->name}\" is no longer available."
+            );
+        }
+
+        $product->sizes = $sizes;
+        $product->total_stock = max(0, (int) $product->total_stock - $qty);
+        $product->save();
+
+        return (float) $product->price;
+    }
+
+    /**
+     * Give back stock previously taken by decrementStockForOrder(), e.g. when a
+     * payment ends up failed/cancelled. Silently no-ops if the product/size is
+     * gone — the sale never completed either way, so there's nothing to reconcile.
+     */
+    public function restoreStock(string $productId, string $size, int $qty): void
+    {
+        if ($qty <= 0) {
+            return;
+        }
+
+        $product = Product::query()->whereKey($productId)->lockForUpdate()->first();
+        if ($product === null) {
+            return;
+        }
+
+        $sizes = is_array($product->sizes) ? $product->sizes : [];
+        $matched = false;
+
+        foreach ($sizes as &$s) {
+            if (($s['size'] ?? '') === $size) {
+                $s['stock'] = (int) ($s['stock'] ?? 0) + $qty;
+                $matched = true;
+                break;
+            }
+        }
+        unset($s);
+
+        if (! $matched) {
+            return;
+        }
+
+        $product->sizes = $sizes;
+        $product->total_stock = (int) $product->total_stock + $qty;
+        $product->save();
+    }
+
     /**
      * @param  array<string, mixed>  $opts
      * @param  array<string, mixed>  $options

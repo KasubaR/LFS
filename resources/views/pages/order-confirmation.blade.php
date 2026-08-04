@@ -10,8 +10,8 @@
  */
 
 $order ??= [];
-$orderNumber  = htmlspecialchars($order['order_number']  ?? '—');
-$customerName = htmlspecialchars($order['customer_name'] ?? '');
+$orderNumber  = htmlspecialchars($order['orderNumber']  ?? '—');
+$customerName = htmlspecialchars($order['customerName'] ?? '');
 $total        = 'K ' . number_format((float)($order['total'] ?? 0), 2);
 $status       = $order['status'] ?? 'pending_payment';
 $items        = $order['items'] ?? [];

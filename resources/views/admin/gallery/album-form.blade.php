@@ -31,7 +31,7 @@ $tagsValue = !empty($al['tags']) ? implode(', ', (array)$al['tags']) : '';
         action="{{ $isEdit ? '/admin/gallery/albums/' . htmlspecialchars($al['id']) : '/admin/gallery/albums' }}"
         id="albumForm">
 
-    <input type="hidden" name="_csrf" value="{{ $csrfToken ?? '' }}">
+    @csrf
 
     <!-- Title -->
     <div class="form-group" style="margin-bottom:1.25rem;">
@@ -133,7 +133,7 @@ $tagsValue = !empty($al['tags']) ? implode(', ', (array)$al['tags']) : '';
       </div>
 
       <small style="display:block; margin-top:0.35rem; color:var(--text-dim); font-size:0.8rem;">
-        You can paste a URL or upload an image. Uploads are stored under <code>/uploads/gallery/covers/</code> and the URL is filled in automatically.
+        You can paste a URL or upload an image. Uploads are stored under <code>/images/gallery/covers/</code> and the URL is filled in automatically.
       </small>
     </div>
 

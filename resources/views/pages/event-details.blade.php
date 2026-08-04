@@ -567,53 +567,13 @@ if (is_string($brochureRaw) && $brochureRaw !== '') {
 
 
 <!-- ══════════════════════════════════════════════
-     4. RESULTS (completed events with data)
-     ══════════════════════════════════════════════ -->
-@if($isCompleted && !empty($ev['results']) && count($ev['results']))
-<section class="event-detail-results-section" aria-labelledby="results-heading">
-  <div class="event-detail-results-inner">
-
-    <div class="text-center mb-10" data-reveal>
-      <span class="section-label justify-center" style="color:var(--green-bright)">
-        <i class="fas fa-trophy" aria-hidden="true"></i> Race Results
-      </span>
-      <h2 class="font-['Bebas_Neue'] text-4xl md:text-5xl mt-2 text-white" id="results-heading">
-        Winners &amp; Finishers
-      </h2>
-    </div>
-
-    <div class="event-detail-results-grid" data-reveal>
-      @foreach($ev['results'] as $r)
-      <div class="event-detail-result-card">
-        <div class="event-detail-result-card__medal" aria-hidden="true">
-          <i class="fas fa-medal"></i>
-        </div>
-        <div class="event-detail-result-card__category">{{ $r['category'] }}</div>
-        <div class="event-detail-result-card__winner">{{ $r['winner'] }}</div>
-        <div class="event-detail-result-card__time">{{ $r['time'] }}</div>
-      </div>
-      @endforeach
-    </div>
-
-    <div class="text-center mt-8" data-reveal>
-      <a href="{{ $ev['resultsLink'] ?? '/contact' }}" class="btn btn-primary">
-        <i class="fas fa-list-ol" aria-hidden="true"></i> Full Results List
-      </a>
-    </div>
-
-  </div>
-</section>
-@endif
-
-
-<!-- ══════════════════════════════════════════════
-     5. SHOP PREVIEW
+     4. SHOP PREVIEW
      ══════════════════════════════════════════════ -->
 @include('partials.shop-preview', ['sectionId' => 'shop', 'bg' => 'var(--off-white)'])
 
 
 <!-- ══════════════════════════════════════════════
-     6. CTA
+     5. CTA
      ══════════════════════════════════════════════ -->
 <section class="py-16 px-6 md:px-16 text-white text-center relative overflow-hidden"
   style="background:var(--dark-green)">

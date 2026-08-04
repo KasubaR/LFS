@@ -98,7 +98,7 @@ class AccountHubTest extends TestCase
         $dashboard->assertDontSee('class="lfs-nav"', false);
         $dashboard->assertSee('Contact LFS', false);
         $dashboard->assertSee('info@lfszambia.run', false);
-        $dashboard->assertSee('+260 966 755 326', false);
+        $dashboard->assertSee('+260 767 023 948', false);
         $dashboard->assertSee('Dashboard', false);
         $dashboard->assertSee('Orders', false);
         $dashboard->assertSee('Wishlist', false);
@@ -151,7 +151,7 @@ class AccountHubTest extends TestCase
         $dashboard->assertOk();
         $dashboard->assertSee('Pending', false);
         $dashboard->assertSee('Announcements unlock once your membership payment is confirmed.', false);
-        $dashboard->assertSee('Upcoming events unlock once your membership payment is confirmed.', false);
+        $dashboard->assertSee('Browse the LFS events calendar', false);
     }
 
     public function test_guest_is_redirected_from_account_tabs(): void
@@ -223,6 +223,7 @@ class AccountHubTest extends TestCase
     public function test_authenticated_checkout_stores_user_id_on_order(): void
     {
         $user = $this->member();
+        $product = $this->createProduct('Tee');
 
         $this->mock(LencoService::class, function ($mock) {
             $mock->shouldReceive('initiateMobileMoneyPayment')->once()->andReturn([
@@ -240,7 +241,7 @@ class AccountHubTest extends TestCase
         });
 
         $response = $this->actingAs($user)->withSession([
-            'cart' => [['price' => 100, 'qty' => 1, 'productId' => 'p1', 'name' => 'Tee', 'size' => 'M']],
+            'cart' => [['price' => 100, 'qty' => 1, 'productId' => $product->id, 'name' => 'Tee', 'size' => 'M']],
         ])->postJson('/shop/checkout/place-order', [
             'customerInfo' => ['name' => $user->name, 'email' => $user->email, 'phone' => $user->phone],
             'paymentMethod' => 'mobile_money',

@@ -15,7 +15,7 @@
   </div>
   <div class="admin-panel__body">
   <form method="POST" action="/admin/gallery/settings" enctype="multipart/form-data" class="admin-form">
-    <input type="hidden" name="_csrf" value="{{ $csrfToken ?? '' }}">
+    @csrf
 
     <div class="admin-form__field">
       <label class="admin-label" for="bannerImageFile">Gallery Banner Image</label>

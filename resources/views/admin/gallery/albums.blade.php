@@ -250,7 +250,7 @@ $currentYear    = (int) date('Y');
     <div class="lfs-modal__footer">
       <button onclick="closeDeleteModal()" class="btn-sm btn-sm--ghost">Cancel</button>
       <form id="deleteAlbumForm" method="POST" action="" style="display:inline;">
-        <input type="hidden" name="_csrf" value="{{ $csrfToken ?? '' }}">
+        @csrf
         <button type="submit" class="btn-sm btn-sm--danger">
           <i class="fas fa-trash"></i> Delete Album
         </button>

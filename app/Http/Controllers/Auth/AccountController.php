@@ -13,7 +13,6 @@ use App\Models\MembershipPayment;
 use App\Models\User;
 use App\Services\AnnouncementService;
 use App\Services\DocumentService;
-use App\Services\MemberDashboardService;
 use App\Services\MembershipCardService;
 use App\Services\MembershipPaymentService;
 use App\Services\MembershipPlanService;
@@ -37,7 +36,6 @@ class AccountController extends Controller
     public function __construct(
         private readonly MembershipPlanService $planService,
         private readonly AnnouncementService $announcementService,
-        private readonly MemberDashboardService $memberDashboardService,
         private readonly OrderService $orderService,
         private readonly WishlistService $wishlistService,
         private readonly SatelliteService $satelliteService,
@@ -76,7 +74,6 @@ class AccountController extends Controller
             'renewalPlans' => $this->planService->getActivePlans(),
             'changePlans' => $canContinuePayment ? $this->planService->getActivePlans() : [],
             'announcements' => $hasPaidMembership ? $this->announcementService->getActiveForMembers(5) : [],
-            'upcomingEvents' => $hasPaidMembership ? $this->memberDashboardService->getUpcomingEvents((int) $user->id) : [],
             'extraScripts' => $canContinuePayment
                 ? '<script src="'.asset('js/account-payment.js').'"></script>'
                 : '',

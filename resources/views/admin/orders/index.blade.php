@@ -108,12 +108,12 @@ $allStatuses = \App\Enums\OrderStatus::ALL;
         <tr>
           <td>
             <a href="/admin/orders/{{ (int)$o['id'] }}">
-              <strong>{{ $o['order_number'] }}</strong>
+              <strong>{{ $o['orderNumber'] }}</strong>
             </a>
           </td>
           <td>
-            {{ $o['customer_name'] }}
-            <div class="admin-table__sub">{{ $o['customer_email'] }}</div>
+            {{ $o['customerName'] }}
+            <div class="admin-table__sub">{{ $o['customerEmail'] }}</div>
           </td>
           <td>{{ ($formatPrice)($o['total']) }}</td>
           <td>
@@ -121,7 +121,7 @@ $allStatuses = \App\Enums\OrderStatus::ALL;
               {{ $lbl }}
             </span>
           </td>
-          <td>{{ date('d M Y', strtotime($o['created_at'])) }}</td>
+          <td>{{ date('d M Y', strtotime($o['createdAt'])) }}</td>
           <td>
             <a href="/admin/orders/{{ (int)$o['id'] }}"
                class="admin-btn admin-btn--primary admin-btn--sm">

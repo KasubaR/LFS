@@ -8,12 +8,46 @@ use Illuminate\Support\Facades\DB;
 
 class OrderService
 {
+    public function __construct(
+        private readonly ProductService $productService,
+    ) {}
+
     /**
      * @param  array<string, mixed>  $data
+     * @return array{id: int, subtotal: float, total: float}
+     *
+     * @throws \App\Exceptions\InsufficientStockException if any line item can't be fulfilled;
+     *         the whole transaction (order + stock) rolls back in that case.
      */
-    public function create(array $data): int
+    public function create(array $data): array
     {
-        return DB::transaction(function () use ($data): int {
+        return DB::transaction(function () use ($data): array {
+            // Reserve stock first — if any line fails, the transaction rolls back
+            // before the order/order_items rows are ever written. decrementStockForOrder()
+            // also returns the product's current DB price, which we use below instead of
+            // trusting the client-submitted cart price (defends against a stale/tampered cart).
+            $lines = [];
+            $subtotal = 0.0;
+            foreach ($data['items'] as $item) {
+                $qty = (int) ($item['qty'] ?? 1);
+                $unitPrice = $this->productService->decrementStockForOrder(
+                    (string) ($item['productId'] ?? ''),
+                    (string) ($item['size'] ?? ''),
+                    $qty,
+                );
+                $lineTotal = $unitPrice * $qty;
+                $subtotal += $lineTotal;
+
+                $lines[] = [
+                    'productId' => $item['productId'] ?? '',
+                    'name' => $item['name'] ?? '',
+                    'size' => $item['size'] ?? '',
+                    'qty' => $qty,
+                    'unitPrice' => $unitPrice,
+                    'lineTotal' => $lineTotal,
+                ];
+            }
+
             $order = Order::query()->create([
                 'user_id' => $data['userId'] ?? null,
                 'order_number' => $data['orderNumber'],
@@ -21,27 +55,46 @@ class OrderService
                 'customer_email' => strtolower($data['customerEmail']),
                 'customer_phone' => $data['customerPhone'] ?? '',
                 'notes' => $data['notes'] ?? '',
-                'subtotal' => $data['subtotal'],
-                'total' => $data['total'],
+                'subtotal' => $subtotal,
+                'total' => $subtotal,
                 'status' => $data['status'] ?? 'pending_payment',
             ]);
 
-            foreach ($data['items'] as $item) {
-                $qty = (int) ($item['qty'] ?? 1);
-                $price = (float) ($item['price'] ?? 0);
-
+            foreach ($lines as $line) {
                 OrderItem::query()->create([
                     'order_id' => $order->id,
-                    'product_id' => $item['productId'] ?? '',
-                    'name' => $item['name'] ?? '',
-                    'size' => $item['size'] ?? '',
-                    'qty' => $qty,
-                    'unit_price' => $price,
-                    'line_total' => $price * $qty,
+                    'product_id' => $line['productId'],
+                    'name' => $line['name'],
+                    'size' => $line['size'],
+                    'qty' => $line['qty'],
+                    'unit_price' => $line['unitPrice'],
+                    'line_total' => $line['lineTotal'],
                 ]);
             }
 
-            return (int) $order->id;
+            return ['id' => (int) $order->id, 'subtotal' => $subtotal, 'total' => $subtotal];
+        });
+    }
+
+    /**
+     * Give back the stock reserved for an order — used when a payment ends up
+     * failed/cancelled after stock was already decremented at order-creation time.
+     */
+    public function restoreStockForOrder(string $orderNumber): void
+    {
+        DB::transaction(function () use ($orderNumber): void {
+            $order = Order::query()->with('items')->where('order_number', $orderNumber)->first();
+            if ($order === null) {
+                return;
+            }
+
+            foreach ($order->items as $item) {
+                $this->productService->restoreStock(
+                    (string) $item->product_id,
+                    (string) $item->size,
+                    (int) $item->qty,
+                );
+            }
         });
     }
 
