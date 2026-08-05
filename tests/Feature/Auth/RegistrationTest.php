@@ -54,7 +54,6 @@ class RegistrationTest extends TestCase
         $user = User::query()->where('email', 'jane@example.com')->first();
         $this->assertNotNull($user);
         $this->assertNull($user->satellite_id);
-        $this->assertTrue($user->force_email_verification);
         $this->assertFalse($user->must_change_password);
         $this->assertSame('female', $user->gender);
         $this->assertSame('Zambian', $user->nationality);

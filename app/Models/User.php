@@ -28,7 +28,7 @@ use Illuminate\Notifications\Notifiable;
     'registered_at',
     'first_login',
     'must_change_password',
-    'force_email_verification',
+    'temp_password_expires_at',
 ])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail
@@ -45,7 +45,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'registered_at' => 'datetime',
             'first_login' => 'datetime',
             'must_change_password' => 'boolean',
-            'force_email_verification' => 'boolean',
+            'temp_password_expires_at' => 'datetime',
         ];
     }
 

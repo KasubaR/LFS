@@ -29,6 +29,8 @@
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="MEMBER_IMPORT_TEMP_PASSWORD" value="Test-Temp-Pass-1"/>
+        <env name="MEMBER_IMPORT_TEMP_PASSWORD_TTL_DAYS" value="14"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>

@@ -32,25 +32,18 @@ $importStatus = session('import_status');
     <p>Skipped: {{ $importResult['skippedRows'] ?? 0 }}</p>
     <p>Errors: {{ $importResult['errorRows'] ?? 0 }}</p>
 
-    @if(!empty($importResult['tempPasswords']))
-      <h4 style="margin-top:1rem;">Temporary passwords (admin handoff only)</h4>
-      <div class="admin-table-wrap">
-        <table class="admin-table">
-          <thead>
-            <tr>
-              <th>Email</th>
-              <th>Temporary password</th>
-            </tr>
-          </thead>
-          <tbody>
-            @foreach($importResult['tempPasswords'] as $entry)
-              <tr>
-                <td>{{ $entry['email'] }}</td>
-                <td><code>{{ $entry['password'] }}</code></td>
-              </tr>
-            @endforeach
-          </tbody>
-        </table>
+    @if(($importResult['importedRows'] ?? 0) > 0)
+      <div class="admin-alert admin-alert--info" style="margin-top:1rem;">
+        Imported accounts sign in with the shared temporary password configured in
+        <code>MEMBER_IMPORT_TEMP_PASSWORD</code>. It's valid for these accounts until
+        <strong>{{ \Illuminate\Support\Carbon::parse($importResult['tempPasswordExpiresAt'])->format('j M Y, H:i') }}</strong>
+        — after that, or as soon as an account uses it, that member is required to set their own password.
+        @if($importResult['welcomeEmailSent'] ?? false)
+          Welcome emails with sign-in instructions were sent to imported members.
+        @else
+          Welcome emails were <strong>not</strong> sent — make sure imported members know the shared temporary
+          password some other way before it expires.
+        @endif
       </div>
     @endif
 
@@ -77,7 +70,7 @@ $importStatus = session('import_status');
     </div>
     <label class="admin-checkbox" style="display:flex; align-items:center; gap:0.5rem; margin-bottom:1rem;">
       <input type="checkbox" name="send_welcome_email" value="1">
-      Send welcome email (no password included)
+      Send welcome email (includes the shared temporary password and its expiry)
     </label>
     <button type="submit" class="admin-btn admin-btn--primary">
       <i class="fas fa-upload" aria-hidden="true"></i> Import Members

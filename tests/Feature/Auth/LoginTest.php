@@ -53,6 +53,42 @@ class LoginTest extends TestCase
         $response->assertRedirect('/email/verify');
     }
 
+    public function test_expired_temp_password_login_is_rejected(): void
+    {
+        User::factory()->create([
+            'email' => 'stale-temp@example.com',
+            'password' => 'TempPass123',
+            'must_change_password' => true,
+            'temp_password_expires_at' => now()->subDay(),
+        ]);
+
+        $response = $this->post('/login', [
+            'email' => 'stale-temp@example.com',
+            'password' => 'TempPass123',
+        ]);
+
+        $response->assertSessionHasErrors('email');
+        $this->assertGuest();
+    }
+
+    public function test_unexpired_temp_password_login_still_works(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'fresh-temp@example.com',
+            'password' => 'TempPass123',
+            'must_change_password' => true,
+            'temp_password_expires_at' => now()->addDay(),
+        ]);
+
+        $response = $this->post('/login', [
+            'email' => 'fresh-temp@example.com',
+            'password' => 'TempPass123',
+        ]);
+
+        $this->assertAuthenticatedAs($user);
+        $response->assertRedirect('/password/change');
+    }
+
     public function test_users_can_logout(): void
     {
         $user = User::factory()->create();

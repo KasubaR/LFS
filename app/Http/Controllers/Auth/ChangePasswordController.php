@@ -45,6 +45,7 @@ class ChangePasswordController extends Controller
         $user->forceFill([
             'password' => Hash::make($request->validated('password')),
             'must_change_password' => false,
+            'temp_password_expires_at' => null,
         ])->save();
 
         return redirect()->route('account')

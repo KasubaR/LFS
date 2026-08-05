@@ -35,6 +35,11 @@ class NewPasswordController extends Controller
                 $user->forceFill([
                     'password' => Hash::make($password),
                     'remember_token' => Str::random(60),
+                    // "Forgot password" is also the recovery path once an imported
+                    // member's shared temp password has expired — resetting here
+                    // graduates them out of the temp-password state either way.
+                    'must_change_password' => false,
+                    'temp_password_expires_at' => null,
                 ])->save();
 
                 event(new PasswordReset($user));

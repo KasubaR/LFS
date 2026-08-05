@@ -7,12 +7,15 @@ use App\Models\MembershipImportBatch;
 use App\Models\MembershipImportRecord;
 use App\Models\MembershipPayment;
 use App\Models\User;
+use App\Notifications\VerifyEmailNotification;
 use App\Services\MemberImportService;
 use Database\Seeders\MembershipPlanSeeder;
 use Database\Seeders\SatelliteSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\URL;
+use RuntimeException;
 use Tests\Concerns\ActsAsAdmin;
 use Tests\TestCase;
 
@@ -92,27 +95,53 @@ class MemberImportTest extends TestCase
         );
     }
 
-    public function test_import_does_not_persist_temp_passwords_on_batch(): void
+    public function test_import_uses_shared_temp_password_and_sets_expiry(): void
     {
         $result = app(MemberImportService::class)->importFromFile($this->fixturePath, 'test:import');
 
-        $this->assertNotEmpty($result['tempPasswords']);
+        $this->assertNotEmpty($result['tempPasswordExpiresAt']);
 
+        $alice = User::query()->where('email', 'alice.import@test.com')->first();
+        $this->assertNotNull($alice);
+        $this->assertNotNull($alice->temp_password_expires_at);
+        $this->assertTrue(Hash::check(config('member_import.temp_password'), $alice->password));
+
+        // The shared password lives only in config — it's never written into batch
+        // notes or anywhere else per-row.
         $batch = MembershipImportBatch::query()->find($result['batchId']);
         $notes = $batch->notes ?? [];
         $this->assertArrayNotHasKey('tempPasswords', $notes);
     }
 
+    public function test_import_requires_a_configured_temp_password(): void
+    {
+        config(['member_import.temp_password' => '']);
+
+        $this->expectException(RuntimeException::class);
+
+        app(MemberImportService::class)->importFromFile($this->fixturePath, 'test:import');
+    }
+
+    public function test_import_sends_verification_email_automatically(): void
+    {
+        Notification::fake();
+
+        app(MemberImportService::class)->importFromFile($this->fixturePath, 'test:import');
+
+        $alice = User::query()->where('email', 'alice.import@test.com')->first();
+        $this->assertNotNull($alice);
+
+        Notification::assertSentTo($alice, VerifyEmailNotification::class);
+    }
+
     public function test_imported_user_can_complete_auth_flow(): void
     {
         $service = app(MemberImportService::class);
-        $result = $service->importFromFile($this->fixturePath, 'test:import');
+        $service->importFromFile($this->fixturePath, 'test:import');
 
-        $tempPassword = collect($result['tempPasswords'])
-            ->firstWhere('email', 'alice.import@test.com')['password'];
-
+        $tempPassword = config('member_import.temp_password');
         $user = User::query()->where('email', 'alice.import@test.com')->first();
-        $this->assertNotNull($tempPassword);
+        $this->assertNotNull($user);
 
         $this->post('/login', [
             'email' => 'alice.import@test.com',
@@ -144,7 +173,27 @@ class MemberImportTest extends TestCase
             ->assertOk()
             ->assertSee('13239', false);
 
-        $this->assertTrue(Hash::check($newPassword, $user->fresh()->password));
+        $fresh = $user->fresh();
+        $this->assertTrue(Hash::check($newPassword, $fresh->password));
+        $this->assertFalse($fresh->must_change_password);
+        $this->assertNull($fresh->temp_password_expires_at);
+    }
+
+    public function test_expired_shared_temp_password_blocks_imported_user_login(): void
+    {
+        $service = app(MemberImportService::class);
+        $service->importFromFile($this->fixturePath, 'test:import');
+
+        $user = User::query()->where('email', 'alice.import@test.com')->first();
+        $user->forceFill(['temp_password_expires_at' => now()->subHour()])->save();
+
+        $response = $this->post('/login', [
+            'email' => 'alice.import@test.com',
+            'password' => config('member_import.temp_password'),
+        ]);
+
+        $response->assertSessionHasErrors('email');
+        $this->assertGuest();
     }
 
     public function test_admin_import_page_can_be_rendered(): void

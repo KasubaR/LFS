@@ -45,7 +45,6 @@ class RegisteredUserController extends Controller
                     'town' => $validated['town'],
                     'registered_at' => now(),
                     'must_change_password' => false,
-                    'force_email_verification' => true,
                 ]);
             });
         } catch (Throwable) {

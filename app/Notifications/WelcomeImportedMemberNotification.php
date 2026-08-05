@@ -6,10 +6,16 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Carbon;
 
 class WelcomeImportedMemberNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+
+    public function __construct(
+        private readonly string $tempPassword,
+        private readonly Carbon $tempPasswordExpiresAt,
+    ) {}
 
     public function via(object $notifiable): array
     {
@@ -22,8 +28,13 @@ class WelcomeImportedMemberNotification extends Notification implements ShouldQu
             ->subject('Welcome to Lusaka Fitness Squad')
             ->greeting('Hello '.$notifiable->name.'!')
             ->line('Your LFS member account has been created from our membership records.')
-            ->line('Please sign in, verify your email address, and set a new password when prompted.')
+            ->line('Sign in with your email address and this temporary password:')
+            ->line('**'.$this->tempPassword.'**')
+            ->line('This temporary password works until '.$this->tempPasswordExpiresAt->format('j M Y, H:i').'. '
+                .'After that, or as soon as you use it, you\'ll be asked to verify your email and set your own '
+                .'permanent password.')
             ->action('Sign in to LFS', url('/login'))
-            ->line('If you need help, contact us at info@lfszambia.run.');
+            ->line('If the temporary password has expired or you need help, use "Forgot password" on the sign-in '
+                .'page or contact us at info@lfszambia.run.');
     }
 }

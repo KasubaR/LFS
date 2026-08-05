@@ -10,14 +10,15 @@ use App\Models\MembershipImportRecord;
 use App\Models\User;
 use App\Notifications\WelcomeImportedMemberNotification;
 use App\Support\Uuid;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
+use RuntimeException;
 use Throwable;
 
 class MemberImportService
@@ -30,9 +31,23 @@ class MemberImportService
 
     /**
      * @return array<string, mixed>
+     *
+     * @throws RuntimeException if MEMBER_IMPORT_TEMP_PASSWORD isn't configured
      */
     public function importFromFile(string|UploadedFile $file, string $importedBy, bool $sendWelcomeEmail = false): array
     {
+        $tempPassword = (string) config('member_import.temp_password');
+        if ($tempPassword === '') {
+            throw new RuntimeException(
+                'MEMBER_IMPORT_TEMP_PASSWORD is not configured. Set it in .env before importing members.'
+            );
+        }
+
+        $ttlDays = (int) config('member_import.temp_password_ttl_days', 14);
+        // Fixed once per batch (not per-row) so every member imported together
+        // shares the same cutoff, which is easier to communicate and reason about.
+        $tempPasswordExpiresAt = now()->addDays(max(1, $ttlDays));
+
         $path = $file instanceof UploadedFile ? $file->getRealPath() : $file;
         $filename = $file instanceof UploadedFile ? $file->getClientOriginalName() : basename($path);
 
@@ -55,19 +70,12 @@ class MemberImportService
         $skipped = 0;
         $errors = 0;
         $errorMessages = [];
-        $tempPasswords = [];
 
         foreach ($deduped as $row) {
             try {
-                $result = $this->importRow($row, $batch, $importedBy, $sendWelcomeEmail);
+                $result = $this->importRow($row, $batch, $importedBy, $sendWelcomeEmail, $tempPassword, $tempPasswordExpiresAt);
                 if ($result['status'] === 'imported') {
                     $imported++;
-                    if (! empty($result['tempPassword'])) {
-                        $tempPasswords[] = [
-                            'email' => $row['email'],
-                            'password' => $result['tempPassword'],
-                        ];
-                    }
                     if (! empty($result['warning'])) {
                         $errorMessages[] = $result['warning'];
                     }
@@ -81,8 +89,6 @@ class MemberImportService
             }
         }
 
-        // Never persist plaintext temp passwords on the batch — they are returned
-        // once in the flash result for the admin UI to display.
         $batch->update([
             'imported_rows' => $imported,
             'skipped_rows' => $skipped,
@@ -101,7 +107,8 @@ class MemberImportService
             'skippedRows' => $skipped,
             'errorRows' => $errors,
             'errors' => $errorMessages,
-            'tempPasswords' => $tempPasswords,
+            'tempPasswordExpiresAt' => $tempPasswordExpiresAt->toDateTimeString(),
+            'welcomeEmailSent' => $sendWelcomeEmail,
         ];
     }
 
@@ -256,10 +263,16 @@ class MemberImportService
 
     /**
      * @param  array<string, mixed>  $row
-     * @return array{status: string, message?: string, tempPassword?: string}
+     * @return array{status: string, message?: string, warning?: string}
      */
-    private function importRow(array $row, MembershipImportBatch $batch, string $importedBy, bool $sendWelcomeEmail): array
-    {
+    private function importRow(
+        array $row,
+        MembershipImportBatch $batch,
+        string $importedBy,
+        bool $sendWelcomeEmail,
+        string $tempPassword,
+        Carbon $tempPasswordExpiresAt,
+    ): array {
         if (strcasecmp($row['status'] ?? '', 'Paid') !== 0) {
             return ['status' => 'skipped', 'message' => $row['email'].': status not Paid'];
         }
@@ -296,9 +309,8 @@ class MemberImportService
         }
 
         $registeredAt = $this->parseRegisteredAt($row);
-        $tempPassword = Str::password(12);
 
-        $imported = DB::transaction(function () use ($row, $batch, $importedBy, $sendWelcomeEmail, $tShirtSize, $plan, $satellite, $registeredAt, $tempPassword) {
+        $user = DB::transaction(function () use ($row, $batch, $importedBy, $tShirtSize, $plan, $satellite, $registeredAt, $tempPassword, $tempPasswordExpiresAt) {
             $user = User::query()->create([
                 'name' => $row['name'],
                 'email' => $row['email'],
@@ -311,7 +323,7 @@ class MemberImportService
                 'satellite_id' => $satellite['id'] ?? null,
                 'registered_at' => $registeredAt,
                 'must_change_password' => true,
-                'force_email_verification' => true,
+                'temp_password_expires_at' => $tempPasswordExpiresAt,
             ]);
 
             $membership = $this->membershipService->importPaidMembership([
@@ -340,16 +352,20 @@ class MemberImportService
                 'row_payload' => $row,
             ]);
 
-            if ($sendWelcomeEmail) {
-                Notification::send($user, new WelcomeImportedMemberNotification);
-            }
-
-            return [
-                'status' => 'imported',
-                'tempPassword' => $tempPassword,
-            ];
+            return $user;
         });
 
+        // Fired outside the transaction (same pattern as self-registration in
+        // RegisteredUserController) so we never email a user whose row later rolls
+        // back. This is what actually gets the verification email out — imports
+        // don't otherwise trigger Laravel's default Registered-event listener.
+        event(new Registered($user));
+
+        if ($sendWelcomeEmail) {
+            Notification::send($user, new WelcomeImportedMemberNotification($tempPassword, $tempPasswordExpiresAt));
+        }
+
+        $imported = ['status' => 'imported'];
         if ($warning !== null) {
             $imported['warning'] = $warning;
         }

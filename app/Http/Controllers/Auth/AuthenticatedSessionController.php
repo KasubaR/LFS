@@ -40,10 +40,27 @@ class AuthenticatedSessionController extends Controller
             ]);
         }
 
+        $user = Auth::user();
+
+        // Bulk-imported members share one org-wide temp password (config/member_import.php)
+        // that's only valid for a limited window. Once that window has passed without the
+        // member setting their own password, reject the login even though the hash still
+        // matches — don't leave a session behind for it.
+        if ($user->must_change_password
+            && $user->temp_password_expires_at !== null
+            && now()->greaterThan($user->temp_password_expires_at)) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            throw ValidationException::withMessages([
+                'email' => 'Your temporary password has expired. Please use "Forgot password" to set a new one.',
+            ]);
+        }
+
         $request->session()->regenerate();
 
-        $user = Auth::user();
-        if ($user && $user->first_login === null) {
+        if ($user->first_login === null) {
             $user->forceFill(['first_login' => now()])->save();
         }
 
