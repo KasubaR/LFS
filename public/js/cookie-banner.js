@@ -17,8 +17,26 @@
 
   /* ── Config ──────────────────────────────────────────────── */
   const CONSENT_COOKIE = 'lfs_consent';
-  const CONSENT_ENDPOINT = '/cookies/consent';
-  const WITHDRAW_ENDPOINT = '/cookies/withdraw';
+
+  // The app may be hosted under a URL prefix (e.g. local XAMPP at
+  // /lfs-website-laravel/public) rather than at the domain root, so a
+  // hardcoded "/cookies/consent" would 404 there. Derive the app's real base
+  // path from this very script's own resolved <script src>, which Laravel's
+  // asset() helper already got right when the tag was rendered.
+  function resolveBasePath() {
+    try {
+      const src = document.currentScript && document.currentScript.src;
+      if (src) {
+        return src.replace(/\/js\/cookie-banner\.js(\?.*)?$/, '');
+      }
+    } catch { /* fall through to root */ }
+    return '';
+  }
+
+  const BASE_PATH = resolveBasePath();
+  const CONSENT_ENDPOINT = BASE_PATH + '/cookies/consent';
+  const WITHDRAW_ENDPOINT = BASE_PATH + '/cookies/withdraw';
+  const PRIVACY_URL = BASE_PATH + '/privacy';
 
   /* ════════════════════════════════════════════════════════════
      COOKIE HELPERS
@@ -81,7 +99,7 @@
             <p class="lfs-cookie-desc">
               LFS uses cookies to keep the site running and to understand how
               you engage with our community. You're in control.
-              <a href="/privacy" class="lfs-cookie-link">Privacy Policy</a>
+              <a href="${PRIVACY_URL}" class="lfs-cookie-link">Privacy Policy</a>
             </p>
           </div>
 
