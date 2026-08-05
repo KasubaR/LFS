@@ -114,9 +114,9 @@ class HomeController extends Controller
             'events' => $events,
             'products' => $homeProducts,
             'posts' => $posts,
-            'heroImage' => '/images/home/home-hero.jpg',
-            'extraStyles' => $heroPreload.'<link rel="stylesheet" href="/css/home.css">',
-            'extraScripts' => '<script src="/js/home.js" defer></script>',
+            'heroImage' => asset('images/home/home-hero.jpg'),
+            'extraStyles' => $heroPreload.'<link rel="stylesheet" href="'.asset('css/home.css').'">',
+            'extraScripts' => '<script src="'.asset('js/home.js').'" defer></script>',
         ]);
     }
 
