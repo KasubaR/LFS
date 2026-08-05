@@ -2,8 +2,13 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Enums\MembershipStatus;
+use App\Models\Membership;
+use App\Models\MembershipPlan;
 use App\Models\User;
+use Database\Seeders\MembershipPlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class LoginTest extends TestCase
@@ -87,6 +92,61 @@ class LoginTest extends TestCase
 
         $this->assertAuthenticatedAs($user);
         $response->assertRedirect('/password/change');
+    }
+
+    private function createMembership(User $user, string $membershipNumber): Membership
+    {
+        $this->seed(MembershipPlanSeeder::class);
+        $plan = MembershipPlan::query()->first();
+
+        return Membership::query()->create([
+            'id' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'membership_number' => $membershipNumber,
+            'status' => MembershipStatus::Active,
+            'current_plan_id' => $plan->id,
+            'approval_status' => 'approved',
+            'start_date' => now()->subMonth()->toDateString(),
+            'expiry_date' => now()->addMonths(5)->toDateString(),
+        ]);
+    }
+
+    public function test_users_can_authenticate_with_membership_number(): void
+    {
+        $user = User::factory()->create(['password' => 'password123']);
+        $this->createMembership($user, 'LFS-000042');
+
+        $response = $this->post('/login', [
+            'email' => 'LFS-000042',
+            'password' => 'password123',
+        ]);
+
+        $this->assertAuthenticatedAs($user);
+        $response->assertRedirect('/account');
+    }
+
+    public function test_membership_number_login_is_case_insensitive(): void
+    {
+        $user = User::factory()->create(['password' => 'password123']);
+        $this->createMembership($user, 'LFS-000042');
+
+        $response = $this->post('/login', [
+            'email' => 'lfs-000042',
+            'password' => 'password123',
+        ]);
+
+        $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_login_rejects_unknown_membership_number(): void
+    {
+        $response = $this->post('/login', [
+            'email' => 'LFS-999999',
+            'password' => 'whatever',
+        ]);
+
+        $response->assertSessionHasErrors('email');
+        $this->assertGuest();
     }
 
     public function test_users_can_logout(): void

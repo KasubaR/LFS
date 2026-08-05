@@ -11,8 +11,8 @@
     @csrf
 
     <div class="form-group{{ $errors->has('email') ? ' form-group--error' : '' }}">
-      <label for="email">Email</label>
-      <input type="email" id="email" name="email" value="{{ old('email') }}" required autocomplete="email" autofocus>
+      <label for="email">Email or Member Number</label>
+      <input type="text" id="email" name="email" value="{{ old('email') }}" required autocomplete="username" autofocus>
       @error('email')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
     </div>
 

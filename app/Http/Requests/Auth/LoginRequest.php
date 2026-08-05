@@ -17,7 +17,9 @@ class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'email' => ['required', 'string', 'email'],
+            // Either an email address or an LFS member number — see
+            // AuthenticatedSessionController::resolveLoginUser().
+            'email' => ['required', 'string', 'max:190'],
             'password' => ['required', 'string'],
             'remember' => ['nullable', 'boolean'],
         ];

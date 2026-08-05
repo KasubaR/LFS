@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Concerns\ProvidesAuthViews;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\Membership;
+use App\Models\User;
 use App\Services\MemberOnboardingService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -31,10 +33,16 @@ class AuthenticatedSessionController extends Controller
 
     public function store(LoginRequest $request): RedirectResponse
     {
-        $credentials = $request->only('email', 'password');
-        $credentials['email'] = strtolower($credentials['email']);
+        $login = trim((string) $request->input('email', ''));
+        $password = (string) $request->input('password', '');
 
-        if (! Auth::attempt($credentials, $request->boolean('remember'))) {
+        // Members can sign in with either their email or their LFS member number —
+        // resolve whichever they typed to a concrete account first, then attempt
+        // by that account's id so the password check goes through the normal
+        // Auth::attempt/hashing path either way.
+        $user = $this->resolveLoginUser($login);
+
+        if ($user === null || ! Auth::attempt(['id' => $user->id, 'password' => $password], $request->boolean('remember'))) {
             throw ValidationException::withMessages([
                 'email' => 'These credentials do not match our records.',
             ]);
@@ -75,5 +83,35 @@ class AuthenticatedSessionController extends Controller
         $request->session()->regenerateToken();
 
         return redirect('/');
+    }
+
+    /**
+     * Resolves the "email or member number" login field to a concrete User.
+     * A value containing "@" is treated as an email; anything else is looked
+     * up as an LFS membership number. Renewals reuse the same membership_number
+     * on a new row (see MembershipService::startRenewal), so a valid number
+     * should map to exactly one user_id — if it somehow maps to more than one,
+     * treat it as unresolved rather than guessing which account to log into.
+     */
+    private function resolveLoginUser(string $login): ?User
+    {
+        if ($login === '') {
+            return null;
+        }
+
+        if (str_contains($login, '@')) {
+            return User::query()->where('email', strtolower($login))->first();
+        }
+
+        $userIds = Membership::query()
+            ->whereRaw('UPPER(membership_number) = ?', [strtoupper($login)])
+            ->distinct()
+            ->pluck('user_id');
+
+        if ($userIds->count() !== 1) {
+            return null;
+        }
+
+        return User::query()->find($userIds->first());
     }
 }
