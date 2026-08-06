@@ -35,4 +35,9 @@ class MembershipPlan extends Model
     {
         return $this->hasMany(MembershipPayment::class, 'plan_id');
     }
+
+    public function promotions(): HasMany
+    {
+        return $this->hasMany(Promotion::class, 'plan_id');
+    }
 }

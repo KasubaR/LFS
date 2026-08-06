@@ -1220,6 +1220,11 @@ a.dashboard-contact-item__value:hover {
 }
 
 /* ── Settings form ── */
+/* White card uses light form tokens (--text-muted in main.css is for dark sections) */
+.account-settings-form.lfs-form label {
+  color: rgba(15, 15, 15, 0.6);
+}
+
 .account-settings-form .form-group {
   margin-bottom: 1.1rem;
 }

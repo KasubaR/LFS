@@ -42,7 +42,7 @@
           <div class="account-payment-card__main">
             <div class="account-payment-card__top">
               <span class="account-payment-card__ref">
-                {{ $payment['paymentReference'] ?? 'Payment #'.$payment['id'] }}
+                {{ $payment['receiptNumber'] ?? $payment['paymentReference'] ?? 'Payment #'.$payment['id'] }}
               </span>
               <span class="auth-status-badge auth-status-badge--{{ $badge }}">
                 {{ $statusLabels[$payment['status']] ?? str_replace('_', ' ', $payment['status']) }}
@@ -62,7 +62,7 @@
             </div>
             @if($canDownload)
               @php
-                $receiptFilename = 'LFS-Receipt-'.($payment['paymentReference'] ?: $payment['id']).'.pdf';
+                $receiptFilename = 'LFS-Receipt-'.($payment['receiptNumber'] ?: $payment['paymentReference'] ?: $payment['id']).'.pdf';
               @endphp
               <a
                 href="{{ route('account.payments.receipt', $payment['id']) }}"

@@ -12,10 +12,14 @@ class MembershipPayment extends Model
     protected $fillable = [
         'membership_id',
         'plan_id',
+        'promotion_id',
         'amount',
         'amount_paid',
+        'pending_charge_amount',
+        'discount_amount',
         'currency',
         'payment_reference',
+        'receipt_number',
         'payment_gateway',
         'status',
         'paid_at',
@@ -36,8 +40,11 @@ class MembershipPayment extends Model
     {
         return [
             'plan_id' => 'integer',
+            'promotion_id' => 'integer',
             'amount' => 'decimal:2',
             'amount_paid' => 'decimal:2',
+            'pending_charge_amount' => 'decimal:2',
+            'discount_amount' => 'decimal:2',
             'paid_at' => 'datetime',
             'covers_from' => 'date',
             'covers_to' => 'date',
@@ -57,5 +64,10 @@ class MembershipPayment extends Model
     public function plan(): BelongsTo
     {
         return $this->belongsTo(MembershipPlan::class, 'plan_id');
+    }
+
+    public function promotion(): BelongsTo
+    {
+        return $this->belongsTo(Promotion::class, 'promotion_id');
     }
 }

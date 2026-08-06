@@ -8,6 +8,7 @@ use App\Http\Requests\Auth\LoginRequest;
 use App\Models\Membership;
 use App\Models\User;
 use App\Services\MemberOnboardingService;
+use App\Support\MembershipNumberLookup;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -100,6 +101,11 @@ class AuthenticatedSessionController extends Controller
      * on a new row (see MembershipService::startRenewal), so a valid number
      * should map to exactly one user_id — if it somehow maps to more than one,
      * treat it as unresolved rather than guessing which account to log into.
+     *
+     * Membership numbers come in two formats (dashed for new signups,
+     * undashed for backfilled legacy imports — see MembershipNumberLookup)
+     * and members may or may not type the "LFS" prefix at all, so several
+     * normalized candidates are tried in turn.
      */
     private function resolveLoginUser(string $login): ?User
     {
@@ -111,15 +117,21 @@ class AuthenticatedSessionController extends Controller
             return User::query()->where('email', strtolower($login))->first();
         }
 
-        $userIds = Membership::query()
-            ->whereRaw('UPPER(membership_number) = ?', [strtoupper($login)])
-            ->distinct()
-            ->pluck('user_id');
+        foreach (MembershipNumberLookup::candidates($login) as $candidate) {
+            $userIds = Membership::query()
+                ->whereRaw("UPPER(REPLACE(membership_number, '-', '')) = ?", [$candidate])
+                ->distinct()
+                ->pluck('user_id');
 
-        if ($userIds->count() !== 1) {
-            return null;
+            if ($userIds->count() === 1) {
+                return User::query()->find($userIds->first());
+            }
+
+            if ($userIds->count() > 1) {
+                return null;
+            }
         }
 
-        return User::query()->find($userIds->first());
+        return null;
     }
 }

@@ -56,10 +56,16 @@
         <p class="form-group__hint">Email cannot be changed here. Contact LFS if you need to update it.</p>
       </div>
 
-      <div class="form-group{{ $errors->has('name') ? ' form-group--error' : '' }}">
-        <label for="settings-name">Full name</label>
-        <input type="text" id="settings-name" name="name" value="{{ old('name', $user->name) }}" required autocomplete="name">
-        @error('name')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
+      <div class="form-group{{ $errors->has('last_name') ? ' form-group--error' : '' }}">
+        <label for="settings-last-name">Last name</label>
+        <input type="text" id="settings-last-name" name="last_name" value="{{ old('last_name', $user->last_name) }}" required autocomplete="family-name">
+        @error('last_name')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
+      </div>
+
+      <div class="form-group{{ $errors->has('other_names') ? ' form-group--error' : '' }}">
+        <label for="settings-other-names">Other name(s)</label>
+        <input type="text" id="settings-other-names" name="other_names" value="{{ old('other_names', $user->other_names) }}" required autocomplete="given-name">
+        @error('other_names')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
       </div>
 
       <div class="form-group{{ $errors->has('phone') ? ' form-group--error' : '' }}">

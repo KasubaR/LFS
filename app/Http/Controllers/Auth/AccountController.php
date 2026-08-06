@@ -65,6 +65,24 @@ class AccountController extends Controller
         $hasPaidMembership = $membership !== null && $membership->membership_number !== null;
         $cardData = $this->membershipCardViewData($membership);
 
+        // What "Pay for membership" actually charges now: the selected plan's
+        // installment size, capped at what's actually owed and only offered
+        // within the Jan-Apr grace window — mirrors
+        // MembershipPaymentController::initiate()'s charge-amount logic, so
+        // the button never promises more than it will really request.
+        $chargeAmountNow = 0.0;
+        if ($canContinuePayment && $membership) {
+            $latestPayment = $this->paymentService->findLatestForMembership($membership->id);
+            $amountDue = $latestPayment
+                ? (float) $latestPayment['amount']
+                : (float) $this->membershipService->currentAnnualPricing()['amount'];
+            $planPrice = (float) ($membership->plan?->price ?? $amountDue);
+
+            $chargeAmountNow = $this->membershipService->isWithinGraceWindow()
+                ? min($planPrice, $amountDue)
+                : $amountDue;
+        }
+
         $viewData = $this->accountViewData(array_merge([
             'title' => 'My Dashboard',
             'description' => 'Your LFS member dashboard and membership status.',
@@ -73,6 +91,7 @@ class AccountController extends Controller
             'canContinuePayment' => $canContinuePayment,
             'canRenew' => $membership !== null && $membership->status === MembershipStatus::Expired,
             'hasPaidMembership' => $hasPaidMembership,
+            'chargeAmountNow' => $chargeAmountNow,
             'renewalPlans' => $this->planService->getActivePlans(),
             'changePlans' => $canContinuePayment ? $this->planService->getActivePlans() : [],
             'announcements' => $hasPaidMembership ? $this->announcementService->getActiveForMembers(5) : [],
@@ -251,7 +270,7 @@ class AccountController extends Controller
             'issuer' => config('membership.issuer'),
         ])->setPaper('a4');
 
-        $filename = 'LFS-Receipt-'.($owned->payment_reference ?: $owned->id).'.pdf';
+        $filename = 'LFS-Receipt-'.($owned->receipt_number ?: $owned->payment_reference ?: $owned->id).'.pdf';
 
         return $pdf->download($filename);
     }
@@ -362,7 +381,8 @@ class AccountController extends Controller
         }
 
         $user->forceFill([
-            'name' => $data['name'],
+            'last_name' => $data['last_name'],
+            'other_names' => $data['other_names'],
             'phone' => $data['phone'],
             'gender' => $data['gender'],
             'nationality' => $data['nationality'],

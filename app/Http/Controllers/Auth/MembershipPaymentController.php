@@ -38,13 +38,16 @@ class MembershipPaymentController extends Controller
             ->first();
 
         // Two ways to reach here: a fresh application/renewal awaiting its first
-        // payment (Draft/PendingPayment), or an already-Active, not-yet-expired
-        // membership that owes a balance (imported members who paid less than
-        // their plan's full price — see MembershipService::findOutstandingBalancePayment).
+        // payment (Draft/PendingPayment), or an existing membership that still
+        // owes a balance — either forced (Suspended: grace period ended unpaid,
+        // see findOutstandingBalancePayment) or voluntary (still Active and
+        // within the grace period, but the member wants to clear the balance
+        // early rather than wait, see findGracePeriodBalanceReminder).
         $isBalanceTopUp = false;
 
         if (! $membership || ! in_array($membership->status, [MembershipStatus::Draft, MembershipStatus::PendingPayment], true)) {
-            $outstanding = $this->membershipService->findOutstandingBalancePayment((int) $user->id);
+            $outstanding = $this->membershipService->findOutstandingBalancePayment((int) $user->id)
+                ?? $this->membershipService->findGracePeriodBalanceReminder((int) $user->id);
 
             if ($outstanding === null || $membership === null || $outstanding['membership']->id !== $membership->id) {
                 return $this->jsonError('No pending membership payment to pay for.', 403);
@@ -64,16 +67,24 @@ class MembershipPaymentController extends Controller
         // is not blocked by the terminal Failed payment. For a balance top-up,
         // carry the amount already paid forward instead of starting from zero.
         if ($payment && $payment['status'] === MembershipPaymentStatus::Failed) {
-            $paymentId = $isBalanceTopUp
-                ? $this->paymentService->create($membership->id, (int) $membership->current_plan_id, [
+            if ($isBalanceTopUp) {
+                $paymentId = $this->paymentService->create($membership->id, (int) $membership->current_plan_id, [
                     'amount' => $payment['amount'],
                     'amountPaid' => $payment['amountPaid'],
                     'status' => MembershipPaymentStatus::PartiallyPaid,
                     'paymentGateway' => $payment['paymentGateway'] ?? 'lenco',
-                ])
-                : $this->paymentService->create($membership->id, (int) $membership->current_plan_id, [
-                    'amount' => (float) ($membership->plan?->price ?? $payment['amount']),
                 ]);
+            } else {
+                // Re-resolve pricing rather than reusing the failed row's amount, so a
+                // retry still gets whatever promotion/late-joiner rate currently applies.
+                $pricing = $this->membershipService->currentAnnualPricing();
+
+                $paymentId = $this->paymentService->create($membership->id, (int) $membership->current_plan_id, [
+                    'amount' => $pricing['amount'],
+                    'promotionId' => $pricing['promotionId'],
+                    'discountAmount' => $pricing['discountAmount'],
+                ]);
+            }
             $payment = $this->paymentService->findById($paymentId);
         }
 
@@ -99,12 +110,23 @@ class MembershipPaymentController extends Controller
         // to the membership's own id so the reference is always unique.
         $reference = $this->lenco->generateReference($membership->membership_number ?? $membership->id);
 
-        // Charge only the outstanding shortfall for a top-up — the payment
-        // row's own `amount` still reflects the full amount due, so verify()/
-        // webhook() completing it with that value correctly resolves to Paid.
+        // A top-up always clears the entire outstanding shortfall in one shot.
+        // A fresh (non-topup) payment charges only the selected plan's
+        // installment size — capped at what's actually owed, so a late-joiner/
+        // promotion-discounted member is never overcharged — but only while
+        // still inside the Jan-Apr grace window; once that's passed, the full
+        // amount is required upfront (no partial payment allowed at all).
         $chargeAmount = $isBalanceTopUp
-            ? round($payment['amount'] - $payment['amountPaid'], 2)
-            : $payment['amount'];
+            ? round((float) $payment['amount'] - (float) $payment['amountPaid'], 2)
+            : ($this->membershipService->isWithinGraceWindow()
+                ? min((float) ($membership->plan->price ?? $payment['amount']), (float) $payment['amount'])
+                : (float) $payment['amount']);
+
+        // verify()/webhook() add this to amount_paid instead of assuming any
+        // successful charge pays off the payment in full — required now that
+        // a charge can be less than the full balance (see pending_charge_amount
+        // migration / MembershipPaymentService::recordGatewayInitiation()).
+        $pendingChargeAmount = $chargeAmount;
 
         $orderData = [
             'orderNumber' => $reference,
@@ -135,6 +157,7 @@ class MembershipPaymentController extends Controller
             'lencoProvider' => $request->validated('provider'),
             'lencoStatus' => $lencoResult['status'],
             'lencoResponse' => $lencoResult['rawResponse'] ?? [],
+            'pendingChargeAmount' => $pendingChargeAmount,
             'metadata' => ['customerPhone' => $request->validated('phone')],
         ]);
 
@@ -174,7 +197,7 @@ class MembershipPaymentController extends Controller
             $result = $this->lenco->verifyPayment($reference, true);
 
             if ($result['internalStatus'] === 'completed') {
-                $this->membershipService->handlePaymentUpdate((int) $payment['id'], (float) $payment['amount'], [
+                $this->membershipService->handlePaymentUpdate((int) $payment['id'], $this->resolveConfirmedAmountPaid($payment), [
                     'paidAt' => now(),
                     'lencoStatus' => $result['status'],
                     'lencoResponse' => $result['rawResponse'] ?? [],
@@ -234,6 +257,24 @@ class MembershipPaymentController extends Controller
         return $this->jsonResponse(['ok' => true]);
     }
 
+    /**
+     * A confirmed Lenco charge only ever covers what was actually requested
+     * for it (pendingChargeAmount, set at initiate() time) — add that to
+     * whatever was already paid, rather than assuming the charge cleared the
+     * payment's full amount. Falls back to "pays off the full shortfall" for
+     * older in-flight payments initiated before pendingChargeAmount existed.
+     *
+     * @param  array<string, mixed>  $payment
+     */
+    private function resolveConfirmedAmountPaid(array $payment): float
+    {
+        $alreadyPaid = (float) $payment['amountPaid'];
+        $amount = (float) $payment['amount'];
+        $thisCharge = $payment['pendingChargeAmount'] ?? ($amount - $alreadyPaid);
+
+        return min($amount, round($alreadyPaid + (float) $thisCharge, 2));
+    }
+
     private function ownsPayment(array $payment): bool
     {
         $membership = $this->membershipService->findByMembershipId($payment['membershipId']);
@@ -266,7 +307,7 @@ class MembershipPaymentController extends Controller
         $internalStatus = $this->lenco->mapLencoStatus((string) $payload['status']);
 
         if ($internalStatus === 'completed') {
-            $this->membershipService->handlePaymentUpdate((int) $payment['id'], (float) $payment['amount'], [
+            $this->membershipService->handlePaymentUpdate((int) $payment['id'], $this->resolveConfirmedAmountPaid($payment), [
                 'paidAt' => now(),
                 'lencoStatus' => $payload['status'],
                 'webhookReceived' => true,

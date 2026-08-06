@@ -9,6 +9,7 @@ use App\Http\Middleware\EnsureAdminCan;
 use App\Http\Middleware\EnsureBalancePaid;
 use App\Http\Middleware\EnsureMember;
 use App\Http\Middleware\EnsurePasswordChanged;
+use App\Http\Middleware\EnsureProfileComplete;
 use App\Http\Middleware\LogApiRequest;
 use App\Http\Middleware\RequireApiScope;
 use Illuminate\Console\Scheduling\Schedule;
@@ -51,6 +52,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'api.log' => LogApiRequest::class,
             'member' => EnsureMember::class,
             'force.password.change' => EnsurePasswordChanged::class,
+            'force.profile.complete' => EnsureProfileComplete::class,
             'force.balance.due' => EnsureBalancePaid::class,
             // Soft-gated on most account pages; use only where unpaid must be blocked.
             'membership.active' => EnsureActiveMembership::class,
@@ -69,6 +71,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withSchedule(function (Schedule $schedule): void {
+        $schedule->command('membership:suspend-unpaid')->daily();
         $schedule->command('membership:expire')->daily();
         $schedule->command('payments:poll-pending')->everyFiveMinutes();
     })

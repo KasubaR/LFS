@@ -29,7 +29,8 @@ class MemberDetailTest extends TestCase
     public function test_member_detail_page_renders_for_existing_member(): void
     {
         $user = User::factory()->create([
-            'name' => 'Detail Test User',
+            'last_name' => 'User',
+            'other_names' => 'Detail Test',
             'email' => 'detail@example.com',
         ]);
 
@@ -160,5 +161,38 @@ class MemberDetailTest extends TestCase
         )->assertRedirect('/admin/members/'.$user->id);
 
         $this->assertSame('cancelled', Membership::query()->find('00000000-0000-4000-8000-000000000032')->status);
+    }
+
+    public function test_suspended_member_shows_correctly_in_admin_list_and_detail(): void
+    {
+        $user = User::factory()->create([
+            'last_name' => 'Suspended',
+            'other_names' => 'Test',
+            'email' => 'suspended-admin-view@example.com',
+        ]);
+
+        Membership::query()->create([
+            'id' => '00000000-0000-4000-8000-000000000033',
+            'user_id' => $user->id,
+            'membership_number' => '30013',
+            'status' => 'suspended',
+            'current_plan_id' => MembershipPlan::query()->first()->id,
+            'approval_status' => 'approved',
+            'joined_at' => now()->subMonths(4),
+            'start_date' => now()->subMonths(4)->toDateString(),
+            'expiry_date' => now()->addMonths(8)->toDateString(),
+            'grace_period_ends_at' => now()->subMonth()->toDateString(),
+        ]);
+
+        // The list view has no membership-number column — just confirm the
+        // suspended row shows up under the filter with the right status pill.
+        $this->actingAsAdmin()->get('/admin/members/list?status=suspended')
+            ->assertOk()
+            ->assertSee('suspended', false)
+            ->assertSee('suspended-admin-view@example.com', false);
+
+        $this->actingAsAdmin()->get('/admin/members/'.$user->id)
+            ->assertOk()
+            ->assertSee('suspended', false);
     }
 }

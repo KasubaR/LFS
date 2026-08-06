@@ -14,6 +14,9 @@ class MembershipStatus
 
     public const Cancelled = 'cancelled';
 
+    /** Grace period (30 April) ended without full payment for the year. */
+    public const Suspended = 'suspended';
+
     /** @var list<string> */
     public const ALL = [
         self::Draft,
@@ -21,6 +24,7 @@ class MembershipStatus
         self::Active,
         self::Expired,
         self::Cancelled,
+        self::Suspended,
     ];
 
     /**
@@ -29,7 +33,8 @@ class MembershipStatus
     public const TRANSITIONS = [
         self::Draft => [self::PendingPayment, self::Cancelled],
         self::PendingPayment => [self::Active, self::Cancelled],
-        self::Active => [self::Expired, self::Cancelled],
+        self::Active => [self::Expired, self::Suspended, self::Cancelled],
+        self::Suspended => [self::Active, self::Expired, self::Cancelled],
         self::Expired => [self::PendingPayment, self::Cancelled],
     ];
 
@@ -39,6 +44,7 @@ class MembershipStatus
     public const ADMIN_DISPLAY_MAP = [
         'active' => [self::Active],
         'pending' => [self::Draft, self::PendingPayment],
+        'suspended' => [self::Suspended],
         'inactive' => [self::Expired, self::Cancelled],
     ];
 

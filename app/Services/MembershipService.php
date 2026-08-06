@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\ApprovalStatus;
+use App\Enums\BillingCycle;
 use App\Enums\MembershipHistoryEvent;
 use App\Enums\MembershipPaymentStatus;
 use App\Enums\MembershipStatus;
@@ -32,7 +33,8 @@ class MembershipService
 
     public function __construct(
         private readonly MembershipPaymentService $paymentService,
-        private readonly MembershipPlanService $planService
+        private readonly MembershipPlanService $planService,
+        private readonly PromotionService $promotionService,
     ) {}
 
     /**
@@ -135,6 +137,10 @@ class MembershipService
             ]);
 
             if ($membership->status === MembershipStatus::PendingPayment) {
+                // The plan is now purely an installment-size choice (Quarterly/Semi
+                // Annual/Annual) — the amount due is always the annual fee
+                // regardless of which is selected, so switching plans here only
+                // changes plan_id, not the pending payment's amount/promotion.
                 MembershipPayment::query()
                     ->where('membership_id', $membership->id)
                     ->whereNotIn('status', MembershipPaymentStatus::TERMINAL)
@@ -142,7 +148,6 @@ class MembershipService
                     ->limit(1)
                     ->update([
                         'plan_id' => $plan->id,
-                        'amount' => (float) $plan->price,
                     ]);
             }
 
@@ -175,15 +180,44 @@ class MembershipService
     }
 
     /**
-     * A member is treated as owing a balance when their current membership is
-     * Active, its period hasn't expired yet ("provided the payment has not
-     * expired from the date of payment"), and its latest payment is only
-     * partially paid — currently only reachable for imported members who paid
-     * less than their plan's full price (see RepairImportedMembershipAmountsCommand).
+     * A member is redirected to the balance page only once their membership
+     * has actually been Suspended for non-payment (grace period — Jan to end
+     * of April — ended without full payment; see SuspendUnpaidMembershipsCommand).
+     * A merely PartiallyPaid-but-still-Active membership (i.e., still within
+     * the grace period) does NOT trigger this — those members get full account
+     * access, per the grace-period policy; the balance is just a reminder.
      *
      * @return array{membership: Membership, payment: array<string, mixed>}|null
      */
     public function findOutstandingBalancePayment(int $userId): ?array
+    {
+        $membership = Membership::query()
+            ->where('user_id', $userId)
+            ->where('status', MembershipStatus::Suspended)
+            ->orderByDesc('created_at')
+            ->first();
+
+        if (! $membership) {
+            return null;
+        }
+
+        $payment = $this->paymentService->findLatestForMembership($membership->id);
+        if (! $payment) {
+            return null;
+        }
+
+        return ['membership' => $membership, 'payment' => $payment];
+    }
+
+    /**
+     * Non-blocking counterpart to findOutstandingBalancePayment(): an Active
+     * membership that's still only partially paid, purely so account pages can
+     * show a friendly "balance due by 30 April" reminder during the grace
+     * period without gating access.
+     *
+     * @return array{membership: Membership, payment: array<string, mixed>}|null
+     */
+    public function findGracePeriodBalanceReminder(int $userId): ?array
     {
         $membership = Membership::query()
             ->where('user_id', $userId)
@@ -200,16 +234,7 @@ class MembershipService
         }
 
         $payment = $this->paymentService->findLatestForMembership($membership->id);
-        if (! $payment) {
-            return null;
-        }
-
-        // Normally partially_paid; a failed top-up retry leaves the row Failed
-        // without having cleared the shortfall, so still treat that as owing.
-        $stillOwes = $payment['status'] === MembershipPaymentStatus::PartiallyPaid
-            || ($payment['status'] === MembershipPaymentStatus::Failed && (float) $payment['amountPaid'] < (float) $payment['amount']);
-
-        if (! $stillOwes) {
+        if (! $payment || $payment['status'] !== MembershipPaymentStatus::PartiallyPaid) {
             return null;
         }
 
@@ -224,7 +249,7 @@ class MembershipService
     {
         $plan = $this->findPlanOrFail((int) $payload['planId']);
         $registeredAt = Carbon::parse($payload['registeredAt']);
-        $dates = $this->computePeriodDates($registeredAt, (int) $plan->duration_months);
+        $dates = $this->computeMembershipYearDates($registeredAt);
 
         return DB::transaction(function () use ($payload, $plan, $registeredAt, $dates) {
             $membershipId = Uuid::v4();
@@ -238,6 +263,7 @@ class MembershipService
                 'start_date' => $dates['startDate'],
                 'expiry_date' => $dates['expiryDate'],
                 'renewal_due_date' => $dates['renewalDueDate'],
+                'grace_period_ends_at' => $dates['gracePeriodEndsAt'],
                 'current_plan_id' => $plan->id,
                 'approval_status' => ApprovalStatus::Approved,
                 'approved_by' => 'system:import',
@@ -309,8 +335,12 @@ class MembershipService
                 'Application submitted'
             );
 
+            $pricing = $this->annualPricingFor(now());
+
             $paymentId = $this->paymentService->create($membershipId, (int) $plan->id, [
-                'amount' => (float) $plan->price,
+                'amount' => $pricing['amount'],
+                'promotionId' => $pricing['promotionId'],
+                'discountAmount' => $pricing['discountAmount'],
             ]);
 
             return $this->toMembership($membership->fresh(['user', 'plan']), $paymentId);
@@ -323,8 +353,9 @@ class MembershipService
             $payment = $this->paymentService->recordAmountPaid($paymentId, $amountPaid, $extra);
 
             // Recovery: a prior attempt may have marked the payment Paid and then
-            // crashed before activateOnPayment finished. Terminal payments normally
-            // short-circuit, but PendingPayment + Paid must still activate once.
+            // crashed before activateOnPayment/reinstateOnPayment finished.
+            // Terminal payments normally short-circuit, but PendingPayment/
+            // Suspended + Paid must still activate/reinstate once.
             if (! $payment) {
                 $existing = $this->paymentService->findById($paymentId);
                 if (
@@ -334,6 +365,11 @@ class MembershipService
                     $membership = $this->findMembershipOrFail($existing['membershipId']);
                     if ($membership->status === MembershipStatus::PendingPayment) {
                         $this->activateOnPayment($membership, $existing);
+
+                        return $this->toMembership($membership->fresh(['user', 'plan']), $paymentId);
+                    }
+                    if ($membership->status === MembershipStatus::Suspended) {
+                        $this->reinstateOnPayment($membership, $existing);
 
                         return $this->toMembership($membership->fresh(['user', 'plan']), $paymentId);
                     }
@@ -347,11 +383,21 @@ class MembershipService
 
             $membership = $this->findMembershipOrFail($payment['membershipId']);
 
+            // A PartiallyPaid first payment still activates the membership —
+            // full access during the grace period is the whole point of
+            // letting members pay their annual fee in installments. Only a
+            // Suspended membership requires the FULL balance to reinstate.
             if (
                 $membership->status === MembershipStatus::PendingPayment
-                && $payment['status'] === MembershipPaymentStatus::Paid
+                && in_array($payment['status'], [MembershipPaymentStatus::Paid, MembershipPaymentStatus::PartiallyPaid], true)
             ) {
                 $this->activateOnPayment($membership, $payment);
+                $membership->refresh();
+            } elseif (
+                $membership->status === MembershipStatus::Suspended
+                && $payment['status'] === MembershipPaymentStatus::Paid
+            ) {
+                $this->reinstateOnPayment($membership, $payment);
                 $membership->refresh();
             }
 
@@ -411,8 +457,12 @@ class MembershipService
                 false
             );
 
+            $pricing = $this->annualPricingFor(now());
+
             $paymentId = $this->paymentService->create($membershipId, (int) $plan->id, [
-                'amount' => (float) $plan->price,
+                'amount' => $pricing['amount'],
+                'promotionId' => $pricing['promotionId'],
+                'discountAmount' => $pricing['discountAmount'],
             ]);
 
             $membership = $this->findMembershipOrFail($membershipId);
@@ -440,6 +490,28 @@ class MembershipService
             'system',
             null,
             $notes ?? 'Membership period ended'
+        );
+
+        return $this->toMembership($membership->fresh(['user', 'plan']));
+    }
+
+    /**
+     * Grace period (30 April) ended without the member paying their annual fee
+     * in full. See SuspendUnpaidMembershipsCommand.
+     */
+    public function suspend(string $membershipId, ?string $notes = null): array
+    {
+        $membership = $this->findMembershipOrFail($membershipId);
+
+        $this->clearActiveHistoryFlags((int) $membership->user_id);
+
+        $this->transition(
+            $membership,
+            MembershipStatus::Suspended,
+            MembershipHistoryEvent::Suspended,
+            'system',
+            null,
+            $notes ?? 'Grace period ended without full payment'
         );
 
         return $this->toMembership($membership->fresh(['user', 'plan']));
@@ -475,6 +547,105 @@ class MembershipService
             'expiryDate' => $expiryDate->toDateString(),
             'renewalDueDate' => $expiryDate->toDateString(),
         ];
+    }
+
+    /**
+     * Every membership runs the same Jan 1 - Dec 31 calendar year, regardless
+     * of which plan (Quarterly/Semi Annual/Annual) was selected. A grace
+     * deadline (30 April of that year) is only offered to members who
+     * registered/renewed within the normal Jan 1 - Apr 30 window — anyone
+     * joining later has already missed it, so no grace period applies (they
+     * must pay the full, possibly late-joiner-reduced, fee upfront).
+     *
+     * @return array{startDate: string, expiryDate: string, renewalDueDate: string, gracePeriodEndsAt: ?string}
+     */
+    public function computeMembershipYearDates(Carbon $registeredAt): array
+    {
+        $year = (int) $registeredAt->year;
+        $expiryDate = Carbon::create($year, 12, 31);
+        $graceEnd = $this->monthDayDate($year, config('membership.membership_year.grace_period_end_month_day', '04-30'));
+
+        return [
+            'startDate' => $registeredAt->toDateString(),
+            'expiryDate' => $expiryDate->toDateString(),
+            'renewalDueDate' => $expiryDate->toDateString(),
+            // Compared by date only — a time-of-day comparison would wrongly
+            // exclude anyone who registers later in the day on the deadline
+            // itself (e.g. 30 April 11pm).
+            'gracePeriodEndsAt' => $registeredAt->toDateString() <= $graceEnd->toDateString() ? $graceEnd->toDateString() : null,
+        ];
+    }
+
+    /**
+     * The annual fee due for someone registering/renewing on $registeredAt:
+     * the Annual plan's price normally, or the reduced late-joiner fee for
+     * anyone registering on/after this year's cutoff (1 June by default).
+     */
+    private function annualFeeDue(Carbon $registeredAt): float
+    {
+        $cutoff = $this->monthDayDate((int) $registeredAt->year, config('membership.late_joiner.cutoff_month_day', '06-01'));
+
+        if ($registeredAt->gte($cutoff)) {
+            return (float) config('membership.late_joiner.fee', 500.00);
+        }
+
+        return (float) $this->findAnnualPlanOrFail()->price;
+    }
+
+    /**
+     * Resolves the amount actually due for a fresh application/renewal at
+     * $registeredAt: the late-joiner-aware annual fee, with any active
+     * Promotion on the Annual plan composed on top.
+     *
+     * @return array{amount: float, promotionId: ?int, discountAmount: float}
+     */
+    private function annualPricingFor(Carbon $registeredAt): array
+    {
+        $annualPlan = $this->findAnnualPlanOrFail();
+        $baseFee = $this->annualFeeDue($registeredAt);
+
+        return $this->promotionService->priceForPlan($annualPlan, $baseFee);
+    }
+
+    /**
+     * Whether $at (default now) falls inside this year's Jan 1 - Apr 30 grace
+     * window — used at checkout time, before a membership row has its own
+     * grace_period_ends_at set (that's only computed once payment activates
+     * the membership).
+     */
+    public function isWithinGraceWindow(?Carbon $at = null): bool
+    {
+        $at ??= now();
+        $graceEnd = $this->monthDayDate((int) $at->year, config('membership.membership_year.grace_period_end_month_day', '04-30'));
+
+        return $at->toDateString() <= $graceEnd->toDateString();
+    }
+
+    /**
+     * Public wrapper around annualPricingFor(now()) — used when re-resolving
+     * pricing for a fresh Lenco attempt (e.g. retrying after a Failed payment).
+     *
+     * @return array{amount: float, promotionId: ?int, discountAmount: float}
+     */
+    public function currentAnnualPricing(): array
+    {
+        return $this->annualPricingFor(now());
+    }
+
+    private function findAnnualPlanOrFail(): MembershipPlan
+    {
+        $plan = MembershipPlan::query()->where('billing_cycle', BillingCycle::Annual)->first();
+
+        if (! $plan) {
+            throw new CodeException('Annual membership plan not found.', self::PLAN_NOT_FOUND_CODE);
+        }
+
+        return $plan;
+    }
+
+    private function monthDayDate(int $year, string $monthDay): Carbon
+    {
+        return Carbon::createFromFormat('Y-m-d', "{$year}-{$monthDay}")->startOfDay();
     }
 
     public function generateMembershipNumber(): string
@@ -621,7 +792,7 @@ class MembershipService
     {
         $plan = $this->findPlanOrFail((int) $membership->current_plan_id);
         $startDate = now();
-        $dates = $this->computePeriodDates($startDate, (int) $plan->duration_months);
+        $dates = $this->computeMembershipYearDates($startDate);
         $isRenewal = $this->isRenewalMembership($membership);
         $joinedAt = $membership->joined_at ?? $startDate;
 
@@ -635,6 +806,7 @@ class MembershipService
             'start_date' => $dates['startDate'],
             'expiry_date' => $dates['expiryDate'],
             'renewal_due_date' => $dates['renewalDueDate'],
+            'grace_period_ends_at' => $dates['gracePeriodEndsAt'],
             'approval_status' => ApprovalStatus::Approved,
             'approved_by' => 'system:lenco',
             'approved_at' => now(),
@@ -683,6 +855,34 @@ class MembershipService
             ],
             false
         );
+    }
+
+    /**
+     * Outstanding balance cleared while Suspended — resume as Active without
+     * touching the membership year's dates (it doesn't restart, it just
+     * un-suspends).
+     *
+     * @param  array<string, mixed>  $payment
+     */
+    private function reinstateOnPayment(Membership $membership, array $payment): void
+    {
+        $this->clearActiveHistoryFlags((int) $membership->user_id);
+
+        $this->transition(
+            $membership,
+            MembershipStatus::Active,
+            MembershipHistoryEvent::Reinstated,
+            'lenco',
+            'system:lenco',
+            'Outstanding balance cleared — membership reinstated',
+            [],
+            true
+        );
+
+        $this->paymentService->updateCoverage((int) $payment['id'], [
+            'coversFrom' => $membership->start_date?->toDateString(),
+            'coversTo' => $membership->expiry_date?->toDateString(),
+        ]);
     }
 
     private function expirePreviousMemberships(int $userId, string $excludeMembershipId): void
@@ -880,6 +1080,7 @@ class MembershipService
             'startDate' => $membership->start_date?->toDateString(),
             'expiryDate' => $membership->expiry_date?->toDateString(),
             'renewalDueDate' => $membership->renewal_due_date?->toDateString(),
+            'gracePeriodEndsAt' => $membership->grace_period_ends_at?->toDateString(),
             'currentPlanId' => (int) $membership->current_plan_id,
             'approvalStatus' => $membership->approval_status,
             'approvedAt' => $membership->approved_at ? (string) $membership->approved_at : null,

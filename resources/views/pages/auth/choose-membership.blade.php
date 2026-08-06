@@ -24,7 +24,7 @@
     </div>
 
     <div class="form-group{{ $errors->has('plan_id') ? ' form-group--error' : '' }}">
-      <label>Membership plan</label>
+      <label>How would you like to pay?</label>
       <div class="auth-plan-grid" role="radiogroup" aria-label="Membership plan">
         @foreach($plans as $plan)
           <label class="auth-plan-option">
@@ -33,13 +33,17 @@
             <span class="auth-plan-option__card">
               <span>
                 <span class="auth-plan-option__name">{{ $plan['name'] }}</span>
-                <span class="auth-plan-option__meta">{{ $plan['durationMonths'] }} months</span>
+                <span class="auth-plan-option__meta">Pay now</span>
               </span>
               <span class="auth-plan-option__price">K{{ number_format($plan['price']) }}</span>
             </span>
           </label>
         @endforeach
       </div>
+      <p class="auth-plan-note">
+        Your membership runs through 31 December. You may pay in installments —
+        the full amount is due by 30 April.
+      </p>
       @error('plan_id')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
     </div>
 

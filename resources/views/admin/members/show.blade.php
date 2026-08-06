@@ -12,7 +12,7 @@ $history     = $member['history'];
 $statusBadge = fn (string $status) => match ($status) {
     'active' => 'green',
     'draft', 'pending_payment' => 'orange',
-    'expired', 'cancelled' => 'red',
+    'expired', 'cancelled', 'suspended' => 'red',
     default => 'muted',
 };
 
@@ -23,7 +23,7 @@ $paymentBadge = fn (?string $status) => match ($status) {
     default => 'muted',
 };
 
-$cancellableStatuses = ['draft', 'pending_payment', 'active'];
+$cancellableStatuses = ['draft', 'pending_payment', 'active', 'suspended'];
 @endphp
 
 <div class="admin-page-header">

@@ -138,6 +138,38 @@ class LoginTest extends TestCase
         $this->assertAuthenticatedAs($user);
     }
 
+    public function test_users_can_authenticate_with_a_backfilled_undashed_membership_number(): void
+    {
+        // Legacy bulk-imported members have an undashed number like
+        // "LFS14149" (see MemberImportService/member-import:backfill-lfs-prefix).
+        $user = User::factory()->create(['password' => 'password123']);
+        $this->createMembership($user, 'LFS14149');
+
+        $response = $this->post('/login', [
+            'email' => 'LFS14149',
+            'password' => 'password123',
+        ]);
+
+        $this->assertAuthenticatedAs($user);
+        $response->assertRedirect('/account');
+    }
+
+    public function test_users_can_authenticate_typing_the_bare_number_without_the_lfs_prefix(): void
+    {
+        // Members shouldn't be locked out just because they type the number
+        // as originally printed on their old card, before it was prefixed.
+        $user = User::factory()->create(['password' => 'password123']);
+        $this->createMembership($user, 'LFS14149');
+
+        $response = $this->post('/login', [
+            'email' => '14149',
+            'password' => 'password123',
+        ]);
+
+        $this->assertAuthenticatedAs($user);
+        $response->assertRedirect('/account');
+    }
+
     public function test_login_rejects_unknown_membership_number(): void
     {
         $response = $this->post('/login', [

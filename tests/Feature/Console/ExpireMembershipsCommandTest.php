@@ -67,4 +67,30 @@ class ExpireMembershipsCommandTest extends TestCase
                 ->exists()
         );
     }
+
+    public function test_command_also_expires_suspended_memberships_past_expiry_date(): void
+    {
+        $plan = MembershipPlan::query()->first();
+        $user = User::factory()->create();
+
+        // Suspended (grace period ended unpaid) but the membership year is
+        // also over now — should still roll to Expired so the member
+        // re-enters the normal renewal flow in January.
+        $membership = Membership::query()->create([
+            'id' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'membership_number' => 'LFS-000012',
+            'status' => MembershipStatus::Suspended,
+            'current_plan_id' => $plan->id,
+            'approval_status' => 'approved',
+            'start_date' => now()->subYear()->toDateString(),
+            'expiry_date' => now()->subDay()->toDateString(),
+            'grace_period_ends_at' => now()->subMonths(8)->toDateString(),
+            'joined_at' => now()->subYear(),
+        ]);
+
+        $this->artisan('membership:expire')->assertSuccessful();
+
+        $this->assertSame(MembershipStatus::Expired, $membership->fresh()->status);
+    }
 }

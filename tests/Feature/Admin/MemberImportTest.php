@@ -50,15 +50,29 @@ class MemberImportTest extends TestCase
         $this->assertSame('Lusaka', $alice->town);
         $this->assertNotNull($alice->registered_at);
 
+        // The sheet's single "Full names" cell ("Alice Import") is split into
+        // structured last_name/other_names at import time.
+        $this->assertSame('Import', $alice->last_name);
+        $this->assertSame('Alice', $alice->other_names);
+        $this->assertSame('Alice Import', $alice->name);
+
         $membership = Membership::query()->where('user_id', $alice->id)->first();
         $this->assertNotNull($membership);
-        $this->assertSame('13239', $membership->membership_number);
+        $this->assertSame('LFS13239', $membership->membership_number);
         $this->assertSame('active', $membership->status->value ?? $membership->status);
 
         $payment = MembershipPayment::query()->where('membership_id', $membership->id)->first();
         $this->assertNotNull($payment);
         $this->assertSame('paid', $payment->status->value ?? $payment->status);
         $this->assertSame('import', $payment->payment_gateway);
+
+        // payment_reference is set to the membership number for legacy
+        // imports (no real gateway reference exists) — receipt_number must
+        // still be its own dedicated, sequential id, not a copy of it.
+        $this->assertSame($membership->membership_number, $payment->payment_reference);
+        $this->assertNotNull($payment->receipt_number);
+        $this->assertNotSame($membership->membership_number, $payment->receipt_number);
+        $this->assertMatchesRegularExpression('/^LFS-RCT-\d{6}$/', $payment->receipt_number);
     }
 
     public function test_import_parses_comma_formatted_net_amount(): void
@@ -100,10 +114,13 @@ class MemberImportTest extends TestCase
 
     public function test_import_skips_duplicate_membership_numbers(): void
     {
+        // The duplicate check compares against the final prefixed number
+        // (see MemberImportService::importRow()), so simulate a pre-existing
+        // membership that already carries the prefix Alice's row would land on.
         Membership::query()->create([
             'id' => (string) \Illuminate\Support\Str::uuid(),
             'user_id' => User::factory()->create()->id,
-            'membership_number' => '13239',
+            'membership_number' => 'LFS13239',
             'status' => 'active',
             'current_plan_id' => \App\Models\MembershipPlan::query()->first()->id,
             'approval_status' => 'approved',
@@ -113,7 +130,7 @@ class MemberImportTest extends TestCase
 
         $this->assertSame(1, $result['importedRows']);
         $this->assertTrue(
-            collect($result['errors'])->contains(fn ($msg) => str_contains($msg, 'membership number 13239 already exists'))
+            collect($result['errors'])->contains(fn ($msg) => str_contains($msg, 'membership number LFS13239 already exists'))
         );
     }
 

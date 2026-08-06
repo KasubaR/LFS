@@ -9,10 +9,16 @@
   <form action="{{ url('/create-account') }}" method="post" class="space-y-4" novalidate>
     @csrf
 
-    <div class="form-group{{ $errors->has('name') ? ' form-group--error' : '' }}">
-      <label for="name">Full name</label>
-      <input type="text" id="name" name="name" value="{{ old('name') }}" required autocomplete="name">
-      @error('name')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
+    <div class="form-group{{ $errors->has('last_name') ? ' form-group--error' : '' }}">
+      <label for="last_name">Last name</label>
+      <input type="text" id="last_name" name="last_name" value="{{ old('last_name') }}" required autocomplete="family-name">
+      @error('last_name')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
+    </div>
+
+    <div class="form-group{{ $errors->has('other_names') ? ' form-group--error' : '' }}">
+      <label for="other_names">Other name(s)</label>
+      <input type="text" id="other_names" name="other_names" value="{{ old('other_names') }}" required autocomplete="given-name">
+      @error('other_names')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
     </div>
 
     <div class="form-group{{ $errors->has('email') ? ' form-group--error' : '' }}">

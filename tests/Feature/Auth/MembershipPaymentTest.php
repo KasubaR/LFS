@@ -278,11 +278,15 @@ class MembershipPaymentTest extends TestCase
     {
         $plan = MembershipPlan::query()->where('billing_cycle', \App\Enums\BillingCycle::Annual)->first();
 
+        // Suspended — not merely PartiallyPaid+Active — is what triggers the
+        // forced balance-page gate and top-up eligibility now (a
+        // PartiallyPaid-but-Active membership within the grace period gets
+        // full access instead; see MembershipService::findOutstandingBalancePayment).
         $membership = Membership::query()->create([
             'id' => (string) Str::uuid(),
             'user_id' => $user->id,
             'membership_number' => '13657',
-            'status' => MembershipStatus::Active,
+            'status' => MembershipStatus::Suspended,
             'current_plan_id' => $plan->id,
             'approval_status' => 'approved',
             'approved_by' => 'system:import',

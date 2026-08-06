@@ -15,9 +15,18 @@
       $statusBadge = match ($membership->status) {
           'active' => 'active',
           'draft' => 'draft',
-          'expired', 'cancelled' => 'expired',
+          // Suspended reuses the "expired" red treatment — visually it's the
+          // same "not in good standing" state, just for a different reason.
+          'expired', 'cancelled', 'suspended' => 'expired',
           default => 'pending',
       };
+
+  // A non-blocking "balance due by 30 April" reminder during the grace
+  // period — PartiallyPaid-but-still-Active memberships get full account
+  // access (no gate), so this is purely informational.
+  $graceReminder = ($membership && $membership->status === 'active')
+      ? app(\App\Services\MembershipService::class)->findGracePeriodBalanceReminder($user->id)
+      : null;
   }
 
   $tabLabels = [
@@ -173,6 +182,20 @@
         <div class="auth-alert auth-alert--success" role="status">
           <i class="fas fa-circle-check" aria-hidden="true"></i>
           <span>{{ $status }}</span>
+        </div>
+      @endif
+
+      @if($graceReminder)
+        @php
+          $reminderBalance = number_format((float) $graceReminder['payment']['amount'] - (float) $graceReminder['payment']['amountPaid'], 2);
+          $reminderDeadline = $graceReminder['membership']->grace_period_ends_at?->format('j M Y');
+        @endphp
+        <div class="auth-alert auth-alert--warning" role="status">
+          <i class="fas fa-circle-exclamation" aria-hidden="true"></i>
+          <span>
+            You still owe K{{ $reminderBalance }} on your membership{{ $reminderDeadline ? " — pay in full by {$reminderDeadline} to avoid suspension" : '' }}.
+            <a href="{{ route('account.balance') }}">Pay now</a>.
+          </span>
         </div>
       @endif
 

@@ -298,7 +298,15 @@ class MemberImportService
             return ['status' => 'skipped', 'message' => $row['email'].': email already exists'];
         }
 
-        $membershipNumber = trim((string) ($row['ref'] ?? ''));
+        // Spreadsheet "Ref" cells are bare digits (e.g. "14149") with no LFS
+        // prefix, unlike numbers generated for regular signups (LFS-000123)
+        // — prefix it here so every membership number starts with "LFS".
+        $rawRef = trim((string) ($row['ref'] ?? ''));
+        $prefix = strtoupper((string) config('membership.membership_number_prefix', 'LFS'));
+        $membershipNumber = ($rawRef !== '' && ! str_starts_with(strtoupper($rawRef), $prefix))
+            ? $prefix.$rawRef
+            : $rawRef;
+
         if ($membershipNumber !== '' && Membership::query()->where('membership_number', $membershipNumber)->exists()) {
             return ['status' => 'skipped', 'message' => $row['email'].': membership number '.$membershipNumber.' already exists'];
         }
@@ -323,9 +331,12 @@ class MemberImportService
 
         $registeredAt = $this->parseRegisteredAt($row);
 
-        $user = DB::transaction(function () use ($row, $batch, $importedBy, $tShirtSize, $plan, $satellite, $registeredAt, $tempPassword, $tempPasswordExpiresAt) {
+        $user = DB::transaction(function () use ($row, $batch, $importedBy, $tShirtSize, $plan, $satellite, $registeredAt, $tempPassword, $tempPasswordExpiresAt, $membershipNumber) {
+            [$otherNames, $lastName] = $this->splitFullName($row['name']);
+
             $user = User::query()->create([
-                'name' => $row['name'],
+                'last_name' => $lastName,
+                'other_names' => $otherNames,
                 'email' => $row['email'],
                 'password' => Hash::make($tempPassword),
                 'phone' => $row['phone'],
@@ -342,10 +353,10 @@ class MemberImportService
             $membership = $this->membershipService->importPaidMembership([
                 'userId' => $user->id,
                 'planId' => $plan['id'],
-                'membershipNumber' => $row['ref'],
+                'membershipNumber' => $membershipNumber,
                 'registeredAt' => $registeredAt->toDateTimeString(),
                 'amountPaid' => $row['amount'] > 0 ? $row['amount'] : $plan['price'],
-                'paymentReference' => (string) $row['ref'],
+                'paymentReference' => $membershipNumber,
                 'importedBy' => $importedBy,
                 'metadata' => [
                     'source' => 'excel_import',
@@ -404,6 +415,23 @@ class MemberImportService
                 return now();
             }
         }
+    }
+
+    /**
+     * The sheet only has a single "Full names" column. Split it the same way
+     * the last_name/other_names backfill did: the last space-separated word
+     * is the surname, everything before it is other names (null if there's
+     * only one word).
+     *
+     * @return array{0: ?string, 1: string} [otherNames, lastName]
+     */
+    private function splitFullName(string $fullName): array
+    {
+        $parts = preg_split('/\s+/', trim($fullName), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $lastName = $parts === [] ? '' : array_pop($parts);
+        $otherNames = $parts === [] ? null : implode(' ', $parts);
+
+        return [$otherNames, $lastName];
     }
 
     private function normalizeGender(string $value): ?string

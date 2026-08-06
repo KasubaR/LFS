@@ -95,6 +95,9 @@
       if (!empty($canRead['members'])) {
           $navItem('members',   '/admin/members',   'fas fa-users',                    'Members',  (int)($counts['pendingMembers']  ?? 0));
       }
+      if (!empty($canRead['promotions'])) {
+          $navItem('promotions', '/admin/promotions', 'fas fa-tags',                    'Promotions');
+      }
       if (!empty($canRead['events'])) {
           $navItem('events',    '/admin/events',     'fas fa-calendar-days',             'Events');
       }

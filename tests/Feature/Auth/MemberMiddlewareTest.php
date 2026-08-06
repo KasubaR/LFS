@@ -74,7 +74,7 @@ class MemberMiddlewareTest extends TestCase
             ->assertSee('21684', false);
     }
 
-    public function test_active_member_with_outstanding_balance_is_redirected_to_balance_page(): void
+    public function test_suspended_member_with_outstanding_balance_is_redirected_to_balance_page(): void
     {
         $user = User::factory()->create([
             'email' => 'balance@example.com',
@@ -83,11 +83,14 @@ class MemberMiddlewareTest extends TestCase
 
         $plan = MembershipPlan::query()->first();
 
+        // Suspended (grace period ended unpaid) — not merely PartiallyPaid —
+        // is what gates access now; a PartiallyPaid-but-Active membership
+        // (still within the grace period) gets full access instead.
         $membership = Membership::query()->create([
             'id' => '00000000-0000-4000-8000-000000000020',
             'user_id' => $user->id,
             'membership_number' => '13657',
-            'status' => 'active',
+            'status' => 'suspended',
             'current_plan_id' => $plan->id,
             'approval_status' => 'approved',
             'approved_by' => 'system:import',
@@ -113,6 +116,43 @@ class MemberMiddlewareTest extends TestCase
         $this->actingAs($user)->get('/account/balance')
             ->assertOk()
             ->assertSee('K100.00', false);
+    }
+
+    public function test_partially_paid_active_member_gets_full_access_during_grace_period(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'grace@example.com',
+            'must_change_password' => false,
+        ]);
+
+        $plan = MembershipPlan::query()->first();
+
+        $membership = Membership::query()->create([
+            'id' => '00000000-0000-4000-8000-000000000021',
+            'user_id' => $user->id,
+            'membership_number' => '13658',
+            'status' => 'active',
+            'current_plan_id' => $plan->id,
+            'approval_status' => 'approved',
+            'approved_by' => 'system:lenco',
+            'joined_at' => now(),
+            'start_date' => now()->toDateString(),
+            'expiry_date' => now()->addMonths(6)->toDateString(),
+            'grace_period_ends_at' => now()->addMonths(2)->toDateString(),
+        ]);
+
+        MembershipPayment::query()->create([
+            'membership_id' => $membership->id,
+            'plan_id' => $plan->id,
+            'amount' => 1000,
+            'amount_paid' => 250,
+            'currency' => 'ZMW',
+            'payment_gateway' => 'lenco',
+            'status' => MembershipPaymentStatus::PartiallyPaid,
+        ]);
+
+        $this->actingAs($user)->get('/account')->assertOk();
+        $this->actingAs($user)->get('/account/payments')->assertOk();
     }
 
     public function test_website_registrant_flow_skips_password_change(): void

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\MembershipStatus;
 use App\Models\Membership;
+use App\Support\MembershipNumberLookup;
 
 /**
  * Answers one question for partner event websites: is this person a paid-up LFS
@@ -76,26 +77,34 @@ class MemberVerificationService
      * A renewal reuses the previous membership_number on a new row
      * (MembershipService::startRenewal), so a number can match several rows.
      * Prefer a currently-active one, otherwise the most recent.
+     *
+     * Membership numbers come in two formats (dashed for new signups,
+     * undashed for backfilled legacy imports — see MembershipNumberLookup),
+     * so several normalized candidates are tried in turn.
      */
     private function resolveByNumber(string $membershipNumber): ?Membership
     {
-        $candidates = Membership::query()
-            ->with(['user.satellite', 'plan'])
-            ->where('membership_number', $this->normalizeNumber($membershipNumber))
-            ->orderByDesc('created_at')
-            ->get();
+        foreach (MembershipNumberLookup::candidates($membershipNumber) as $candidate) {
+            $matches = Membership::query()
+                ->with(['user.satellite', 'plan'])
+                ->whereRaw("UPPER(REPLACE(membership_number, '-', '')) = ?", [$candidate])
+                ->orderByDesc('created_at')
+                ->get();
 
-        if ($candidates->isEmpty()) {
-            return null;
-        }
-
-        foreach ($candidates as $candidate) {
-            if ($candidate->isCardActive()) {
-                return $candidate;
+            if ($matches->isEmpty()) {
+                continue;
             }
+
+            foreach ($matches as $match) {
+                if ($match->isCardActive()) {
+                    return $match;
+                }
+            }
+
+            return $matches->first();
         }
 
-        return $candidates->first();
+        return null;
     }
 
     private function secondFactorMatches(Membership $membership, ?string $surname, ?string $email): bool
@@ -190,11 +199,6 @@ class MemberVerificationService
         $parts = preg_split('/\s+/', trim($fullName)) ?: [];
 
         return ($parts[0] ?? '') !== '' ? $parts[0] : null;
-    }
-
-    private function normalizeNumber(string $value): string
-    {
-        return mb_strtoupper(trim($value));
     }
 
     private function normalizeEmail(string $value): string

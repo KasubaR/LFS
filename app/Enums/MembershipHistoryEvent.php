@@ -28,6 +28,12 @@ class MembershipHistoryEvent
 
     public const Cancelled = 'cancelled';
 
+    /** Grace period ended (30 April) without full payment. */
+    public const Suspended = 'suspended';
+
+    /** Outstanding balance cleared while Suspended; membership resumes as Active. */
+    public const Reinstated = 'reinstated';
+
     /** @var list<string> */
     public const ALL = [
         self::Activated,
@@ -41,5 +47,7 @@ class MembershipHistoryEvent
         self::Created,
         self::Submitted,
         self::Cancelled,
+        self::Suspended,
+        self::Reinstated,
     ];
 }

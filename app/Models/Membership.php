@@ -24,6 +24,7 @@ class Membership extends Model
         'start_date',
         'expiry_date',
         'renewal_due_date',
+        'grace_period_ends_at',
         'current_plan_id',
         'approval_status',
         'approved_by',
@@ -39,6 +40,7 @@ class Membership extends Model
             'start_date' => 'date',
             'expiry_date' => 'date',
             'renewal_due_date' => 'date',
+            'grace_period_ends_at' => 'date',
             'approved_at' => 'datetime',
             'joined_at' => 'datetime',
         ];
@@ -82,9 +84,15 @@ class Membership extends Model
      */
     public function cardDisplayStatus(): string
     {
-        return $this->isCardActive() ? 'Active' : (
-            $this->status === MembershipStatus::Expired ? 'Expired' : 'Inactive'
-        );
+        if ($this->isCardActive()) {
+            return 'Active';
+        }
+
+        return match ($this->status) {
+            MembershipStatus::Expired => 'Expired',
+            MembershipStatus::Suspended => 'Suspended',
+            default => 'Inactive',
+        };
     }
 
     public function verificationUrl(): ?string

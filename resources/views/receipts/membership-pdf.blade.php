@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Receipt {{ $payment->payment_reference ?? $payment->id }}</title>
+<title>Receipt {{ $payment->receipt_number ?? $payment->id }}</title>
 <style>
   @page { margin: 12mm; }
 
@@ -149,7 +149,7 @@
     <div class="meta-box">
       <h1>RECEIPT</h1>
       <div class="meta-box-inner">
-        <div class="row"><span class="label">Receipt No: </span><span class="value">{{ $payment->payment_reference ?? ('LFS-RCT-'.str_pad((string) $payment->id, 6, '0', STR_PAD_LEFT)) }}</span></div>
+        <div class="row"><span class="label">Receipt No: </span><span class="value">{{ $payment->receipt_number ?? ('LFS-RCT-'.str_pad((string) $payment->id, 6, '0', STR_PAD_LEFT)) }}</span></div>
         <div class="row"><span class="label">Date Paid: </span><span class="value">{{ ($payment->paid_at ?? $payment->created_at)->format('j M Y') }}</span></div>
       </div>
     </div>

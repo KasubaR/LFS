@@ -11,12 +11,15 @@ class ExpireMembershipsCommand extends Command
 {
     protected $signature = 'membership:expire';
 
-    protected $description = 'Mark active memberships past their expiry date as expired';
+    protected $description = 'Mark active (or suspended) memberships past their expiry date as expired';
 
     public function handle(MembershipService $membershipService): int
     {
+        // Suspended memberships whose year ends (31 Dec) still unpaid also
+        // roll to Expired, so they re-enter the normal renewal flow in
+        // January instead of staying suspended indefinitely.
         $membershipIds = Membership::query()
-            ->where('status', MembershipStatus::Active)
+            ->whereIn('status', [MembershipStatus::Active, MembershipStatus::Suspended])
             ->where('expiry_date', '<', now()->toDateString())
             ->pluck('id');
 

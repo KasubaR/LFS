@@ -41,7 +41,7 @@
                             <span class="auth-plan-option__card">
                               <span>
                                 <span class="auth-plan-option__name">{{ $plan['name'] }}</span>
-                                <span class="auth-plan-option__meta">{{ $plan['durationMonths'] }} months</span>
+                                <span class="auth-plan-option__meta">Pay now</span>
                               </span>
                               <span class="auth-plan-option__price">K{{ number_format($plan['price']) }}</span>
                             </span>
@@ -62,10 +62,10 @@
 
               <p class="auth-account-card__payment-text" style="margin-bottom:0.5rem;">
                 <strong>{{ count($changePlans ?? []) > 1 ? '2. Pay for membership' : 'Pay for membership' }}</strong>
-                — {{ $membership->plan?->name ?? '—' }} (K{{ number_format((float) ($membership->plan?->price ?? 0)) }})
+                — {{ $membership->plan?->name ?? '—' }} (K{{ number_format($chargeAmountNow ?? 0) }} now)
               </p>
 
-              <form id="account-payment-form" data-amount="{{ $membership->plan?->price ?? 0 }}">
+              <form id="account-payment-form" data-amount="{{ $chargeAmountNow ?? 0 }}">
                 @csrf
                 <div class="auth-payment-provider-grid" role="radiogroup" aria-label="Mobile money provider">
                   <label class="auth-payment-provider">
@@ -84,7 +84,7 @@
                 </div>
 
                 <button type="submit" class="btn btn-primary w-full justify-center" data-pay-button>
-                  <i class="fas fa-credit-card mr-2" aria-hidden="true"></i> Pay K{{ number_format((float) ($membership->plan?->price ?? 0)) }}
+                  <i class="fas fa-credit-card mr-2" aria-hidden="true"></i> Pay K{{ number_format($chargeAmountNow ?? 0) }}
                 </button>
               </form>
 
@@ -124,13 +124,17 @@
                         <span class="auth-plan-option__card">
                           <span>
                             <span class="auth-plan-option__name">{{ $plan['name'] }}</span>
-                            <span class="auth-plan-option__meta">{{ $plan['durationMonths'] }} months</span>
+                            <span class="auth-plan-option__meta">Pay now</span>
                           </span>
                           <span class="auth-plan-option__price">K{{ number_format($plan['price']) }}</span>
                         </span>
                       </label>
                     @endforeach
                   </div>
+                  <p class="auth-plan-note">
+                    Your membership runs through 31 December. You may pay in installments —
+                    the full amount is due by 30 April.
+                  </p>
                   @error('plan_id')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
                 </div>
                 <button type="submit" class="btn btn-primary w-full justify-center">

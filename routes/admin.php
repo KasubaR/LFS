@@ -15,6 +15,7 @@ use App\Http\Controllers\Admin\MessageController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProfileController;
+use App\Http\Controllers\Admin\PromotionController;
 use Illuminate\Support\Facades\Route;
 
 $loginSlug = config('admin.login_slug');
@@ -188,6 +189,16 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
             ->where('id', '[0-9]+')
             ->where('membershipId', '[a-f0-9\-]{36}')
             ->name('admin.members.cancel');
+    });
+
+    // ── Promotions ───────────────────────────────────────────────────────────────────
+    Route::prefix('promotions')->middleware('admin.can:promotions,read')->group(function (): void {
+        Route::get('/', [PromotionController::class, 'index']);
+        Route::get('create', [PromotionController::class, 'create']);
+        Route::post('create', [PromotionController::class, 'store']);
+        Route::get('{id}/edit', [PromotionController::class, 'edit'])->where('id', '[0-9]+');
+        Route::post('{id}/edit', [PromotionController::class, 'update'])->where('id', '[0-9]+');
+        Route::post('{id}/delete', [PromotionController::class, 'destroy'])->where('id', '[0-9]+');
     });
 
     // ── Orders ───────────────────────────────────────────────────────────────────────

@@ -89,6 +89,18 @@ class AdminRbacTest extends TestCase
             ->assertOk();
     }
 
+    public function test_finance_cannot_access_promotions(): void
+    {
+        $finance = $this->makeAdminUser([
+            'role' => AdminRole::Finance,
+            'name' => 'Finance User',
+        ]);
+
+        $this->actingAsAdmin($finance)
+            ->get('/admin/promotions')
+            ->assertForbidden();
+    }
+
     public function test_finance_sidebar_hides_members(): void
     {
         $finance = $this->makeAdminUser(['role' => AdminRole::Finance]);
@@ -138,12 +150,14 @@ class AdminRbacTest extends TestCase
         $avondale = Satellite::query()->where('slug', 'avondale')->firstOrFail();
 
         $inScope = User::factory()->create([
-            'name' => 'Woodies Member',
+            'last_name' => 'Member',
+            'other_names' => 'Woodies',
             'email' => 'woodies-member@lfs.test',
             'satellite_id' => $woodies->id,
         ]);
         $outOfScope = User::factory()->create([
-            'name' => 'Avondale Member',
+            'last_name' => 'Member',
+            'other_names' => 'Avondale',
             'email' => 'avondale-member@lfs.test',
             'satellite_id' => $avondale->id,
         ]);

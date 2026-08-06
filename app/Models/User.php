@@ -8,6 +8,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,7 +16,8 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 #[Fillable([
-    'name',
+    'last_name',
+    'other_names',
     'email',
     'password',
     'phone',
@@ -67,6 +69,28 @@ class User extends Authenticatable implements MustVerifyEmail
     public function wishlistItems(): HasMany
     {
         return $this->hasMany(WishlistItem::class);
+    }
+
+    /**
+     * Computed full name — there's no `name` column; every caller that used
+     * to read/write it (views, notifications, initials()) still works
+     * unchanged because this accessor stands in for it transparently.
+     */
+    protected function name(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => trim(trim((string) $this->other_names).' '.trim((string) $this->last_name)),
+        );
+    }
+
+    public function hasCompleteProfile(): bool
+    {
+        return trim((string) $this->last_name) !== ''
+            && trim((string) $this->other_names) !== ''
+            && $this->satellite_id !== null
+            && $this->gender !== null && trim((string) $this->gender) !== ''
+            && $this->phone !== null && trim((string) $this->phone) !== ''
+            && $this->t_shirt_size !== null && trim((string) $this->t_shirt_size) !== '';
     }
 
     public function avatarUrl(): ?string

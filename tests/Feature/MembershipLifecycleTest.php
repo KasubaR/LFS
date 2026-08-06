@@ -12,6 +12,7 @@ use App\Models\Membership;
 use App\Models\MembershipHistory;
 use App\Models\MembershipPayment;
 use App\Models\MembershipPlan;
+use App\Models\Promotion;
 use App\Models\Satellite;
 use App\Models\User;
 use App\Services\MembershipService;
@@ -43,7 +44,8 @@ class MembershipLifecycleTest extends TestCase
         $satellite = Satellite::query()->where('slug', 'woodies')->first();
 
         $this->user = User::factory()->create([
-            'name' => 'Jane Runner',
+            'last_name' => 'Runner',
+            'other_names' => 'Jane',
             'email' => 'jane@example.com',
             'phone' => '0977000000',
             'satellite_id' => $satellite->id,
@@ -56,6 +58,11 @@ class MembershipLifecycleTest extends TestCase
 
     public function test_new_signup_flow_from_draft_to_active_on_payment(): void
     {
+        // Freeze inside the normal Jan-Apr renewal window — the real "now" in
+        // this sandbox is already past the 1 June late-joiner cutoff, which
+        // would otherwise halve the annual fee this test expects.
+        Carbon::setTestNow('2026-01-15 10:00:00');
+
         $created = $this->membershipService->createApplication($this->user->id, $this->annualPlan->id);
 
         $membership = Membership::query()->find($created['membershipId']);
@@ -69,8 +76,6 @@ class MembershipLifecycleTest extends TestCase
         $this->assertSame(1000.00, $submitted['latestPayment']['amount']);
         $this->assertNull($submitted['membershipNumber']);
 
-        Carbon::setTestNow('2026-01-15 10:00:00');
-
         $active = $this->membershipService->handlePaymentUpdate(
             $submitted['latestPayment']['id'],
             1000.00
@@ -81,16 +86,24 @@ class MembershipLifecycleTest extends TestCase
         $this->assertSame(ApprovalStatus::Approved, $active['approvalStatus']);
         $this->assertSame('system:lenco', $active['approvedBy']);
         $this->assertSame('2026-01-15', $active['startDate']);
-        $this->assertSame('2027-01-14', $active['expiryDate']);
-        $this->assertSame('2027-01-14', $active['renewalDueDate']);
+        $this->assertSame('2026-12-31', $active['expiryDate']);
+        $this->assertSame('2026-12-31', $active['renewalDueDate']);
+        $this->assertSame('2026-04-30', $active['gracePeriodEndsAt']);
         $this->assertSame('2026-01-15', $active['latestPayment']['coversFrom']);
-        $this->assertSame('2027-01-14', $active['latestPayment']['coversTo']);
+        $this->assertSame('2026-12-31', $active['latestPayment']['coversTo']);
 
         Carbon::setTestNow();
     }
 
-    public function test_partial_payment_keeps_membership_in_pending_payment(): void
+    public function test_partial_payment_during_grace_period_still_activates_the_membership(): void
     {
+        // Paying only an installment (not the full annual fee) during the
+        // Jan-Apr grace window still activates the membership with full
+        // access — the balance is just owed, not a blocker. See
+        // MembershipService::findOutstandingBalancePayment() /
+        // findGracePeriodBalanceReminder() and SuspendUnpaidMembershipsCommand.
+        Carbon::setTestNow('2026-01-15 10:00:00');
+
         $created = $this->membershipService->createApplication($this->user->id, $this->annualPlan->id);
         $submitted = $this->membershipService->submitApplication($created['membershipId']);
 
@@ -99,8 +112,12 @@ class MembershipLifecycleTest extends TestCase
             500.00
         );
 
-        $this->assertSame(MembershipStatus::PendingPayment, $updated['status']);
+        $this->assertSame(MembershipStatus::Active, $updated['status']);
         $this->assertSame(MembershipPaymentStatus::PartiallyPaid, $updated['latestPayment']['status']);
+        $this->assertSame('2026-04-30', $updated['gracePeriodEndsAt']);
+        $this->assertNotNull($updated['membershipNumber']);
+
+        Carbon::setTestNow();
     }
 
     public function test_plan_duration_date_math_for_semi_annual_and_quarterly(): void
@@ -274,5 +291,117 @@ class MembershipLifecycleTest extends TestCase
         $activeB = $this->membershipService->handlePaymentUpdate($bPay['latestPayment']['id'], 1000.00);
 
         $this->assertNotSame($activeA['membershipNumber'], $activeB['membershipNumber']);
+    }
+
+    public function test_receipt_number_is_assigned_on_payment_and_is_unique_and_distinct_from_membership_number(): void
+    {
+        $userB = User::factory()->create(['satellite_id' => $this->user->satellite_id]);
+
+        $a = $this->membershipService->createApplication($this->user->id, $this->annualPlan->id);
+        $aPay = $this->membershipService->submitApplication($a['membershipId']);
+        $activeA = $this->membershipService->handlePaymentUpdate($aPay['latestPayment']['id'], 1000.00);
+
+        $b = $this->membershipService->createApplication($userB->id, $this->annualPlan->id);
+        $bPay = $this->membershipService->submitApplication($b['membershipId']);
+        $activeB = $this->membershipService->handlePaymentUpdate($bPay['latestPayment']['id'], 1000.00);
+
+        $paymentA = MembershipPayment::query()->find($aPay['latestPayment']['id']);
+        $paymentB = MembershipPayment::query()->find($bPay['latestPayment']['id']);
+
+        $this->assertNotNull($paymentA->receipt_number);
+        $this->assertNotNull($paymentB->receipt_number);
+        $this->assertNotSame($paymentA->receipt_number, $paymentB->receipt_number);
+
+        // Distinct from both the membership number and the raw Lenco-style
+        // payment reference — a receipt number is its own dedicated id.
+        $this->assertNotSame($activeA['membershipNumber'], $paymentA->receipt_number);
+        $this->assertNotSame($paymentA->payment_reference, $paymentA->receipt_number);
+        $this->assertMatchesRegularExpression('/^LFS-RCT-\d{6}$/', $paymentA->receipt_number);
+        $this->assertMatchesRegularExpression('/^LFS-RCT-\d{6}$/', $paymentB->receipt_number);
+    }
+
+    public function test_active_promotion_discounts_the_payment_created_on_submission(): void
+    {
+        Carbon::setTestNow('2026-01-15 10:00:00');
+
+        Promotion::query()->create([
+            'name' => 'Early Bird Annual',
+            'plan_id' => $this->annualPlan->id,
+            'discount_type' => 'percentage',
+            'discount_value' => 10,
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addMonth()->toDateString(),
+            'is_active' => true,
+        ]);
+
+        $created = $this->membershipService->createApplication($this->user->id, $this->annualPlan->id);
+        $submitted = $this->membershipService->submitApplication($created['membershipId']);
+
+        $this->assertSame(900.00, $submitted['latestPayment']['amount']);
+        $this->assertSame(100.00, (float) $submitted['latestPayment']['discountAmount']);
+        $this->assertNotNull($submitted['latestPayment']['promotionId']);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_late_joiner_registering_after_june_gets_reduced_fee_and_no_grace_period(): void
+    {
+        Carbon::setTestNow('2026-07-10 10:00:00');
+
+        $created = $this->membershipService->createApplication($this->user->id, $this->annualPlan->id);
+        $submitted = $this->membershipService->submitApplication($created['membershipId']);
+
+        $this->assertSame(500.00, $submitted['latestPayment']['amount']);
+
+        $active = $this->membershipService->handlePaymentUpdate($submitted['latestPayment']['id'], 500.00);
+
+        $this->assertSame(MembershipStatus::Active, $active['status']);
+        $this->assertSame('2026-07-10', $active['startDate']);
+        $this->assertSame('2026-12-31', $active['expiryDate']);
+        // Past the grace window entirely — no partial-payment allowance.
+        $this->assertNull($active['gracePeriodEndsAt']);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_registration_after_grace_window_but_before_late_joiner_cutoff_pays_full_with_no_grace(): void
+    {
+        // 15 May: past the 30 April grace deadline, but before the 1 June
+        // late-joiner cutoff — full price, no partial-payment allowance.
+        Carbon::setTestNow('2026-05-15 10:00:00');
+
+        $created = $this->membershipService->createApplication($this->user->id, $this->annualPlan->id);
+        $submitted = $this->membershipService->submitApplication($created['membershipId']);
+
+        $this->assertSame(1000.00, $submitted['latestPayment']['amount']);
+
+        $active = $this->membershipService->handlePaymentUpdate($submitted['latestPayment']['id'], 1000.00);
+
+        $this->assertNull($active['gracePeriodEndsAt']);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_registration_on_grace_deadline_itself_still_gets_the_grace_period(): void
+    {
+        // 30 April inclusive — the boundary should still count as "within".
+        Carbon::setTestNow('2026-04-30 23:00:00');
+
+        $created = $this->membershipService->createApplication($this->user->id, $this->annualPlan->id);
+        $submitted = $this->membershipService->submitApplication($created['membershipId']);
+        $active = $this->membershipService->handlePaymentUpdate($submitted['latestPayment']['id'], 300.00);
+
+        // A partial payment already activates the membership within the
+        // grace window — see test_partial_payment_during_grace_period_*.
+        $this->assertSame(MembershipStatus::Active, $active['status']);
+        $this->assertSame(MembershipPaymentStatus::PartiallyPaid, $active['latestPayment']['status']);
+        $this->assertSame('2026-04-30', $active['gracePeriodEndsAt']);
+
+        $activated = $this->membershipService->handlePaymentUpdate($submitted['latestPayment']['id'], 1000.00);
+        $this->assertSame(MembershipStatus::Active, $activated['status']);
+        $this->assertSame(MembershipPaymentStatus::Paid, $activated['latestPayment']['status']);
+        $this->assertSame('2026-04-30', $activated['gracePeriodEndsAt']);
+
+        Carbon::setTestNow();
     }
 }

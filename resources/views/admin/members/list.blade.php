@@ -19,9 +19,10 @@ $filterStatus = $filterStatus ?? '';
     <select name="status"
             style="padding:0.55rem 0.75rem; background:var(--black-soft); border:1px solid var(--border-mid); border-radius:8px; color:var(--off-white); font-family:var(--font-body); font-size:0.85rem;">
       <option value="">All Members</option>
-      <option value="active"   {{ $filterStatus === 'active'   ? 'selected' : '' }}>Active</option>
-      <option value="pending"  {{ $filterStatus === 'pending'  ? 'selected' : '' }}>Pending</option>
-      <option value="inactive" {{ $filterStatus === 'inactive' ? 'selected' : '' }}>Inactive</option>
+      <option value="active"    {{ $filterStatus === 'active'    ? 'selected' : '' }}>Active</option>
+      <option value="pending"   {{ $filterStatus === 'pending'   ? 'selected' : '' }}>Pending</option>
+      <option value="suspended" {{ $filterStatus === 'suspended' ? 'selected' : '' }}>Suspended</option>
+      <option value="inactive"  {{ $filterStatus === 'inactive'  ? 'selected' : '' }}>Inactive</option>
     </select>
 
     <input type="search" name="search"
@@ -66,10 +67,11 @@ $filterStatus = $filterStatus ?? '';
         @foreach($members as $m)
           @php
             $statusColor = match ($m['status'] ?? '') {
-              'active'   => ['bg' => 'rgba(74,124,89,0.2)',   'color' => 'var(--green-bright)', 'border' => 'rgba(74,124,89,0.4)'],
-              'pending'  => ['bg' => 'rgba(224,123,57,0.15)', 'color' => 'var(--flag-orange)',  'border' => 'rgba(224,123,57,0.3)'],
-              'inactive' => ['bg' => 'rgba(192,57,43,0.15)',  'color' => '#e88',                'border' => 'rgba(192,57,43,0.3)'],
-              default    => ['bg' => 'rgba(255,255,255,0.06)', 'color' => 'var(--text-dim)',    'border' => 'var(--border-mid)'],
+              'active'    => ['bg' => 'rgba(74,124,89,0.2)',   'color' => 'var(--green-bright)', 'border' => 'rgba(74,124,89,0.4)'],
+              'pending'   => ['bg' => 'rgba(224,123,57,0.15)', 'color' => 'var(--flag-orange)',  'border' => 'rgba(224,123,57,0.3)'],
+              'suspended' => ['bg' => 'rgba(192,57,43,0.2)',   'color' => '#e88',                'border' => 'rgba(192,57,43,0.4)'],
+              'inactive'  => ['bg' => 'rgba(192,57,43,0.15)',  'color' => '#e88',                'border' => 'rgba(192,57,43,0.3)'],
+              default     => ['bg' => 'rgba(255,255,255,0.06)', 'color' => 'var(--text-dim)',    'border' => 'var(--border-mid)'],
             };
           @endphp
           <tr style="border-bottom:1px solid var(--border-subtle);">

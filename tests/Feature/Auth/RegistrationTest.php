@@ -37,7 +37,8 @@ class RegistrationTest extends TestCase
         Notification::fake();
 
         $response = $this->post('/create-account', [
-            'name' => 'Jane Runner',
+            'last_name' => 'Runner',
+            'other_names' => 'Jane',
             'email' => 'jane@example.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',

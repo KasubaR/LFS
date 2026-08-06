@@ -31,9 +31,10 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
  *    text column alone, never from the amount actually paid. This command re-derives the
  *    duration from amount paid instead: `amount / plan.price` tells you how many terms of
  *    that plan were paid for (e.g. 1000 paid against a "Quarterly" (250) label = 4 quarters).
- *    Amounts that fall short of a clean multiple (only the `900`-against-`Annual` rows in this
- *    dataset) are treated as an underpayment: the plan's full duration is kept, but the payment
- *    is marked partially_paid with the shortfall recorded as still owed.
+ *    The only amount that falls short of a clean multiple in this dataset is the `900`-against-
+ *    `Annual` (K1000) rows: K900 is treated as a valid Annual price on its own (no discount
+ *    tier is actually configured in the system) and honored as a full payment — not chased for
+ *    the K100 difference from today's K1000 list price.
  */
 class RepairImportedMembershipAmountsCommand extends Command
 {
@@ -62,7 +63,7 @@ class RepairImportedMembershipAmountsCommand extends Command
             ->orderBy('id')
             ->get();
 
-        $counts = ['fixed_bug' => 0, 'multi_term' => 0, 'partial' => 0, 'unchanged' => 0, 'expired' => 0];
+        $counts = ['fixed_bug' => 0, 'multi_term' => 0, 'nine_hundred_annual' => 0, 'unchanged' => 0, 'expired' => 0];
         $unresolved = [];
         $rowsForDisplay = [];
 
@@ -81,12 +82,20 @@ class RepairImportedMembershipAmountsCommand extends Command
                 continue;
             }
 
-            $ref = $membership->membership_number;
+            // Strip the "LFS" prefix (added by the membership-number backfill,
+            // see member-import:backfill-lfs-prefix) so this still matches
+            // the spreadsheet's raw "Ref" cells regardless of whether that
+            // backfill has run yet.
+            $ref = preg_replace('/^LFS-?/i', '', (string) $membership->membership_number);
             $currentAmount = (float) $payment->amount;
             $bugFixed = false;
-            $sourceAmount = $currentAmount;
+            // Read from amount_paid rather than amount: amount_paid is the one field this
+            // command never rewrites to anything other than what the member actually paid,
+            // so it stays a stable signal of the original imported figure across reruns
+            // (amount itself gets normalized to the plan's price/duration below).
+            $sourceAmount = (float) $payment->amount_paid;
 
-            if (abs($currentAmount - 1.0) < 0.001) {
+            if (abs($sourceAmount - 1.0) < 0.001) {
                 if (! array_key_exists($ref, $correctedAmounts)) {
                     $unresolved[] = "{$ref}: amount=1.00 (comma-parse bug) but not found in spreadsheet — needs manual fix";
 
@@ -100,30 +109,33 @@ class RepairImportedMembershipAmountsCommand extends Command
             $multiplier = (int) round($sourceAmount / $price);
             $isCleanMultiple = $multiplier >= 1 && abs(($multiplier * $price) - $sourceAmount) < 0.01;
 
+            $startDate = $membership->start_date instanceof Carbon
+                ? $membership->start_date->copy()
+                : Carbon::parse($membership->start_date);
+            $isNineHundredAnnual = abs($sourceAmount - 900.0) < 0.01 && (int) $plan->duration_months === 12;
+
             if ($isCleanMultiple) {
                 $newAmount = $sourceAmount;
                 $newAmountPaid = $sourceAmount;
                 $newStatus = MembershipPaymentStatus::Paid;
                 $newDurationMonths = $multiplier * (int) $plan->duration_months;
                 $kind = $bugFixed ? 'fixed_bug' : ($multiplier > 1 ? 'multi_term' : 'unchanged');
-            } elseif (abs($sourceAmount - 900.0) < 0.01 && (int) $plan->duration_months === 12) {
-                // The one known underpayment pattern in this dataset: paid 900 against a
-                // 1000-priced Annual plan. Keep the full Annual duration but record the
-                // shortfall so the member is prompted to pay it (see EnsureBalancePaid).
-                $newAmount = $price;
+            } elseif ($isNineHundredAnnual) {
+                // No discount tier is actually configured in the system — K900 against the
+                // K1000 Annual plan is simply what these members paid. Honor it as paid in
+                // full instead of treating the K100 difference from today's list price as a
+                // shortfall still owed (see EnsureBalancePaid).
+                $newAmount = $sourceAmount;
                 $newAmountPaid = $sourceAmount;
-                $newStatus = MembershipPaymentStatus::PartiallyPaid;
+                $newStatus = MembershipPaymentStatus::Paid;
                 $newDurationMonths = (int) $plan->duration_months;
-                $kind = 'partial';
+                $kind = 'nine_hundred_annual';
             } else {
                 $unresolved[] = "{$ref}: amount={$sourceAmount} doesn't cleanly divide {$plan->name}'s price ({$price}) — needs manual review";
 
                 continue;
             }
 
-            $startDate = $membership->start_date instanceof Carbon
-                ? $membership->start_date->copy()
-                : Carbon::parse($membership->start_date);
             $dates = $membershipService->computePeriodDates($startDate, $newDurationMonths);
 
             $amountChanged = abs($newAmount - $currentAmount) > 0.001 || abs($newAmountPaid - (float) $payment->amount_paid) > 0.001 || $newStatus !== $payment->status;
@@ -205,10 +217,10 @@ class RepairImportedMembershipAmountsCommand extends Command
 
         $this->newLine();
         $this->info(($dryRun ? '[DRY RUN] ' : '').sprintf(
-            'Bug-fixed: %d, multi-term extended: %d, marked partially paid: %d, unchanged (skipped): %d, transitioned to expired: %d',
+            'Bug-fixed: %d, multi-term extended: %d, K900 Annual honored in full: %d, unchanged (skipped): %d, transitioned to expired: %d',
             $counts['fixed_bug'],
             $counts['multi_term'],
-            $counts['partial'],
+            $counts['nine_hundred_annual'],
             $counts['unchanged'],
             $counts['expired']
         ));

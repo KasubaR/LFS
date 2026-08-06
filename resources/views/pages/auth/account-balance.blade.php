@@ -17,9 +17,16 @@
 
     <div class="auth-account-card auth-account-card--payment">
       <p class="auth-account-card__payment-text">
-        Your {{ $planName }} membership is active, but the amount recorded for it was
-        K{{ number_format($payment['amountPaid'], 2) }} of the K{{ number_format($payment['amount'], 2) }} plan
-        price. Please pay the remaining K{{ number_format($balanceOwed, 2) }} with Mobile Money to clear the balance.
+        @if($membership->status === 'suspended')
+          Your {{ $planName }} membership was suspended because the grace period
+          (through 30 April) ended without full payment. You've paid
+          K{{ number_format($payment['amountPaid'], 2) }} of the K{{ number_format($payment['amount'], 2) }} annual
+          fee — pay the remaining K{{ number_format($balanceOwed, 2) }} with Mobile Money to reactivate it immediately.
+        @else
+          You've paid K{{ number_format($payment['amountPaid'], 2) }} of the
+          K{{ number_format($payment['amount'], 2) }} annual fee. Please pay the remaining
+          K{{ number_format($balanceOwed, 2) }} with Mobile Money to clear the balance.
+        @endif
       </p>
 
       <form id="account-payment-form" data-amount="{{ $balanceOwed }}">

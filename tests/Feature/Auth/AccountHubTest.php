@@ -298,7 +298,8 @@ class AccountHubTest extends TestCase
 
         $this->actingAs($user)
             ->post('/account/settings/personal', [
-                'name' => 'Updated Runner',
+                'last_name' => 'Runner',
+                'other_names' => 'Updated',
                 'phone' => '+260977777777',
                 'gender' => 'female',
                 'nationality' => 'Zambian',
@@ -319,7 +320,8 @@ class AccountHubTest extends TestCase
         $this->actingAs($user)
             ->from('/account/settings/personal')
             ->post('/account/settings/personal', [
-                'name' => '',
+                'last_name' => '',
+                'other_names' => '',
                 'phone' => 'abc',
                 'gender' => 'nope',
                 'nationality' => '',
@@ -328,7 +330,7 @@ class AccountHubTest extends TestCase
                 't_shirt_size' => 'HUGE',
             ])
             ->assertRedirect('/account/settings/personal')
-            ->assertSessionHasErrors(['name', 'phone', 'gender', 'nationality', 'satellite_id', 'town', 't_shirt_size']);
+            ->assertSessionHasErrors(['last_name', 'other_names', 'phone', 'gender', 'nationality', 'satellite_id', 'town', 't_shirt_size']);
     }
 
     public function test_settings_subpages_render(): void
@@ -351,7 +353,8 @@ class AccountHubTest extends TestCase
         $user = $this->member();
         $satellite = Satellite::query()->where('slug', 'avondale')->first();
         $base = [
-            'name' => $user->name,
+            'last_name' => $user->last_name,
+            'other_names' => $user->other_names,
             'phone' => $user->phone,
             'gender' => $user->gender,
             'nationality' => $user->nationality,
@@ -410,7 +413,8 @@ class AccountHubTest extends TestCase
         $this->actingAs($user)
             ->from('/account/settings/personal')
             ->post('/account/settings/personal', [
-                'name' => $user->name,
+                'last_name' => $user->last_name,
+                'other_names' => $user->other_names,
                 'phone' => $user->phone,
                 'gender' => $user->gender,
                 'nationality' => $user->nationality,
@@ -425,7 +429,8 @@ class AccountHubTest extends TestCase
         $this->actingAs($user)
             ->from('/account/settings/personal')
             ->post('/account/settings/personal', [
-                'name' => $user->name,
+                'last_name' => $user->last_name,
+                'other_names' => $user->other_names,
                 'phone' => $user->phone,
                 'gender' => $user->gender,
                 'nationality' => $user->nationality,
@@ -450,6 +455,7 @@ class AccountHubTest extends TestCase
             'amount_paid' => 1000,
             'currency' => 'ZMW',
             'payment_reference' => 'LFS-PAY-PAID-1',
+            'receipt_number' => 'LFS-RCT-000042',
             'payment_gateway' => 'lenco',
             'status' => 'paid',
             'paid_at' => now(),
@@ -470,7 +476,12 @@ class AccountHubTest extends TestCase
 
         $response = $this->actingAs($user)->get('/account/payments');
         $response->assertOk();
-        $response->assertSee('LFS-PAY-PAID-1', false);
+        // The paid row has a receipt_number, so it takes priority over the
+        // raw gateway payment_reference in the list's headline.
+        $response->assertSee('LFS-RCT-000042', false);
+        $response->assertDontSee('LFS-PAY-PAID-1', false);
+        // The pending row has no receipt_number yet, so it still falls back
+        // to showing its payment_reference.
         $response->assertSee('LFS-PAY-PENDING-1', false);
         $response->assertSee('Download receipt', false);
 

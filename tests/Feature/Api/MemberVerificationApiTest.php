@@ -60,8 +60,16 @@ class MemberVerificationApiTest extends TestCase
      */
     private function makeMembership(array $overrides = [], string $name = 'Chanda Mwale', string $email = 'chanda@example.com'): Membership
     {
+        // Same last-word-is-surname split the app itself uses (see
+        // MemberImportService::splitFullName), so $user->name reconstructs
+        // to exactly $name and multi-word surnames still round-trip.
+        $parts = explode(' ', trim($name));
+        $lastName = array_pop($parts);
+        $otherNames = implode(' ', $parts);
+
         $user = User::factory()->create([
-            'name' => $name,
+            'last_name' => $lastName,
+            'other_names' => $otherNames,
             'email' => $email,
             'satellite_id' => $this->satellite->id,
         ]);
@@ -192,6 +200,31 @@ class MemberVerificationApiTest extends TestCase
         $this->verify(['membership_number' => '  lfs-000412 ', 'surname' => '  mWaLe '])
             ->assertOk()
             ->assertJsonPath('data.is_member', true);
+    }
+
+    public function test_undashed_legacy_membership_number_verifies_by_surname(): void
+    {
+        // Legacy bulk-imported members have an undashed number like
+        // "LFS14149" (see MemberImportService/member-import:backfill-lfs-prefix).
+        $this->makeMembership(['membership_number' => 'LFS14149']);
+
+        $this->verify(['membership_number' => 'LFS14149', 'surname' => 'Mwale'])
+            ->assertOk()
+            ->assertJsonPath('data.is_member', true)
+            ->assertJsonPath('data.membership_number', 'LFS14149');
+    }
+
+    public function test_bare_number_without_lfs_prefix_still_verifies(): void
+    {
+        // A partner (or member) who only knows the number as originally
+        // printed, before it was backfilled with a prefix, shouldn't be
+        // turned away.
+        $this->makeMembership(['membership_number' => 'LFS14149']);
+
+        $this->verify(['membership_number' => '14149', 'surname' => 'Mwale'])
+            ->assertOk()
+            ->assertJsonPath('data.is_member', true)
+            ->assertJsonPath('data.membership_number', 'LFS14149');
     }
 
     public function test_multi_word_surname_is_accepted(): void

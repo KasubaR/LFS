@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\MembershipPaymentStatus;
 use App\Models\MembershipPayment;
+use Illuminate\Support\Facades\DB;
 
 class MembershipPaymentService
 {
@@ -12,15 +13,20 @@ class MembershipPaymentService
      */
     public function create(string $membershipId, int $planId, array $data = []): int
     {
+        $status = $data['status'] ?? MembershipPaymentStatus::Pending;
+
         $payment = MembershipPayment::query()->create([
             'membership_id' => $membershipId,
             'plan_id' => $planId,
+            'promotion_id' => $data['promotionId'] ?? null,
             'amount' => (float) ($data['amount'] ?? 0),
             'amount_paid' => (float) ($data['amountPaid'] ?? 0),
+            'discount_amount' => array_key_exists('discountAmount', $data) ? (float) $data['discountAmount'] : null,
             'currency' => $data['currency'] ?? config('membership.currency', 'ZMW'),
             'payment_reference' => $data['paymentReference'] ?? null,
+            'receipt_number' => $this->maybeAssignReceiptNumber(null, $status),
             'payment_gateway' => $data['paymentGateway'] ?? 'lenco',
-            'status' => $data['status'] ?? MembershipPaymentStatus::Pending,
+            'status' => $status,
             'metadata' => $data['metadata'] ?? null,
         ]);
 
@@ -54,6 +60,11 @@ class MembershipPaymentService
 
         if ($status === MembershipPaymentStatus::Paid) {
             $updates['paid_at'] = $extra['paidAt'] ?? now();
+        }
+
+        $receiptNumber = $this->maybeAssignReceiptNumber($payment->receipt_number, $status);
+        if ($receiptNumber !== null) {
+            $updates['receipt_number'] = $receiptNumber;
         }
 
         $map = [
@@ -155,6 +166,7 @@ class MembershipPaymentService
             'webhookReceived' => 'webhook_received',
             'webhookPayload' => 'webhook_payload',
             'webhookReceivedAt' => 'webhook_received_at',
+            'pendingChargeAmount' => 'pending_charge_amount',
             'metadata' => 'metadata',
         ];
 
@@ -166,6 +178,67 @@ class MembershipPaymentService
         }
 
         MembershipPayment::query()->whereKey($id)->update($updates);
+    }
+
+    /**
+     * A dedicated, sequential, human-readable receipt id — distinct from
+     * payment_reference (the Lenco gateway reference, or, for legacy
+     * imports, the membership number). Mirrors
+     * MembershipService::generateMembershipNumber()'s counter-row pattern.
+     */
+    public function generateReceiptNumber(): string
+    {
+        $prefix = config('membership.receipt_number_prefix', 'LFS-RCT');
+
+        $counter = DB::table('receipt_number_counters')
+            ->where('prefix', $prefix)
+            ->lockForUpdate()
+            ->first();
+
+        if ($counter === null) {
+            $latest = MembershipPayment::query()
+                ->where('receipt_number', 'like', $prefix.'-%')
+                ->orderByDesc('receipt_number')
+                ->value('receipt_number');
+
+            $sequence = 1;
+            if ($latest && preg_match('/-(\d+)$/', $latest, $matches)) {
+                $sequence = (int) $matches[1] + 1;
+            }
+
+            DB::table('receipt_number_counters')->insert([
+                'prefix' => $prefix,
+                'next_value' => $sequence + 1,
+            ]);
+
+            return sprintf('%s-%06d', $prefix, $sequence);
+        }
+
+        $sequence = (int) $counter->next_value;
+
+        DB::table('receipt_number_counters')
+            ->where('prefix', $prefix)
+            ->update(['next_value' => $sequence + 1]);
+
+        return sprintf('%s-%06d', $prefix, $sequence);
+    }
+
+    /**
+     * Returns a freshly generated receipt number if this payment just became
+     * eligible for one (Paid or PartiallyPaid, and doesn't already have one);
+     * otherwise null, meaning "leave it as is".
+     */
+    private function maybeAssignReceiptNumber(?string $existing, string $status): ?string
+    {
+        if ($existing !== null) {
+            return null;
+        }
+
+        if (! in_array($status, [MembershipPaymentStatus::Paid, MembershipPaymentStatus::PartiallyPaid], true)) {
+            return null;
+        }
+
+        return $this->generateReceiptNumber();
     }
 
     public function findByReference(string $reference): ?array
@@ -281,10 +354,14 @@ class MembershipPaymentService
             'membershipNumber' => $payment->relationLoaded('membership') ? $payment->membership?->membership_number : null,
             'planId' => $payment->plan_id,
             'planName' => $payment->plan?->name,
+            'promotionId' => $payment->promotion_id,
             'amount' => (float) $payment->amount,
             'amountPaid' => (float) $payment->amount_paid,
+            'pendingChargeAmount' => $payment->pending_charge_amount !== null ? (float) $payment->pending_charge_amount : null,
+            'discountAmount' => $payment->discount_amount !== null ? (float) $payment->discount_amount : null,
             'currency' => $payment->currency,
             'paymentReference' => $payment->payment_reference,
+            'receiptNumber' => $payment->receipt_number,
             'paymentGateway' => $payment->payment_gateway,
             'status' => $payment->status,
             'paidAt' => $payment->paid_at ? (string) $payment->paid_at : null,

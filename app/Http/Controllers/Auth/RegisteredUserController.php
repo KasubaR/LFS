@@ -35,7 +35,8 @@ class RegisteredUserController extends Controller
         try {
             $user = DB::transaction(function () use ($validated) {
                 return User::query()->create([
-                    'name' => $validated['name'],
+                    'last_name' => $validated['last_name'],
+                    'other_names' => $validated['other_names'],
                     'email' => strtolower($validated['email']),
                     'password' => $validated['password'],
                     'phone' => $validated['phone'],
