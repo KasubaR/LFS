@@ -2,10 +2,13 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class PublicPagesBatch3Test extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_events_listing_renders_with_layout_and_content(): void
     {
         $response = $this->get('/events');

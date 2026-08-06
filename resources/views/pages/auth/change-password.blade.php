@@ -24,12 +24,19 @@
     <div class="form-group auth-form__password-wrap{{ $errors->has('password') ? ' form-group--error' : '' }}">
       <label for="password">New password</label>
       <div class="auth-form__input-wrap">
-        <input type="password" id="password" name="password" required autocomplete="new-password">
+        <input type="password" id="password" name="password" required autocomplete="new-password" aria-describedby="password-requirements">
         <button type="button" class="auth-form__eye" data-toggle-password="password" aria-label="Show password">
           <i class="fas fa-eye-slash" aria-hidden="true"></i>
         </button>
       </div>
       @error('password')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
+      <ul class="password-requirements" id="password-requirements" data-password-requirements-for="password" aria-live="polite" hidden>
+        <li data-rule="length">At least 8 characters</li>
+        <li data-rule="upper">One uppercase letter</li>
+        <li data-rule="lower">One lowercase letter</li>
+        <li data-rule="number">One number</li>
+        <li data-rule="special">One special character</li>
+      </ul>
     </div>
 
     <div class="form-group auth-form__password-wrap{{ $errors->has('password_confirmation') ? ' form-group--error' : '' }}">
@@ -41,6 +48,7 @@
         </button>
       </div>
       @error('password_confirmation')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
+      <p class="password-match-hint" data-password-match-for="password_confirmation" aria-live="polite" hidden></p>
     </div>
 
     <button type="submit" class="btn btn-primary w-full justify-center mt-2">

@@ -61,6 +61,28 @@ class MemberImportTest extends TestCase
         $this->assertSame('import', $payment->payment_gateway);
     }
 
+    public function test_import_parses_comma_formatted_net_amount(): void
+    {
+        // Regression test: the spreadsheet's "Net amount" column is sometimes text
+        // formatted with a thousands separator (e.g. "1,000.00"). PHP's (float) cast
+        // truncates at the comma, so this used to silently import the payment as 1.00
+        // instead of 1000.00.
+        $service = app(MemberImportService::class);
+        $result = $service->importFromFile(base_path('tests/fixtures/member-import-comma-amount.csv'), 'test:import');
+
+        $this->assertSame(1, $result['importedRows']);
+
+        $dana = User::query()->where('email', 'dana.import@test.com')->first();
+        $this->assertNotNull($dana);
+
+        $membership = Membership::query()->where('user_id', $dana->id)->first();
+        $payment = MembershipPayment::query()->where('membership_id', $membership->id)->first();
+
+        $this->assertNotNull($payment);
+        $this->assertSame('1000.00', $payment->amount);
+        $this->assertSame('1000.00', $payment->amount_paid);
+    }
+
     public function test_rollback_removes_imported_records(): void
     {
         $service = app(MemberImportService::class);
@@ -122,8 +144,13 @@ class MemberImportTest extends TestCase
         app(MemberImportService::class)->importFromFile($this->fixturePath, 'test:import');
     }
 
-    public function test_import_sends_verification_email_automatically(): void
+    public function test_import_does_not_send_verification_email_immediately(): void
     {
+        // The verification link expires long before most imported members
+        // actually log in with their shared temp password (see
+        // MemberImportService), so it must NOT be sent at import time —
+        // otherwise every member gets a dead link before they've even tried
+        // it. It's sent on first login instead (see the auth-flow test below).
         Notification::fake();
 
         app(MemberImportService::class)->importFromFile($this->fixturePath, 'test:import');
@@ -131,7 +158,25 @@ class MemberImportTest extends TestCase
         $alice = User::query()->where('email', 'alice.import@test.com')->first();
         $this->assertNotNull($alice);
 
+        Notification::assertNotSentTo($alice, VerifyEmailNotification::class);
+    }
+
+    public function test_first_login_sends_a_fresh_verification_email(): void
+    {
+        Notification::fake();
+
+        app(MemberImportService::class)->importFromFile($this->fixturePath, 'test:import');
+
+        $tempPassword = config('member_import.temp_password');
+        $alice = User::query()->where('email', 'alice.import@test.com')->first();
+
+        $this->post('/login', [
+            'email' => 'alice.import@test.com',
+            'password' => $tempPassword,
+        ])->assertRedirect('/email/verify');
+
         Notification::assertSentTo($alice, VerifyEmailNotification::class);
+        $this->assertNotNull($alice->fresh()->first_login);
     }
 
     public function test_imported_user_can_complete_auth_flow(): void
@@ -158,7 +203,7 @@ class MemberImportTest extends TestCase
             ->get($verificationUrl)
             ->assertRedirect('/password/change');
 
-        $newPassword = 'secure-new-pass';
+        $newPassword = 'SecureNew-Pass1';
 
         $this->actingAs($user->fresh())
             ->post('/password/change', [

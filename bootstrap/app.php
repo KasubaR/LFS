@@ -6,6 +6,7 @@ use App\Http\Middleware\AuthenticateApiClient;
 use App\Http\Middleware\EnsureActiveMembership;
 use App\Http\Middleware\EnsureAdminAuthenticated;
 use App\Http\Middleware\EnsureAdminCan;
+use App\Http\Middleware\EnsureBalancePaid;
 use App\Http\Middleware\EnsureMember;
 use App\Http\Middleware\EnsurePasswordChanged;
 use App\Http\Middleware\LogApiRequest;
@@ -50,6 +51,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'api.log' => LogApiRequest::class,
             'member' => EnsureMember::class,
             'force.password.change' => EnsurePasswordChanged::class,
+            'force.balance.due' => EnsureBalancePaid::class,
             // Soft-gated on most account pages; use only where unpaid must be blocked.
             'membership.active' => EnsureActiveMembership::class,
         ]);

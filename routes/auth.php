@@ -65,7 +65,9 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         ->name('membership.apply.store');
 });
 
-Route::middleware(['auth', 'verified', 'force.password.change', 'member'])->group(function (): void {
+Route::middleware(['auth', 'verified', 'force.password.change', 'force.balance.due', 'member'])->group(function (): void {
+    Route::get('/account/balance', [AccountController::class, 'balance'])->name('account.balance');
+
     Route::get('/account', [AccountController::class, 'show'])->name('account');
     Route::get('/account/card', [AccountController::class, 'card'])->name('account.card');
     Route::get('/account/card/pdf', [AccountController::class, 'downloadCard'])->name('account.card.pdf');

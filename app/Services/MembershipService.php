@@ -175,6 +175,48 @@ class MembershipService
     }
 
     /**
+     * A member is treated as owing a balance when their current membership is
+     * Active, its period hasn't expired yet ("provided the payment has not
+     * expired from the date of payment"), and its latest payment is only
+     * partially paid — currently only reachable for imported members who paid
+     * less than their plan's full price (see RepairImportedMembershipAmountsCommand).
+     *
+     * @return array{membership: Membership, payment: array<string, mixed>}|null
+     */
+    public function findOutstandingBalancePayment(int $userId): ?array
+    {
+        $membership = Membership::query()
+            ->where('user_id', $userId)
+            ->where('status', MembershipStatus::Active)
+            ->where(function ($q) {
+                $q->whereNull('expiry_date')
+                    ->orWhere('expiry_date', '>=', now()->toDateString());
+            })
+            ->orderByDesc('created_at')
+            ->first();
+
+        if (! $membership) {
+            return null;
+        }
+
+        $payment = $this->paymentService->findLatestForMembership($membership->id);
+        if (! $payment) {
+            return null;
+        }
+
+        // Normally partially_paid; a failed top-up retry leaves the row Failed
+        // without having cleared the shortfall, so still treat that as owing.
+        $stillOwes = $payment['status'] === MembershipPaymentStatus::PartiallyPaid
+            || ($payment['status'] === MembershipPaymentStatus::Failed && (float) $payment['amountPaid'] < (float) $payment['amount']);
+
+        if (! $stillOwes) {
+            return null;
+        }
+
+        return ['membership' => $membership, 'payment' => $payment];
+    }
+
+    /**
      * @param  array<string, mixed>  $payload
      * @return array{userId: int, membershipId: string, membershipNumber: string, paymentId: int}
      */

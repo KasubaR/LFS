@@ -16,6 +16,7 @@ use App\Services\DocumentService;
 use App\Services\MembershipCardService;
 use App\Services\MembershipPaymentService;
 use App\Services\MembershipPlanService;
+use App\Services\MembershipService;
 use App\Services\OrderService;
 use App\Services\SatelliteService;
 use App\Services\WishlistService;
@@ -42,6 +43,7 @@ class AccountController extends Controller
         private readonly MembershipCardService $membershipCardService,
         private readonly MembershipPaymentService $paymentService,
         private readonly DocumentService $documentService,
+        private readonly MembershipService $membershipService,
     ) {}
 
     public function show(): View|RedirectResponse
@@ -201,6 +203,32 @@ class AccountController extends Controller
             'description' => 'Your LFS membership payment history and receipts.',
             'activeTab' => 'payments',
             'payments' => $this->paymentService->listForUser((int) $user->id),
+        ], $user));
+    }
+
+    public function balance(): View|RedirectResponse
+    {
+        $user = $this->accountUser();
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+
+        $outstanding = $this->membershipService->findOutstandingBalancePayment((int) $user->id);
+        if ($outstanding === null) {
+            // Nothing owed (or it's since been paid) — nothing to show here.
+            return redirect()->route('account');
+        }
+
+        $payment = $outstanding['payment'];
+
+        return view('pages.auth.account-balance', $this->accountViewData([
+            'title' => 'Outstanding Balance',
+            'description' => 'Finish paying your membership balance.',
+            'activeTab' => 'dashboard',
+            'membership' => $outstanding['membership'],
+            'payment' => $payment,
+            'balanceOwed' => round($payment['amount'] - $payment['amountPaid'], 2),
+            'extraScripts' => '<script src="'.asset('js/account-payment.js').'"></script>',
         ], $user));
     }
 

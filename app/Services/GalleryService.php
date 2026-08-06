@@ -22,7 +22,7 @@ class GalleryService
         $year = $query['year'] ?? '';
 
         $builder = Album::query()
-            ->orderByRaw('ISNULL(date) ASC, date DESC, created_at DESC');
+            ->orderByRaw('(date IS NULL) ASC, date DESC, created_at DESC');
 
         if ($category !== '') {
             $builder->where('category', $category);
@@ -59,7 +59,7 @@ class GalleryService
     public function getAlbumsForUpload(): array
     {
         return Album::query()
-            ->orderByRaw('ISNULL(date) ASC, date DESC')
+            ->orderByRaw('(date IS NULL) ASC, date DESC')
             ->get()
             ->map(fn (Album $album) => $this->toAlbum($album))
             ->all();
@@ -139,10 +139,16 @@ class GalleryService
 
     public function incrementAlbumMediaCount(string $albumId, int $delta): void
     {
+        $sum = 'media_count + '.(int) $delta;
+        // SQLite has no GREATEST(); its multi-argument MAX() is the equivalent.
+        $clamp = DB::connection()->getDriverName() === 'sqlite'
+            ? "MAX(0, {$sum})"
+            : "GREATEST(0, {$sum})";
+
         Album::query()
             ->whereKey($albumId)
             ->update([
-                'media_count' => DB::raw('GREATEST(0, media_count + '.(int) $delta.')'),
+                'media_count' => DB::raw($clamp),
                 'updated_at' => now(),
             ]);
     }

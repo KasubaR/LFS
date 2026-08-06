@@ -37,8 +37,20 @@ class MembershipPaymentController extends Controller
             ->orderByDesc('created_at')
             ->first();
 
+        // Two ways to reach here: a fresh application/renewal awaiting its first
+        // payment (Draft/PendingPayment), or an already-Active, not-yet-expired
+        // membership that owes a balance (imported members who paid less than
+        // their plan's full price — see MembershipService::findOutstandingBalancePayment).
+        $isBalanceTopUp = false;
+
         if (! $membership || ! in_array($membership->status, [MembershipStatus::Draft, MembershipStatus::PendingPayment], true)) {
-            return $this->jsonError('No pending membership payment to pay for.', 403);
+            $outstanding = $this->membershipService->findOutstandingBalancePayment((int) $user->id);
+
+            if ($outstanding === null || $membership === null || $outstanding['membership']->id !== $membership->id) {
+                return $this->jsonError('No pending membership payment to pay for.', 403);
+            }
+
+            $isBalanceTopUp = true;
         }
 
         if ($membership->status === MembershipStatus::Draft) {
@@ -48,16 +60,28 @@ class MembershipPaymentController extends Controller
 
         $payment = $this->paymentService->findLatestForMembership($membership->id);
 
-        // A prior MoMo attempt may have failed — create a fresh pending row so
-        // initiate is not blocked by the terminal Failed payment.
+        // A prior MoMo attempt may have failed — create a fresh row so initiate
+        // is not blocked by the terminal Failed payment. For a balance top-up,
+        // carry the amount already paid forward instead of starting from zero.
         if ($payment && $payment['status'] === MembershipPaymentStatus::Failed) {
-            $paymentId = $this->paymentService->create($membership->id, (int) $membership->current_plan_id, [
-                'amount' => (float) ($membership->plan?->price ?? $payment['amount']),
-            ]);
+            $paymentId = $isBalanceTopUp
+                ? $this->paymentService->create($membership->id, (int) $membership->current_plan_id, [
+                    'amount' => $payment['amount'],
+                    'amountPaid' => $payment['amountPaid'],
+                    'status' => MembershipPaymentStatus::PartiallyPaid,
+                    'paymentGateway' => $payment['paymentGateway'] ?? 'lenco',
+                ])
+                : $this->paymentService->create($membership->id, (int) $membership->current_plan_id, [
+                    'amount' => (float) ($membership->plan?->price ?? $payment['amount']),
+                ]);
             $payment = $this->paymentService->findById($paymentId);
         }
 
-        if (! $payment || MembershipPaymentStatus::isTerminal($payment['status'])) {
+        $paymentUsable = $isBalanceTopUp
+            ? $payment && $payment['status'] === MembershipPaymentStatus::PartiallyPaid
+            : $payment && ! MembershipPaymentStatus::isTerminal($payment['status']);
+
+        if (! $paymentUsable) {
             return $this->jsonError('No pending payment found for this membership.', 403);
         }
 
@@ -75,9 +99,16 @@ class MembershipPaymentController extends Controller
         // to the membership's own id so the reference is always unique.
         $reference = $this->lenco->generateReference($membership->membership_number ?? $membership->id);
 
+        // Charge only the outstanding shortfall for a top-up — the payment
+        // row's own `amount` still reflects the full amount due, so verify()/
+        // webhook() completing it with that value correctly resolves to Paid.
+        $chargeAmount = $isBalanceTopUp
+            ? round($payment['amount'] - $payment['amountPaid'], 2)
+            : $payment['amount'];
+
         $orderData = [
             'orderNumber' => $reference,
-            'totals' => ['total' => $payment['amount']],
+            'totals' => ['total' => $chargeAmount],
             'currency' => $payment['currency'] ?? 'ZMW',
             'country' => 'ZM',
         ];

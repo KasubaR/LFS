@@ -70,6 +70,14 @@ class AuthenticatedSessionController extends Controller
 
         if ($user->first_login === null) {
             $user->forceFill(['first_login' => now()])->save();
+
+            // Imported members never get a verification email until they
+            // actually show up and log in — see MemberImportService — so the
+            // signed link is fresh relative to now rather than the import
+            // batch, which could've run days or weeks earlier.
+            if (! $user->hasVerifiedEmail()) {
+                $user->sendEmailVerificationNotification();
+            }
         }
 
         return redirect()->intended($this->onboardingService->resolveNextRoute($user));

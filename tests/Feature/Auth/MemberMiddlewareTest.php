@@ -2,7 +2,9 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Enums\MembershipPaymentStatus;
 use App\Models\Membership;
+use App\Models\MembershipPayment;
 use App\Models\MembershipPlan;
 use App\Models\User;
 use Database\Seeders\MembershipPlanSeeder;
@@ -61,8 +63,8 @@ class MemberMiddlewareTest extends TestCase
         $this->actingAs($user->fresh())
             ->post('/password/change', [
                 'current_password' => 'temp-pass-123',
-                'password' => 'my-new-password',
-                'password_confirmation' => 'my-new-password',
+                'password' => 'MyNewPass1!',
+                'password_confirmation' => 'MyNewPass1!',
             ])
             ->assertRedirect('/account');
 
@@ -70,6 +72,47 @@ class MemberMiddlewareTest extends TestCase
             ->get('/account')
             ->assertOk()
             ->assertSee('21684', false);
+    }
+
+    public function test_active_member_with_outstanding_balance_is_redirected_to_balance_page(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'balance@example.com',
+            'must_change_password' => false,
+        ]);
+
+        $plan = MembershipPlan::query()->first();
+
+        $membership = Membership::query()->create([
+            'id' => '00000000-0000-4000-8000-000000000020',
+            'user_id' => $user->id,
+            'membership_number' => '13657',
+            'status' => 'active',
+            'current_plan_id' => $plan->id,
+            'approval_status' => 'approved',
+            'approved_by' => 'system:import',
+            'joined_at' => now(),
+            'start_date' => now()->toDateString(),
+            'expiry_date' => now()->addMonths(6)->toDateString(),
+        ]);
+
+        MembershipPayment::query()->create([
+            'membership_id' => $membership->id,
+            'plan_id' => $plan->id,
+            'amount' => 1000,
+            'amount_paid' => 900,
+            'currency' => 'ZMW',
+            'payment_gateway' => 'import',
+            'status' => MembershipPaymentStatus::PartiallyPaid,
+        ]);
+
+        // Any gated account page redirects to the balance page while owed.
+        $this->actingAs($user)->get('/account')->assertRedirect('/account/balance');
+        $this->actingAs($user)->get('/account/payments')->assertRedirect('/account/balance');
+
+        $this->actingAs($user)->get('/account/balance')
+            ->assertOk()
+            ->assertSee('K100.00', false);
     }
 
     public function test_website_registrant_flow_skips_password_change(): void

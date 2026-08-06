@@ -39,8 +39,8 @@ class RegistrationTest extends TestCase
         $response = $this->post('/create-account', [
             'name' => 'Jane Runner',
             'email' => 'jane@example.com',
-            'password' => 'password123',
-            'password_confirmation' => 'password123',
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
             'phone' => '0977000000',
             'gender' => 'female',
             'nationality' => 'Zambian',

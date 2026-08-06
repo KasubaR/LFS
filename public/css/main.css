@@ -1260,6 +1260,78 @@ body.mobile-nav-open {
   box-shadow: 0 0 0 3px rgba(74,124,89,0.25);
 }
 
+/* ── PASSWORD REQUIREMENTS (real-time checklist + match hint) ── */
+.password-requirements {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius-sm);
+  background: rgba(0,0,0,0.03);
+  display: grid;
+  gap: 0.3rem;
+}
+
+.password-requirements[hidden] { display: none; }
+
+.password-requirements li {
+  font-size: 0.78rem;
+  color: #6b6b6b;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: color var(--transition-base);
+}
+
+.password-requirements li::before {
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  content: '\f111'; /* fa-circle */
+  font-size: 0.5rem;
+  color: rgba(0,0,0,0.25);
+  flex-shrink: 0;
+}
+
+.password-requirements li.is-met {
+  color: var(--green);
+}
+
+.password-requirements li.is-met::before {
+  content: '\f00c'; /* fa-check */
+  font-size: 0.7rem;
+  color: var(--green);
+}
+
+.lfs-form--dark .password-requirements { background: rgba(255,255,255,0.06); }
+.lfs-form--dark .password-requirements li { color: rgba(255,255,255,0.6); }
+
+.password-match-hint {
+  font-size: 0.82rem;
+  margin-top: 0.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.password-match-hint[hidden] { display: none; }
+
+.password-match-hint::before {
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  font-size: 0.75rem;
+}
+
+.password-match-hint.is-match {
+  color: var(--green);
+}
+
+.password-match-hint.is-match::before { content: '\f00c'; }
+
+.password-match-hint.is-mismatch {
+  color: var(--red);
+}
+
+.password-match-hint.is-mismatch::before { content: '\f00d'; /* fa-xmark */ }
+
 /* ── FLOATING CART ── */
 .lfs-cart-fab {
   position: fixed;

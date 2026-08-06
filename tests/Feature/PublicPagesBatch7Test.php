@@ -2,10 +2,13 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class PublicPagesBatch7Test extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_shop_page_renders_with_layout_and_filters(): void
     {
         $response = $this->get('/shop');

@@ -42,12 +42,28 @@ class PasswordResetTest extends TestCase
         $response = $this->post('/reset-password', [
             'token' => $token,
             'email' => 'reset@example.com',
-            'password' => 'newpassword123',
-            'password_confirmation' => 'newpassword123',
+            'password' => 'NewPassword123!',
+            'password_confirmation' => 'NewPassword123!',
         ]);
 
         $response->assertRedirect('/login');
-        $this->assertTrue(Hash::check('newpassword123', $user->fresh()->password));
+        $this->assertTrue(Hash::check('NewPassword123!', $user->fresh()->password));
+    }
+
+    public function test_reset_password_rejects_the_shared_temp_password(): void
+    {
+        $user = User::factory()->create(['email' => 'reset@example.com']);
+        $token = Password::createToken($user);
+        $sharedTempPassword = config('member_import.temp_password');
+
+        $response = $this->post('/reset-password', [
+            'token' => $token,
+            'email' => 'reset@example.com',
+            'password' => $sharedTempPassword,
+            'password_confirmation' => $sharedTempPassword,
+        ]);
+
+        $response->assertSessionHasErrors('password');
     }
 
     public function test_reset_password_screen_can_be_rendered(): void

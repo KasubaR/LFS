@@ -10,7 +10,6 @@ use App\Models\MembershipImportRecord;
 use App\Models\User;
 use App\Notifications\WelcomeImportedMemberNotification;
 use App\Support\Uuid;
-use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -205,6 +204,20 @@ class MemberImportService
     }
 
     /**
+     * Cast a spreadsheet money cell to a float. Cells are read as strings and some
+     * rows format "Net amount" with thousands separators (e.g. "1,000.00"), which
+     * PHP's (float) cast silently truncates at the comma (=> 1.0 instead of 1000.0).
+     * Strip grouping separators before casting so both "1000.00" and "1,000.00" parse
+     * the same.
+     */
+    private function parseAmount(string $value): float
+    {
+        $cleaned = str_replace(',', '', trim($value));
+
+        return $cleaned === '' ? 0.0 : (float) $cleaned;
+    }
+
+    /**
      * @param  array<string, string>  $mapped
      * @return array<string, mixed>
      */
@@ -218,7 +231,7 @@ class MemberImportService
             'email' => strtolower(trim($mapped['email'] ?? '')),
             'phone' => $mapped['phone'] ?? '',
             'status' => $mapped['status'] ?? '',
-            'amount' => (float) ($mapped['net_amount'] ?? 0),
+            'amount' => $this->parseAmount($mapped['net_amount'] ?? ''),
             'gender' => $mapped['sex'] ?? '',
             'nationality' => $mapped['nationality'] ?? '',
             'tShirtSize' => $mapped['t_shirt_size'] ?? '',
@@ -355,12 +368,13 @@ class MemberImportService
             return $user;
         });
 
-        // Fired outside the transaction (same pattern as self-registration in
-        // RegisteredUserController) so we never email a user whose row later rolls
-        // back. This is what actually gets the verification email out — imports
-        // don't otherwise trigger Laravel's default Registered-event listener.
-        event(new Registered($user));
-
+        // Deliberately not sending the verification email here. The signed link
+        // expires after auth.verification.expire (60 min default), but members
+        // often don't log in with their shared temp password until well after
+        // that — sometimes days later, any time inside its multi-day TTL — which
+        // left them with a dead "Invalid signature" link before they'd even
+        // tried it. AuthenticatedSessionController sends it on first login
+        // instead, so the link is fresh relative to when they actually show up.
         if ($sendWelcomeEmail) {
             Notification::send($user, new WelcomeImportedMemberNotification($tempPassword, $tempPasswordExpiresAt));
         }

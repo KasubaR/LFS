@@ -37,7 +37,7 @@ class AppServiceProvider extends ServiceProvider
         // that limit regardless of host config.
         Schema::defaultStringLength(191);
 
-        Password::defaults(fn () => Password::min(8));
+        Password::defaults(fn () => Password::min(8)->mixedCase()->numbers()->symbols());
 
         RateLimiter::for('admin', function (Request $request) {
             $sessionId = $request->session()->getId();

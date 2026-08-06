@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Enums\MembershipPaymentStatus;
 use App\Enums\MembershipStatus;
 use App\Models\Membership;
 use App\Models\MembershipPayment;
@@ -271,6 +272,84 @@ class MembershipPaymentTest extends TestCase
             'provider' => 'mtn',
             'phone' => '+260971234567',
         ])->assertStatus(409);
+    }
+
+    private function createUnderpaidActiveMembership(User $user): Membership
+    {
+        $plan = MembershipPlan::query()->where('billing_cycle', \App\Enums\BillingCycle::Annual)->first();
+
+        $membership = Membership::query()->create([
+            'id' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'membership_number' => '13657',
+            'status' => MembershipStatus::Active,
+            'current_plan_id' => $plan->id,
+            'approval_status' => 'approved',
+            'approved_by' => 'system:import',
+            'joined_at' => now(),
+            'start_date' => now()->toDateString(),
+            'expiry_date' => now()->addMonths(6)->toDateString(),
+        ]);
+
+        MembershipPayment::query()->create([
+            'membership_id' => $membership->id,
+            'plan_id' => $plan->id,
+            'amount' => 1000,
+            'amount_paid' => 900,
+            'currency' => 'ZMW',
+            'payment_gateway' => 'import',
+            'status' => MembershipPaymentStatus::PartiallyPaid,
+        ]);
+
+        return $membership;
+    }
+
+    public function test_balance_top_up_charges_only_the_shortfall_and_clears_the_balance(): void
+    {
+        $user = User::factory()->create();
+        $membership = $this->createUnderpaidActiveMembership($user);
+
+        $this->mock(LencoService::class, function ($mock) {
+            $mock->shouldReceive('generateReference')->andReturn('LFS-REF-TOPUP');
+            $mock->shouldReceive('initiateMobileMoneyPayment')
+                ->once()
+                ->withArgs(fn ($orderData) => (float) $orderData['totals']['total'] === 100.0)
+                ->andReturn([
+                    'transactionId' => 'txn-topup',
+                    'lencoReference' => 'lenco-topup',
+                    'reference' => 'LFS-REF-TOPUP',
+                    'status' => 'pay-offline',
+                    'paymentInstructions' => 'Approve on your phone',
+                    'paymentUrl' => null,
+                    'expiresAt' => null,
+                    'rawResponse' => [],
+                ]);
+            $mock->shouldReceive('verifyPayment')->once()->with('LFS-REF-TOPUP', true)->andReturn([
+                'status' => 'successful',
+                'internalStatus' => 'completed',
+                'rawResponse' => [],
+            ]);
+        });
+
+        // Still owed — middleware forces /account/balance.
+        $this->actingAs($user)->get('/account')->assertRedirect('/account/balance');
+
+        $this->actingAs($user)->postJson('/account/payment/initiate', [
+            'provider' => 'mtn',
+            'phone' => '+260971234567',
+        ])->assertOk()->assertJson(['ok' => true, 'reference' => 'LFS-REF-TOPUP']);
+
+        $this->actingAs($user)->getJson('/account/payment/verify?reference=LFS-REF-TOPUP')
+            ->assertOk()
+            ->assertJson(['ok' => true, 'status' => 'completed']);
+
+        $payment = MembershipPayment::query()->where('membership_id', $membership->id)->first();
+        $this->assertSame('1000.00', $payment->amount);
+        $this->assertSame('1000.00', $payment->amount_paid);
+        $this->assertSame('paid', $payment->status);
+
+        // Balance cleared — no longer redirected away from the dashboard.
+        $this->actingAs($user)->get('/account')->assertOk();
     }
 
     public function test_failed_payment_can_be_retried_with_new_row(): void

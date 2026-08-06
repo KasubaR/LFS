@@ -93,13 +93,13 @@ class PasswordChangeTest extends TestCase
 
         $response = $this->post('/password/change', [
             'current_password' => 'temp-pass-123',
-            'password' => 'new-secure-pass',
-            'password_confirmation' => 'new-secure-pass',
+            'password' => 'NewSecure-Pass1',
+            'password_confirmation' => 'NewSecure-Pass1',
         ]);
 
         $response->assertRedirect('/account');
         $this->assertFalse($user->fresh()->must_change_password);
-        $this->assertTrue(Hash::check('new-secure-pass', $user->fresh()->password));
+        $this->assertTrue(Hash::check('NewSecure-Pass1', $user->fresh()->password));
     }
 
     public function test_password_change_requires_correct_current_password(): void
@@ -121,6 +121,50 @@ class PasswordChangeTest extends TestCase
         $response->assertSessionHasErrors('current_password');
         $this->assertTrue($user->fresh()->must_change_password);
         $this->assertTrue(Hash::check('temp-pass-123', $user->fresh()->password));
+    }
+
+    public function test_password_change_rejects_reusing_the_current_password(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'imported4@example.com',
+            'password' => 'temp-pass-123',
+            'must_change_password' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        $response = $this->post('/password/change', [
+            'current_password' => 'temp-pass-123',
+            'password' => 'temp-pass-123',
+            'password_confirmation' => 'temp-pass-123',
+        ]);
+
+        $response->assertSessionHasErrors('password');
+        $this->assertTrue($user->fresh()->must_change_password);
+    }
+
+    public function test_password_change_rejects_the_shared_temp_password_as_new_password(): void
+    {
+        $sharedTempPassword = config('member_import.temp_password');
+
+        $user = User::factory()->create([
+            'email' => 'imported5@example.com',
+            // Current password differs from the shared temp password so this
+            // only exercises the NotSharedTempPassword rule, not `different`.
+            'password' => 'some-other-current-pass',
+            'must_change_password' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        $response = $this->post('/password/change', [
+            'current_password' => 'some-other-current-pass',
+            'password' => $sharedTempPassword,
+            'password_confirmation' => $sharedTempPassword,
+        ]);
+
+        $response->assertSessionHasErrors('password');
+        $this->assertTrue($user->fresh()->must_change_password);
     }
 
     public function test_account_is_blocked_until_password_is_changed(): void

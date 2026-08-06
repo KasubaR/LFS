@@ -72,6 +72,7 @@
   <script src="{{ asset('js/input-sanitizer.js') }}"></script>
   <script src="{{ asset('js/main.js') }}"></script>
   <script src="{{ asset('js/cart.js') }}"></script>
+  <script src="{{ asset('js/password-requirements.js') }}"></script>
 
   <!-- Page-specific scripts (optional — trusted controller output only, never from user input) -->
   {!! ($scripts ?? '') . ($extraScripts ?? '') !!}

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Rules\NotSharedTempPassword;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Password;
 
@@ -20,7 +21,10 @@ class ResetPasswordRequest extends FormRequest
         return [
             'token' => ['required', 'string'],
             'email' => ['required', 'string', 'email'],
-            'password' => ['required', 'string', 'confirmed', Password::defaults()],
+            // "Forgot password" is also how a member recovers once their
+            // shared temp password has expired — don't let them set the temp
+            // password right back as their new permanent one.
+            'password' => ['required', 'string', 'confirmed', new NotSharedTempPassword, Password::defaults()],
         ];
     }
 }

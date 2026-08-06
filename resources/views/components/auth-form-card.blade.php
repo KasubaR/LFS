@@ -122,22 +122,4 @@
   </div>
 </section>
 @endif
-
-<script>
-(function () {
-  document.querySelectorAll('[data-toggle-password]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var input = document.getElementById(btn.getAttribute('data-toggle-password'));
-      if (!input) return;
-      var isPassword = input.type === 'password';
-      input.type = isPassword ? 'text' : 'password';
-      var icon = btn.querySelector('i');
-      if (icon) {
-        icon.classList.toggle('fa-eye', isPassword);
-        icon.classList.toggle('fa-eye-slash', !isPassword);
-      }
-      btn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
-    });
-  });
-})();
-</script>
+<!-- Password show/hide toggling is handled globally by password-requirements.js -->
