@@ -172,7 +172,14 @@ class MemberVerificationService
             // Active-but-past-expiry reports as expired, which is the honest answer.
             MembershipStatus::Active, MembershipStatus::Expired => self::STATUS_EXPIRED,
             MembershipStatus::Cancelled => self::STATUS_CANCELLED,
-            MembershipStatus::Draft, MembershipStatus::PendingPayment => self::STATUS_PENDING_PAYMENT,
+            // Suspended still belongs to the *current* membership year — it just
+            // needs the outstanding balance paid to reactivate, same as a fresh
+            // application needs its first payment. That's a closer match to
+            // "pending_payment" than "expired" (which tells the caller a new
+            // year/application is needed). The public API contract only allows
+            // these five status values (see docs/api/PARTNER_API_PLAN.md), so
+            // Suspended is folded into the closest one rather than adding a sixth.
+            MembershipStatus::Draft, MembershipStatus::PendingPayment, MembershipStatus::Suspended => self::STATUS_PENDING_PAYMENT,
             default => self::STATUS_EXPIRED,
         };
     }

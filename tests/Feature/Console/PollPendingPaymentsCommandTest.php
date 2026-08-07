@@ -15,6 +15,7 @@ use App\Services\LencoService;
 use Database\Seeders\MembershipPlanSeeder;
 use Database\Seeders\SatelliteSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -69,6 +70,9 @@ class PollPendingPaymentsCommandTest extends TestCase
             'plan_id' => $plan->id,
             'amount' => $plan->price,
             'amount_paid' => 0,
+            // Set by recordGatewayInitiation() for any real in-flight charge —
+            // required for the poller to credit it (see resolveConfirmedCharge()).
+            'pending_charge_amount' => $plan->price,
             'currency' => 'ZMW',
             'payment_reference' => 'LFS-MEMBER-REF-1',
             'payment_gateway' => 'lenco',
@@ -103,6 +107,127 @@ class PollPendingPaymentsCommandTest extends TestCase
         $this->assertSame(MembershipStatus::Active, $membership->fresh()->status);
         $this->assertSame('system:lenco', $membership->fresh()->approved_by);
         $this->assertSame('paid', $membershipPayment->fresh()->status);
+    }
+
+    public function test_command_recovers_a_stuck_partial_membership_payment(): void
+    {
+        // Partial-payment counterpart to test_command_resolves_stuck_order_and_membership_payments:
+        // the first installment's own webhook was missed, and it's a
+        // genuine partial charge (pending_charge_amount < amount) rather
+        // than one that happens to clear the balance in full — the poller
+        // must activate the membership as PartiallyPaid, not Paid, and must
+        // stamp a real grace_period_ends_at (see
+        // MembershipService::handlePaymentUpdate()'s grace-window check).
+        Carbon::setTestNow('2026-02-01 10:00:00');
+
+        $user = User::factory()->create();
+        $quarterly = MembershipPlan::query()->where('billing_cycle', \App\Enums\BillingCycle::Quarterly)->first();
+        $membership = Membership::query()->create([
+            'id' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'membership_number' => 'LFS-000031',
+            'status' => MembershipStatus::PendingPayment,
+            'current_plan_id' => $quarterly->id,
+            'approval_status' => 'pending',
+        ]);
+
+        $payment = MembershipPayment::query()->create([
+            'membership_id' => $membership->id,
+            'plan_id' => $quarterly->id,
+            'amount' => 1000,
+            'amount_paid' => 0,
+            'pending_charge_amount' => 250,
+            'currency' => 'ZMW',
+            'payment_reference' => 'LFS-MEMBER-PARTIAL-1',
+            'payment_gateway' => 'lenco',
+            'status' => 'pending',
+        ]);
+        $payment->forceFill(['created_at' => now()->subMinutes(10)])->save();
+
+        $this->mock(LencoService::class, function ($mock) {
+            $mock->shouldReceive('verifyPayment')
+                ->once()
+                ->with('LFS-MEMBER-PARTIAL-1', true)
+                ->andReturn([
+                    'status' => 'successful',
+                    'internalStatus' => 'completed',
+                    'rawResponse' => [],
+                ]);
+        });
+
+        $this->artisan('payments:poll-pending')->assertSuccessful();
+
+        $membership->refresh();
+        $payment->refresh();
+
+        $this->assertSame(MembershipStatus::Active, $membership->status);
+        $this->assertNotNull($membership->grace_period_ends_at);
+        $this->assertSame('250.00', $payment->amount_paid);
+        $this->assertSame('partially_paid', $payment->status);
+        $this->assertNull($payment->payment_reference, 'reference must be cleared or a follow-up top-up would be blocked');
+
+        Carbon::setTestNow();
+    }
+
+    public function test_command_recovers_a_stuck_second_installment_top_up(): void
+    {
+        // Continuation of the scenario above: the membership is already
+        // Active + PartiallyPaid from a first installment, and a later
+        // top-up attempt's own webhook is the one that got missed this
+        // time. The poller must credit it on top of what's already paid
+        // (not replace it) and bring the payment to Paid.
+        Carbon::setTestNow('2026-02-15 10:00:00');
+
+        $user = User::factory()->create();
+        $quarterly = MembershipPlan::query()->where('billing_cycle', \App\Enums\BillingCycle::Quarterly)->first();
+        $membership = Membership::query()->create([
+            'id' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'membership_number' => 'LFS-000032',
+            'status' => MembershipStatus::Active,
+            'current_plan_id' => $quarterly->id,
+            'approval_status' => 'approved',
+            'approved_by' => 'system:lenco',
+            'joined_at' => now(),
+            'start_date' => now()->toDateString(),
+            'expiry_date' => now()->addMonths(10)->toDateString(),
+            'grace_period_ends_at' => now()->addMonths(2)->toDateString(),
+        ]);
+
+        $payment = MembershipPayment::query()->create([
+            'membership_id' => $membership->id,
+            'plan_id' => $quarterly->id,
+            'amount' => 1000,
+            'amount_paid' => 250,
+            'pending_charge_amount' => 750,
+            'currency' => 'ZMW',
+            'payment_reference' => 'LFS-MEMBER-TOPUP-1',
+            'payment_gateway' => 'lenco',
+            'status' => 'partially_paid',
+        ]);
+        $payment->forceFill(['created_at' => now()->subMinutes(10)])->save();
+
+        $this->mock(LencoService::class, function ($mock) {
+            $mock->shouldReceive('verifyPayment')
+                ->once()
+                ->with('LFS-MEMBER-TOPUP-1', true)
+                ->andReturn([
+                    'status' => 'successful',
+                    'internalStatus' => 'completed',
+                    'rawResponse' => [],
+                ]);
+        });
+
+        $this->artisan('payments:poll-pending')->assertSuccessful();
+
+        $membership->refresh();
+        $payment->refresh();
+
+        $this->assertSame(MembershipStatus::Active, $membership->status);
+        $this->assertSame('1000.00', $payment->amount_paid);
+        $this->assertSame('paid', $payment->status);
+
+        Carbon::setTestNow();
     }
 
     private function makeProduct(int $stock): Product

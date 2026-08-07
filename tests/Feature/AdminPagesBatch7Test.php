@@ -35,6 +35,34 @@ class AdminPagesBatch7Test extends TestCase
         $response->assertSee('View all members', false);
     }
 
+    public function test_members_index_breaks_out_suspended_from_inactive(): void
+    {
+        // Regression test: the stats row used to only compute
+        // Total/Active/Pending/Inactive, so a Suspended member counted
+        // towards Total but showed up in none of the other three cards.
+        $members = [
+            ['status' => 'active'],
+            ['status' => 'pending'],
+            ['status' => 'suspended'],
+            ['status' => 'suspended'],
+            ['status' => 'inactive'],
+        ];
+
+        $html = view('admin.members.index', [
+            'pageTitle' => 'Members',
+            'activePage' => 'members',
+            'breadcrumbs' => [],
+            'members' => $members,
+            'chartData' => null,
+        ])->render();
+
+        $this->assertMatchesRegularExpression(
+            '/Total.*?5.*?Active.*?1.*?Pending.*?1.*?Suspended.*?2.*?Inactive.*?1/s',
+            $html,
+            'Suspended must render as its own count, separate from Total/Active/Pending/Inactive'
+        );
+    }
+
     public function test_members_full_list_renders(): void
     {
         $response = $this->actingAsAdmin()->get('/admin/members/list');

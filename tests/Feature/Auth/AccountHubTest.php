@@ -490,6 +490,71 @@ class AccountHubTest extends TestCase
         $receipt->assertHeader('content-type', 'application/pdf');
     }
 
+    public function test_suspended_membership_outranks_an_older_expired_one_on_the_dashboard(): void
+    {
+        // Regression test: resolveDisplayMembership()'s priority ranking
+        // used to omit Suspended entirely, so it fell back to the default
+        // (lowest) rank — worse than even Expired/Cancelled. A member with
+        // both an old Expired membership and a currently-Suspended one (this
+        // year's, non-payment) would then see the stale Expired record
+        // instead of the actionable Suspended one.
+        $user = $this->member();
+        $plan = MembershipPlan::query()->first();
+
+        $expired = Membership::query()->where('user_id', $user->id)->first();
+        $expired->update([
+            'status' => MembershipStatus::Expired,
+            'expiry_date' => now()->subMonths(8)->toDateString(),
+        ]);
+
+        $suspended = Membership::query()->create([
+            'id' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'membership_number' => 'LFS-HUB-002',
+            'status' => MembershipStatus::Suspended,
+            'current_plan_id' => $plan->id,
+            'approval_status' => 'approved',
+            'start_date' => now()->subMonths(4)->toDateString(),
+            'expiry_date' => now()->addMonths(8)->toDateString(),
+        ]);
+
+        $dashboard = $this->actingAs($user)->get('/account');
+        $dashboard->assertOk();
+        $dashboard->assertSee($suspended->membership_number, false);
+        $dashboard->assertDontSee($expired->membership_number, false);
+    }
+
+    public function test_active_member_in_grace_period_can_reach_balance_page_from_dashboard_reminder(): void
+    {
+        $user = $this->member();
+        $membership = Membership::query()->where('user_id', $user->id)->first();
+        $membership->update(['grace_period_ends_at' => now()->addMonths(2)]);
+
+        MembershipPayment::query()->create([
+            'membership_id' => $membership->id,
+            'plan_id' => $membership->current_plan_id,
+            'amount' => 1000,
+            'amount_paid' => 250,
+            'currency' => 'ZMW',
+            'payment_reference' => 'LFS-PAY-GRACE-1',
+            'payment_gateway' => 'lenco',
+            'status' => 'partially_paid',
+        ]);
+
+        // The dashboard reminder banner links here — it must not bounce the
+        // member back to /account (that only happens for Suspended members,
+        // see AccountController::balance()).
+        $dashboard = $this->actingAs($user)->get('/account');
+        $dashboard->assertOk();
+        $dashboard->assertSee(route('account.balance'), false);
+
+        $balance = $this->actingAs($user)->get('/account/balance');
+        $balance->assertOk();
+        $balance->assertSee('Outstanding balance', false);
+        $balance->assertSee('K750.00', false);
+        $balance->assertSee('account-payment-form', false);
+    }
+
     public function test_payment_receipt_is_owner_scoped_and_requires_a_completed_payment(): void
     {
         $owner = $this->member();

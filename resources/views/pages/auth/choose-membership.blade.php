@@ -2,8 +2,8 @@
 
 @section('content')
 <x-auth-form-card
-  auth-title="Choose Membership"
-  auth-subtitle="Select your nearest satellite and membership plan to complete your application."
+  auth-title="Annual Membership"
+  auth-subtitle="Select your nearest satellite and how much of the annual fee you would like to pay now."
   :status="$status ?? null"
   :split="true">
 
@@ -24,8 +24,8 @@
     </div>
 
     <div class="form-group{{ $errors->has('plan_id') ? ' form-group--error' : '' }}">
-      <label>How would you like to pay?</label>
-      <div class="auth-plan-grid" role="radiogroup" aria-label="Membership plan">
+      <label>Initial payment</label>
+      <div class="auth-plan-grid" role="radiogroup" aria-label="Initial payment amount">
         @foreach($plans as $plan)
           <label class="auth-plan-option">
             <input type="radio" name="plan_id" value="{{ $plan['id'] }}"
@@ -33,7 +33,7 @@
             <span class="auth-plan-option__card">
               <span>
                 <span class="auth-plan-option__name">{{ $plan['name'] }}</span>
-                <span class="auth-plan-option__meta">Pay now</span>
+                <span class="auth-plan-option__meta">{{ (float) $plan['price'] >= 1000 ? 'Pay the annual fee in full' : 'Partial payment toward the annual fee' }}</span>
               </span>
               <span class="auth-plan-option__price">K{{ number_format($plan['price']) }}</span>
             </span>
@@ -41,8 +41,8 @@
         @endforeach
       </div>
       <p class="auth-plan-note">
-        Your membership runs through 31 December. You may pay in installments —
-        the full amount is due by 30 April.
+        This is one annual membership running through 31 December. K250 and K500
+        are partial payments toward the K1,000 annual fee, which is due by 30 April.
       </p>
       @error('plan_id')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
     </div>

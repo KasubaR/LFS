@@ -12,6 +12,7 @@ use App\Services\LencoService;
 use Database\Seeders\MembershipPlanSeeder;
 use Database\Seeders\SatelliteSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -356,6 +357,205 @@ class MembershipPaymentTest extends TestCase
         $this->actingAs($user)->get('/account')->assertOk();
     }
 
+    private function createActiveMembershipInGracePeriod(User $user): Membership
+    {
+        $plan = MembershipPlan::query()->where('billing_cycle', \App\Enums\BillingCycle::Annual)->first();
+
+        // Active (not Suspended) and still within the grace window — this is
+        // the "voluntary top-up" path: full account access already, the
+        // dashboard just reminds them of the balance (see
+        // MembershipService::findGracePeriodBalanceReminder()).
+        $membership = Membership::query()->create([
+            'id' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'membership_number' => '13658',
+            'status' => MembershipStatus::Active,
+            'current_plan_id' => $plan->id,
+            'approval_status' => 'approved',
+            'approved_by' => 'system:import',
+            'joined_at' => now(),
+            'start_date' => now()->toDateString(),
+            'expiry_date' => now()->addMonths(6)->toDateString(),
+            'grace_period_ends_at' => now()->addMonths(2)->toDateString(),
+        ]);
+
+        MembershipPayment::query()->create([
+            'membership_id' => $membership->id,
+            'plan_id' => $plan->id,
+            'amount' => 1000,
+            'amount_paid' => 250,
+            'currency' => 'ZMW',
+            'payment_gateway' => 'import',
+            'status' => MembershipPaymentStatus::PartiallyPaid,
+        ]);
+
+        return $membership;
+    }
+
+    public function test_active_member_in_grace_period_can_pay_off_the_balance_via_the_dashboard_reminder(): void
+    {
+        // Regression test for the dashboard's "Pay now" reminder link: an
+        // Active (not Suspended) member who's still only PartiallyPaid must
+        // be able to complete the full initiate -> verify payment flow from
+        // /account/balance, not just have the page render.
+        $user = User::factory()->create();
+        $membership = $this->createActiveMembershipInGracePeriod($user);
+
+        $this->mock(LencoService::class, function ($mock) {
+            $mock->shouldReceive('generateReference')->andReturn('LFS-REF-GRACE-TOPUP');
+            $mock->shouldReceive('initiateMobileMoneyPayment')
+                ->once()
+                ->withArgs(fn ($orderData) => (float) $orderData['totals']['total'] === 750.0)
+                ->andReturn([
+                    'transactionId' => 'txn-grace', 'lencoReference' => 'lenco-grace', 'reference' => 'LFS-REF-GRACE-TOPUP',
+                    'status' => 'pay-offline', 'paymentInstructions' => null, 'paymentUrl' => null, 'expiresAt' => null, 'rawResponse' => [],
+                ]);
+            $mock->shouldReceive('verifyPayment')->once()->with('LFS-REF-GRACE-TOPUP', true)->andReturn([
+                'status' => 'successful', 'internalStatus' => 'completed', 'rawResponse' => [],
+            ]);
+        });
+
+        // Not gated — EnsureBalancePaid only forces Suspended members.
+        $this->actingAs($user)->get('/account')->assertOk();
+
+        $this->actingAs($user)->get('/account/balance')
+            ->assertOk()
+            ->assertSee('account-payment-form', false);
+
+        $this->actingAs($user)->postJson('/account/payment/initiate', [
+            'provider' => 'mtn', 'phone' => '+260971234567',
+        ])->assertOk()->assertJson(['ok' => true, 'reference' => 'LFS-REF-GRACE-TOPUP']);
+
+        $this->actingAs($user)->getJson('/account/payment/verify?reference=LFS-REF-GRACE-TOPUP')
+            ->assertOk()->assertJson(['ok' => true, 'status' => 'completed']);
+
+        $payment = MembershipPayment::query()->where('membership_id', $membership->id)->first();
+        $this->assertSame('1000.00', $payment->amount_paid);
+        $this->assertSame('paid', $payment->status);
+        $this->assertSame(MembershipStatus::Active, $membership->fresh()->status);
+    }
+
+    public function test_second_verify_poll_after_a_resolved_partial_charge_is_safe(): void
+    {
+        // Regression coverage alongside
+        // test_redelivered_webhook_does_not_double_credit_a_partial_charge:
+        // resolveConfirmedCharge() clears payment_reference as part of
+        // crediting a charge, so a member's browser polling
+        // /account/payment/verify?reference=<original> a second time after
+        // that — e.g. a slow tab that already showed the "waiting" state —
+        // must not find a stale row to re-credit. It should 404 cleanly
+        // rather than double-apply the charge or error internally.
+        Carbon::setTestNow('2026-02-01 10:00:00');
+
+        $user = User::factory()->create();
+        $quarterly = MembershipPlan::query()->where('billing_cycle', \App\Enums\BillingCycle::Quarterly)->first();
+        Membership::query()->create([
+            'id' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'membership_number' => 'LFS-000007',
+            'status' => MembershipStatus::Draft,
+            'current_plan_id' => $quarterly->id,
+            'approval_status' => 'pending',
+        ]);
+
+        $this->mock(LencoService::class, function ($mock) {
+            $mock->shouldReceive('generateReference')->andReturn('LFS-REF-VERIFY-DUP');
+            $mock->shouldReceive('initiateMobileMoneyPayment')->once()->andReturn([
+                'transactionId' => 'txn-verify-dup', 'lencoReference' => 'lenco-verify-dup', 'reference' => 'LFS-REF-VERIFY-DUP',
+                'status' => 'pay-offline', 'paymentInstructions' => null, 'paymentUrl' => null, 'expiresAt' => null, 'rawResponse' => [],
+            ]);
+            $mock->shouldReceive('verifyPayment')->once()->with('LFS-REF-VERIFY-DUP', true)->andReturn([
+                'status' => 'successful', 'internalStatus' => 'completed', 'rawResponse' => [],
+            ]);
+        });
+
+        $this->actingAs($user)->postJson('/account/payment/initiate', [
+            'provider' => 'mtn', 'phone' => '+260971234567',
+        ])->assertOk();
+
+        // First poll: genuinely credits the 250 that was charged.
+        $this->actingAs($user)->getJson('/account/payment/verify?reference=LFS-REF-VERIFY-DUP')
+            ->assertOk()->assertJson(['status' => 'completed']);
+
+        $payment = MembershipPayment::query()->where('membership_id', function ($q) use ($user) {
+            $q->select('id')->from('memberships')->where('user_id', $user->id);
+        })->first();
+        $this->assertSame('250.00', $payment->amount_paid);
+        $this->assertSame('partially_paid', $payment->status);
+        $this->assertNull($payment->payment_reference);
+
+        // Second poll for the SAME now-cleared reference — Lenco is never
+        // even called again (verifyPayment mocked ->once() above); the
+        // lookup itself must not resolve to the same row.
+        $this->actingAs($user)->getJson('/account/payment/verify?reference=LFS-REF-VERIFY-DUP')
+            ->assertStatus(404);
+
+        $payment->refresh();
+        $this->assertSame('250.00', $payment->amount_paid, 'a repeated verify() poll must not double-credit the same charge');
+
+        Carbon::setTestNow();
+    }
+
+    public function test_failed_top_up_attempt_does_not_corrupt_a_successful_partial_payment(): void
+    {
+        // Regression test: a failed/cancelled callback for a top-up attempt
+        // layered on an already-PartiallyPaid payment used to flip the whole
+        // row to the terminal Failed status via
+        // MembershipPaymentService::markFailed(), destroying the K900
+        // already successfully paid. It must instead only clear the
+        // in-flight attempt and leave the payment retryable.
+        $user = User::factory()->create();
+        $membership = $this->createUnderpaidActiveMembership($user);
+
+        $this->mock(LencoService::class, function ($mock) {
+            $mock->shouldReceive('generateReference')->andReturn('LFS-REF-TOPUP-FAIL', 'LFS-REF-TOPUP-RETRY');
+            $call = 0;
+            $mock->shouldReceive('initiateMobileMoneyPayment')->twice()->andReturnUsing(function () use (&$call) {
+                $call++;
+                $ref = $call === 1 ? 'LFS-REF-TOPUP-FAIL' : 'LFS-REF-TOPUP-RETRY';
+
+                return [
+                    'transactionId' => 'txn-'.$call,
+                    'lencoReference' => 'lenco-'.$call,
+                    'reference' => $ref,
+                    'status' => 'pay-offline',
+                    'paymentInstructions' => 'Approve on your phone',
+                    'paymentUrl' => null,
+                    'expiresAt' => null,
+                    'rawResponse' => [],
+                ];
+            });
+            $mock->shouldReceive('verifyPayment')->once()->with('LFS-REF-TOPUP-FAIL', true)->andReturn([
+                'status' => 'declined',
+                'internalStatus' => 'failed',
+                'rawResponse' => [],
+            ]);
+        });
+
+        $this->actingAs($user)->postJson('/account/payment/initiate', [
+            'provider' => 'mtn',
+            'phone' => '+260971234567',
+        ])->assertOk()->assertJson(['ok' => true, 'reference' => 'LFS-REF-TOPUP-FAIL']);
+
+        $this->actingAs($user)->getJson('/account/payment/verify?reference=LFS-REF-TOPUP-FAIL')
+            ->assertOk()
+            ->assertJson(['ok' => true, 'status' => 'failed']);
+
+        $payment = MembershipPayment::query()->where('membership_id', $membership->id)->first();
+        // The 900 already banked survives — the row stays PartiallyPaid, not Failed.
+        $this->assertSame('partially_paid', $payment->status);
+        $this->assertSame('900.00', $payment->amount_paid);
+        $this->assertNull($payment->payment_reference, 'stale reference must be cleared or a retry is blocked');
+        $this->assertNull($payment->pending_charge_amount);
+
+        // Member can retry the top-up — not blocked as "already in progress"
+        // and not blocked because the payment is now terminal.
+        $this->actingAs($user)->postJson('/account/payment/initiate', [
+            'provider' => 'mtn',
+            'phone' => '+260971234567',
+        ])->assertOk()->assertJson(['ok' => true, 'reference' => 'LFS-REF-TOPUP-RETRY']);
+    }
+
     public function test_failed_payment_can_be_retried_with_new_row(): void
     {
         $user = User::factory()->create();
@@ -405,5 +605,135 @@ class MembershipPaymentTest extends TestCase
 
         $this->assertSame(2, MembershipPayment::query()->where('membership_id', $membership->id)->count());
         $this->assertSame(MembershipStatus::PendingPayment, $membership->fresh()->status);
+    }
+
+    public function test_partial_first_payment_can_be_followed_by_a_top_up_without_being_blocked(): void
+    {
+        // Regression test: a stale payment_reference left on the payment row
+        // after a successful partial charge used to make every subsequent
+        // initiate() call 409 with "already in progress" — the member could
+        // never pay the rest. See MembershipPaymentService::resolveConfirmedCharge().
+        Carbon::setTestNow('2026-02-01 10:00:00');
+
+        $user = User::factory()->create();
+        $quarterly = MembershipPlan::query()->where('billing_cycle', \App\Enums\BillingCycle::Quarterly)->first();
+        $membership = Membership::query()->create([
+            'id' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'membership_number' => 'LFS-000005',
+            'status' => MembershipStatus::Draft,
+            'current_plan_id' => $quarterly->id,
+            'approval_status' => 'pending',
+        ]);
+
+        $this->mock(LencoService::class, function ($mock) {
+            $mock->shouldReceive('generateReference')->andReturn('LFS-REF-INSTALLMENT-1', 'LFS-REF-INSTALLMENT-2');
+            $mock->shouldReceive('initiateMobileMoneyPayment')
+                ->once()
+                ->withArgs(fn ($orderData) => (float) $orderData['totals']['total'] === 250.0)
+                ->andReturn([
+                    'transactionId' => 'txn-1', 'lencoReference' => 'lenco-1', 'reference' => 'LFS-REF-INSTALLMENT-1',
+                    'status' => 'pay-offline', 'paymentInstructions' => null, 'paymentUrl' => null, 'expiresAt' => null, 'rawResponse' => [],
+                ]);
+            $mock->shouldReceive('verifyPayment')->once()->with('LFS-REF-INSTALLMENT-1', true)->andReturn([
+                'status' => 'successful', 'internalStatus' => 'completed', 'rawResponse' => [],
+            ]);
+            $mock->shouldReceive('initiateMobileMoneyPayment')
+                ->once()
+                ->withArgs(fn ($orderData) => (float) $orderData['totals']['total'] === 750.0)
+                ->andReturn([
+                    'transactionId' => 'txn-2', 'lencoReference' => 'lenco-2', 'reference' => 'LFS-REF-INSTALLMENT-2',
+                    'status' => 'pay-offline', 'paymentInstructions' => null, 'paymentUrl' => null, 'expiresAt' => null, 'rawResponse' => [],
+                ]);
+            $mock->shouldReceive('verifyPayment')->once()->with('LFS-REF-INSTALLMENT-2', true)->andReturn([
+                'status' => 'successful', 'internalStatus' => 'completed', 'rawResponse' => [],
+            ]);
+        });
+
+        // First installment (250 of the 1000 annual fee).
+        $this->actingAs($user)->postJson('/account/payment/initiate', [
+            'provider' => 'mtn', 'phone' => '+260971234567',
+        ])->assertOk();
+        $this->actingAs($user)->getJson('/account/payment/verify?reference=LFS-REF-INSTALLMENT-1')
+            ->assertOk()->assertJson(['status' => 'completed']);
+
+        $payment = MembershipPayment::query()->where('membership_id', $membership->id)->first();
+        $this->assertSame(MembershipStatus::Active, $membership->fresh()->status);
+        $this->assertSame('250.00', $payment->amount_paid);
+        $this->assertSame('partially_paid', $payment->status);
+        $this->assertNull($payment->payment_reference, 'stale reference must be cleared or the next top-up is blocked');
+
+        // Paying the rest must NOT 409 as "already in progress".
+        $this->actingAs($user)->postJson('/account/payment/initiate', [
+            'provider' => 'mtn', 'phone' => '+260971234567',
+        ])->assertOk()->assertJson(['ok' => true, 'reference' => 'LFS-REF-INSTALLMENT-2']);
+
+        $this->actingAs($user)->getJson('/account/payment/verify?reference=LFS-REF-INSTALLMENT-2')
+            ->assertOk()->assertJson(['status' => 'completed']);
+
+        $payment->refresh();
+        $this->assertSame('1000.00', $payment->amount_paid);
+        $this->assertSame('paid', $payment->status);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_redelivered_webhook_does_not_double_credit_a_partial_charge(): void
+    {
+        // Regression test: replaying a confirmation for a payment that's
+        // still non-terminal (PartiallyPaid) after a successful partial
+        // charge used to re-add pending_charge_amount every time, turning a
+        // single K250 charge into K500+ with no further money actually
+        // charged. See MembershipPaymentService::resolveConfirmedCharge().
+        Carbon::setTestNow('2026-02-01 10:00:00');
+
+        $user = User::factory()->create();
+        $quarterly = MembershipPlan::query()->where('billing_cycle', \App\Enums\BillingCycle::Quarterly)->first();
+        $membership = Membership::query()->create([
+            'id' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'membership_number' => 'LFS-000006',
+            'status' => MembershipStatus::Draft,
+            'current_plan_id' => $quarterly->id,
+            'approval_status' => 'pending',
+        ]);
+
+        $this->mock(LencoService::class, function ($mock) {
+            $mock->shouldReceive('generateReference')->andReturn('LFS-REF-DUP');
+            $mock->shouldReceive('initiateMobileMoneyPayment')->once()->andReturn([
+                'transactionId' => 'txn-dup', 'lencoReference' => 'lenco-dup', 'reference' => 'LFS-REF-DUP',
+                'status' => 'pay-offline', 'paymentInstructions' => null, 'paymentUrl' => null, 'expiresAt' => null, 'rawResponse' => [],
+            ]);
+            $mock->shouldReceive('verifyWebhookSignature')->twice()->andReturn(true);
+            $mock->shouldReceive('parseWebhookPayload')->twice()->andReturn([
+                'reference' => 'LFS-REF-DUP',
+                'lencoReference' => 'lenco-dup',
+                'transactionId' => 'txn-dup',
+                'status' => 'successful',
+            ]);
+            $mock->shouldReceive('mapLencoStatus')->twice()->with('successful')->andReturn('completed');
+        });
+
+        $this->actingAs($user)->postJson('/account/payment/initiate', [
+            'provider' => 'mtn', 'phone' => '+260971234567',
+        ])->assertOk();
+
+        $webhookBody = ['data' => ['reference' => 'LFS-REF-DUP', 'status' => 'successful']];
+
+        // First delivery: genuinely credits the 250 that was charged.
+        $this->postJson('/account/payment/webhook', $webhookBody)->assertOk();
+
+        $payment = MembershipPayment::query()->where('membership_id', $membership->id)->first();
+        $this->assertSame('250.00', $payment->amount_paid);
+
+        // Redelivered webhook for the SAME already-processed attempt — must
+        // be a no-op, not credit another 250.
+        $this->postJson('/account/payment/webhook', $webhookBody)->assertOk();
+
+        $payment->refresh();
+        $this->assertSame('250.00', $payment->amount_paid, 'a redelivered webhook must not double-credit the same charge');
+        $this->assertSame('partially_paid', $payment->status);
+
+        Carbon::setTestNow();
     }
 }

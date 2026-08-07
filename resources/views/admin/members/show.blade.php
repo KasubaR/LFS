@@ -23,7 +23,11 @@ $paymentBadge = fn (?string $status) => match ($status) {
     default => 'muted',
 };
 
-$cancellableStatuses = ['draft', 'pending_payment', 'active', 'suspended'];
+// Mirrors MembershipStatus::TRANSITIONS — every status that enum permits
+// transitioning to Cancelled must offer the cancel action here, including
+// Expired (a member can still be cancelled outright after their year lapses
+// instead of just left to sit as Expired).
+$cancellableStatuses = ['draft', 'pending_payment', 'active', 'suspended', 'expired'];
 @endphp
 
 <div class="admin-page-header">
@@ -96,7 +100,7 @@ $cancellableStatuses = ['draft', 'pending_payment', 'active', 'suspended'];
             <thead>
               <tr>
                 <th>Number</th>
-                <th>Plan</th>
+                <th>Payment option</th>
                 <th>Status</th>
                 <th>Coverage</th>
                 <th>Payment</th>

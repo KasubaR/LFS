@@ -139,8 +139,12 @@ class PollPendingPaymentsCommand extends Command
         MembershipService $membershipService,
         Carbon $cutoff,
     ): array {
+        // 'partially_paid' is included too — a stuck top-up attempt (the
+        // payment's own webhook missed) is the same "recover from a missed
+        // webhook" scenario this command exists for, just on a payment that
+        // already has some money against it.
         $stuck = MembershipPayment::query()
-            ->where('status', 'pending')
+            ->whereIn('status', ['pending', 'partially_paid'])
             ->whereNotNull('payment_reference')
             ->where('created_at', '<', $cutoff)
             ->limit(self::BATCH_LIMIT)
@@ -184,12 +188,21 @@ class PollPendingPaymentsCommand extends Command
                 continue;
             }
 
+            $paymentArray = $membershipPayments->findById((int) $payment->id);
+            $resolvedCharge = $paymentArray !== null ? $membershipPayments->resolveConfirmedCharge($paymentArray) : null;
+
+            if ($resolvedCharge === null) {
+                // Nothing pending to credit — already processed by a webhook/
+                // verify() call that beat this poller to it. Not an error.
+                continue;
+            }
+
             try {
-                $membershipService->handlePaymentUpdate((int) $payment->id, (float) $payment->amount, [
+                $membershipService->handlePaymentUpdate((int) $payment->id, $resolvedCharge['amountPaid'], array_merge($resolvedCharge['extra'], [
                     'paidAt' => now(),
                     'lencoStatus' => $result['status'],
                     'lencoResponse' => $result['rawResponse'] ?? [],
-                ]);
+                ]));
                 $resolved++;
             } catch (Throwable $e) {
                 Log::warning('[PollPendingPaymentsCommand] membership activation failed', [

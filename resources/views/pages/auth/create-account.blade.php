@@ -3,7 +3,7 @@
 @section('content')
 <x-auth-form-card
   auth-title="Create Account"
-  auth-subtitle="Join Lusaka Fitness Squad. Create your account, then verify your email to choose a membership plan."
+  auth-subtitle="Join Lusaka Fitness Squad. Create your account, then verify your email to select an initial payment amount for annual membership."
   :status="$status ?? null">
 
   <form action="{{ url('/create-account') }}" method="post" class="space-y-4" novalidate>

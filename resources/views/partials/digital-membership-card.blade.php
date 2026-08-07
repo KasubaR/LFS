@@ -64,8 +64,8 @@
         <dd>{{ $satelliteName }}</dd>
       </div>
       <div>
-        <dt>Plan</dt>
-        <dd>{{ $membership->plan?->name ?? '—' }}</dd>
+        <dt>Membership</dt>
+        <dd>Annual</dd>
       </div>
     </dl>
 

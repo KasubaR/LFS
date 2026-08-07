@@ -294,6 +294,23 @@ class MemberVerificationApiTest extends TestCase
             ->assertJsonPath('data.status', 'pending_payment');
     }
 
+    public function test_suspended_membership_reports_pending_payment_not_expired(): void
+    {
+        // Suspended still belongs to the current membership year — it needs
+        // its outstanding balance paid, not a fresh renewal — so it must not
+        // be lumped in with a genuinely Expired membership (see
+        // MemberVerificationService::statusFor()).
+        $this->makeMembership([
+            'status' => MembershipStatus::Suspended,
+            'expiry_date' => now()->addMonths(6)->toDateString(),
+        ]);
+
+        $this->verify(['membership_number' => 'LFS-000412', 'surname' => 'Mwale'])
+            ->assertOk()
+            ->assertJsonPath('data.is_member', false)
+            ->assertJsonPath('data.status', 'pending_payment');
+    }
+
     public function test_active_status_past_expiry_reports_expired(): void
     {
         // Row never swept by membership:expire — the date is what counts.

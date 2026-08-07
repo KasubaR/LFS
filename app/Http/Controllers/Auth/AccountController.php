@@ -151,7 +151,7 @@ class AccountController extends Controller
                 ? $membership->expiry_date->format('j M Y')
                 : '—',
             'satelliteName' => $user->satellite?->name ?? '—',
-            'planName' => $membership->plan?->name ?? '—',
+            'planName' => 'Annual Membership',
             'qrDataUri' => $this->membershipCardService->qrPngDataUri($membership),
         ])->setPaper('a4');
 
@@ -232,7 +232,12 @@ class AccountController extends Controller
             return $user;
         }
 
-        $outstanding = $this->membershipService->findOutstandingBalancePayment((int) $user->id);
+        // Suspended members are forced here; Active members within the grace
+        // period can also land here voluntarily via the dashboard's "Pay now"
+        // reminder link — mirrors MembershipPaymentController::initiate()'s
+        // same two-source lookup.
+        $outstanding = $this->membershipService->findOutstandingBalancePayment((int) $user->id)
+            ?? $this->membershipService->findGracePeriodBalanceReminder((int) $user->id);
         if ($outstanding === null) {
             // Nothing owed (or it's since been paid) — nothing to show here.
             return redirect()->route('account');
@@ -555,10 +560,15 @@ class AccountController extends Controller
     {
         $priority = [
             MembershipStatus::Active => 0,
-            MembershipStatus::PendingPayment => 1,
-            MembershipStatus::Draft => 2,
-            MembershipStatus::Expired => 3,
-            MembershipStatus::Cancelled => 4,
+            // Suspended still needs the member's attention (pay the full
+            // balance to reinstate — see EnsureBalancePaid) and is the
+            // current-cycle record, so it outranks an older Expired/Cancelled
+            // membership from a prior cycle just like Active does.
+            MembershipStatus::Suspended => 1,
+            MembershipStatus::PendingPayment => 2,
+            MembershipStatus::Draft => 3,
+            MembershipStatus::Expired => 4,
+            MembershipStatus::Cancelled => 5,
         ];
 
         return Membership::query()

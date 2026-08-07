@@ -33,8 +33,8 @@ class MembershipApplicationController extends Controller
         }
 
         return view('pages.auth.choose-membership', $this->signupViewData([
-            'title' => 'Choose Membership',
-            'description' => 'Select your nearest satellite and LFS membership plan.',
+            'title' => 'Annual Membership',
+            'description' => 'Select your nearest satellite and initial payment amount.',
             'page' => 'auth',
             'satellites' => $this->satelliteService->getActiveSatellites(),
             'plans' => $this->planService->getActivePlans(),
@@ -66,6 +66,6 @@ class MembershipApplicationController extends Controller
         }
 
         return redirect()->route('account')
-            ->with('auth_status', 'Membership plan selected. You can continue to payment from your account.');
+            ->with('auth_status', 'Initial payment amount selected. You can continue to payment from your account.');
     }
 }

@@ -24,7 +24,7 @@
     <div class="account-empty" role="status">
       <div class="account-empty__icon" aria-hidden="true"><i class="fas fa-receipt"></i></div>
       <h2 class="account-empty__title">No payments yet</h2>
-      <p class="account-empty__text">Once you pay for a membership plan, your payment history will show up here.</p>
+      <p class="account-empty__text">Once you pay toward your annual membership, your payment history will show up here.</p>
     </div>
   @else
     <ul class="account-payment-list">
@@ -49,7 +49,7 @@
               </span>
             </div>
             <p class="account-payment-card__meta">
-              {{ $payment['planName'] ?? 'Membership plan' }}
+              Annual Membership · {{ $payment['planName'] ?? 'Payment' }}
               @if($payment['membershipNumber'])
                 · {{ $payment['membershipNumber'] }}
               @endif

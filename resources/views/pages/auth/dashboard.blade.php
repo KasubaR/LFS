@@ -28,12 +28,12 @@
               @if(count($changePlans ?? []) > 1)
                 <div class="account-change-plan">
                   <p class="auth-account-card__payment-text" style="margin-bottom:0.5rem;">
-                    <strong>1. Choose your plan</strong> — selecting a different plan switches it instantly.
+                    <strong>1. Choose your initial payment</strong> — this changes how much you pay now, not your membership.
                   </p>
                   <form action="{{ url('/account/plan/change') }}" method="post" class="space-y-4" data-auto-submit-on-select>
                     @csrf
                     <div class="form-group{{ $errors->has('plan_id') ? ' form-group--error' : '' }}">
-                      <div class="auth-plan-grid" role="radiogroup" aria-label="Membership plan">
+                      <div class="auth-plan-grid" role="radiogroup" aria-label="Initial payment amount">
                         @foreach($changePlans as $plan)
                           <label class="auth-plan-option">
                             <input type="radio" name="plan_id" value="{{ $plan['id'] }}"
@@ -52,7 +52,7 @@
                     </div>
                     <noscript>
                       <button type="submit" class="btn btn-outline w-full justify-center">
-                        <i class="fas fa-rotate mr-2" aria-hidden="true"></i> Update Plan
+                        <i class="fas fa-rotate mr-2" aria-hidden="true"></i> Update Payment Amount
                       </button>
                     </noscript>
                   </form>
@@ -62,7 +62,7 @@
 
               <p class="auth-account-card__payment-text" style="margin-bottom:0.5rem;">
                 <strong>{{ count($changePlans ?? []) > 1 ? '2. Pay for membership' : 'Pay for membership' }}</strong>
-                — {{ $membership->plan?->name ?? '—' }} (K{{ number_format($chargeAmountNow ?? 0) }} now)
+                — Annual Membership (K{{ number_format($chargeAmountNow ?? 0) }} now)
               </p>
 
               <form id="account-payment-form" data-amount="{{ $chargeAmountNow ?? 0 }}">
@@ -111,12 +111,12 @@
           @if($canRenew)
             <div class="auth-account-card auth-renewal-panel">
               <p class="auth-renewal-panel__text">
-                Your membership has expired. Choose a plan to renew and continue to payment.
+                Your annual membership has expired. Choose how much to pay now to renew.
               </p>
               <form action="{{ url('/account/renew') }}" method="post" class="space-y-4">
                 @csrf
                 <div class="form-group{{ $errors->has('plan_id') ? ' form-group--error' : '' }}">
-                  <div class="auth-plan-grid" role="radiogroup" aria-label="Renewal plan">
+                  <div class="auth-plan-grid" role="radiogroup" aria-label="Renewal initial payment amount">
                     @foreach($renewalPlans as $plan)
                       <label class="auth-plan-option">
                         <input type="radio" name="plan_id" value="{{ $plan['id'] }}"
@@ -132,8 +132,8 @@
                     @endforeach
                   </div>
                   <p class="auth-plan-note">
-                    Your membership runs through 31 December. You may pay in installments —
-                    the full amount is due by 30 April.
+                    Every option renews the same annual membership through 31 December.
+                    K250 and K500 are partial payments toward the annual fee.
                   </p>
                   @error('plan_id')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
                 </div>

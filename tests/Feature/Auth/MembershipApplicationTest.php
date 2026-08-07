@@ -29,8 +29,13 @@ class MembershipApplicationTest extends TestCase
         $response = $this->actingAs($user)->get('/membership/apply');
 
         $response->assertOk();
-        $response->assertSee('Choose Membership', false);
-        $response->assertSee('Membership plan', false);
+        $response->assertSee('Annual Membership', false);
+        $response->assertSee('Initial payment', false);
+        $response->assertSee('K250 initial payment', false);
+        $response->assertSee('K500 initial payment', false);
+        $response->assertSee('Full annual payment', false);
+        $response->assertDontSee('Quarterly', false);
+        $response->assertDontSee('Semi Annual', false);
     }
 
     public function test_verified_user_can_submit_membership_application(): void

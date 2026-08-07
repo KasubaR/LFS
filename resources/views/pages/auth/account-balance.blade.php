@@ -1,10 +1,6 @@
 @extends('layouts.app')
 
 @section('content')
-@php
-  $planName = $membership->plan?->name ?? 'Membership';
-@endphp
-
 <x-account-shell
   active-tab="dashboard"
   title="Outstanding Balance"
@@ -18,7 +14,7 @@
     <div class="auth-account-card auth-account-card--payment">
       <p class="auth-account-card__payment-text">
         @if($membership->status === 'suspended')
-          Your {{ $planName }} membership was suspended because the grace period
+          Your annual membership was suspended because the grace period
           (through 30 April) ended without full payment. You've paid
           K{{ number_format($payment['amountPaid'], 2) }} of the K{{ number_format($payment['amount'], 2) }} annual
           fee — pay the remaining K{{ number_format($balanceOwed, 2) }} with Mobile Money to reactivate it immediately.

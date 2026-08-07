@@ -155,6 +155,14 @@ class MemberDetailTest extends TestCase
             'expiry_date' => now()->subDay()->toDateString(),
         ]);
 
+        // Regression test: the detail page's cancel form used to be hidden
+        // for Expired rows even though MembershipStatus::TRANSITIONS permits
+        // Expired -> Cancelled — the POST below worked, but there was no way
+        // to reach it from the UI. See $cancellableStatuses in show.blade.php.
+        $this->actingAsAdmin()->get('/admin/members/'.$user->id)
+            ->assertOk()
+            ->assertSee('/admin/members/'.$user->id.'/memberships/00000000-0000-4000-8000-000000000032/cancel', false);
+
         $this->actingAsAdmin()->post(
             '/admin/members/'.$user->id.'/memberships/00000000-0000-4000-8000-000000000032/cancel',
             ['reason' => 'Expired cleanup']

@@ -382,6 +382,31 @@ class MembershipLifecycleTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_partial_payment_outside_the_grace_window_does_not_activate_membership(): void
+    {
+        // 15 May: past the grace deadline — no partial-payment allowance is
+        // supposed to reach here (MembershipPaymentController::initiate()
+        // charges the full amount upfront once the window's closed), but
+        // handlePaymentUpdate() must not trust that and activate anyway: an
+        // activation here would stamp a null grace_period_ends_at (see
+        // computeMembershipYearDates()), which SuspendUnpaidMembershipsCommand
+        // filters out entirely — leaving an underpaid membership Active
+        // forever with no way to ever suspend it.
+        Carbon::setTestNow('2026-05-15 10:00:00');
+
+        $created = $this->membershipService->createApplication($this->user->id, $this->annualPlan->id);
+        $submitted = $this->membershipService->submitApplication($created['membershipId']);
+        $this->assertSame(1000.00, $submitted['latestPayment']['amount']);
+
+        $result = $this->membershipService->handlePaymentUpdate($submitted['latestPayment']['id'], 500.00);
+
+        $this->assertSame(MembershipStatus::PendingPayment, $result['status']);
+        $this->assertSame(MembershipPaymentStatus::PartiallyPaid, $result['latestPayment']['status']);
+        $this->assertNull($result['membershipNumber']);
+
+        Carbon::setTestNow();
+    }
+
     public function test_registration_on_grace_deadline_itself_still_gets_the_grace_period(): void
     {
         // 30 April inclusive — the boundary should still count as "within".
@@ -401,6 +426,60 @@ class MembershipLifecycleTest extends TestCase
         $this->assertSame(MembershipStatus::Active, $activated['status']);
         $this->assertSame(MembershipPaymentStatus::Paid, $activated['latestPayment']['status']);
         $this->assertSame('2026-04-30', $activated['gracePeriodEndsAt']);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_registration_on_may_1_is_the_first_day_with_no_grace_period(): void
+    {
+        // The very next day after the 30 April deadline — off-by-one check
+        // against test_registration_on_grace_deadline_itself_still_gets_the_grace_period().
+        Carbon::setTestNow('2026-05-01 00:00:01');
+
+        $created = $this->membershipService->createApplication($this->user->id, $this->annualPlan->id);
+        $submitted = $this->membershipService->submitApplication($created['membershipId']);
+        $this->assertSame(1000.00, $submitted['latestPayment']['amount']);
+
+        $active = $this->membershipService->handlePaymentUpdate($submitted['latestPayment']['id'], 1000.00);
+        $this->assertSame(MembershipStatus::Active, $active['status']);
+        $this->assertNull($active['gracePeriodEndsAt']);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_registration_on_may_31_still_pays_full_price_with_no_grace(): void
+    {
+        // Last day before the 1 June late-joiner cutoff — still full price,
+        // still no grace period. Off-by-one check against
+        // test_late_joiner_registering_after_june_gets_reduced_fee_and_no_grace_period().
+        Carbon::setTestNow('2026-05-31 23:59:00');
+
+        $created = $this->membershipService->createApplication($this->user->id, $this->annualPlan->id);
+        $submitted = $this->membershipService->submitApplication($created['membershipId']);
+
+        $this->assertSame(1000.00, $submitted['latestPayment']['amount']);
+
+        $active = $this->membershipService->handlePaymentUpdate($submitted['latestPayment']['id'], 1000.00);
+        $this->assertSame(MembershipStatus::Active, $active['status']);
+        $this->assertNull($active['gracePeriodEndsAt']);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_registration_on_june_1_is_the_first_day_of_the_reduced_late_joiner_fee(): void
+    {
+        // The exact cutoff instant — annualFeeDue() uses gte(), so this must
+        // already get the reduced fee, not the following day.
+        Carbon::setTestNow('2026-06-01 00:00:00');
+
+        $created = $this->membershipService->createApplication($this->user->id, $this->annualPlan->id);
+        $submitted = $this->membershipService->submitApplication($created['membershipId']);
+
+        $this->assertSame(500.00, $submitted['latestPayment']['amount']);
+
+        $active = $this->membershipService->handlePaymentUpdate($submitted['latestPayment']['id'], 500.00);
+        $this->assertSame(MembershipStatus::Active, $active['status']);
+        $this->assertNull($active['gracePeriodEndsAt']);
 
         Carbon::setTestNow();
     }

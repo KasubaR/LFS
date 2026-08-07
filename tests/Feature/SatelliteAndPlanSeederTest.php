@@ -24,7 +24,7 @@ class SatelliteAndPlanSeederTest extends TestCase
         $this->assertNotNull(Satellite::query()->where('slug', 'virtual')->first());
     }
 
-    public function test_membership_plan_seeder_creates_three_plans(): void
+    public function test_membership_plan_seeder_creates_three_annual_payment_options(): void
     {
         $this->seed(MembershipPlanSeeder::class);
 
@@ -33,14 +33,17 @@ class SatelliteAndPlanSeederTest extends TestCase
         $quarterly = MembershipPlan::query()->where('billing_cycle', BillingCycle::Quarterly)->first();
 
         $this->assertNotNull($annual);
+        $this->assertSame('Full annual payment', $annual->name);
         $this->assertSame(1000.00, (float) $annual->price);
         $this->assertSame(12, $annual->duration_months);
 
         $this->assertNotNull($semiAnnual);
+        $this->assertSame('K500 initial payment', $semiAnnual->name);
         $this->assertSame(500.00, (float) $semiAnnual->price);
         $this->assertSame(6, $semiAnnual->duration_months);
 
         $this->assertNotNull($quarterly);
+        $this->assertSame('K250 initial payment', $quarterly->name);
         $this->assertSame(250.00, (float) $quarterly->price);
         $this->assertSame(3, $quarterly->duration_months);
     }

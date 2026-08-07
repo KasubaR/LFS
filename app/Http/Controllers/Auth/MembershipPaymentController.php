@@ -197,11 +197,14 @@ class MembershipPaymentController extends Controller
             $result = $this->lenco->verifyPayment($reference, true);
 
             if ($result['internalStatus'] === 'completed') {
-                $this->membershipService->handlePaymentUpdate((int) $payment['id'], $this->resolveConfirmedAmountPaid($payment), [
-                    'paidAt' => now(),
-                    'lencoStatus' => $result['status'],
-                    'lencoResponse' => $result['rawResponse'] ?? [],
-                ]);
+                $resolved = $this->paymentService->resolveConfirmedCharge($payment);
+                if ($resolved !== null) {
+                    $this->membershipService->handlePaymentUpdate((int) $payment['id'], $resolved['amountPaid'], array_merge($resolved['extra'], [
+                        'paidAt' => now(),
+                        'lencoStatus' => $result['status'],
+                        'lencoResponse' => $result['rawResponse'] ?? [],
+                    ]));
+                }
             } elseif (in_array($result['internalStatus'], ['failed', 'cancelled'], true)) {
                 $this->paymentService->markFailed((int) $payment['id'], [
                     'lencoStatus' => $result['status'],
@@ -257,24 +260,6 @@ class MembershipPaymentController extends Controller
         return $this->jsonResponse(['ok' => true]);
     }
 
-    /**
-     * A confirmed Lenco charge only ever covers what was actually requested
-     * for it (pendingChargeAmount, set at initiate() time) — add that to
-     * whatever was already paid, rather than assuming the charge cleared the
-     * payment's full amount. Falls back to "pays off the full shortfall" for
-     * older in-flight payments initiated before pendingChargeAmount existed.
-     *
-     * @param  array<string, mixed>  $payment
-     */
-    private function resolveConfirmedAmountPaid(array $payment): float
-    {
-        $alreadyPaid = (float) $payment['amountPaid'];
-        $amount = (float) $payment['amount'];
-        $thisCharge = $payment['pendingChargeAmount'] ?? ($amount - $alreadyPaid);
-
-        return min($amount, round($alreadyPaid + (float) $thisCharge, 2));
-    }
-
     private function ownsPayment(array $payment): bool
     {
         $membership = $this->membershipService->findByMembershipId($payment['membershipId']);
@@ -307,13 +292,16 @@ class MembershipPaymentController extends Controller
         $internalStatus = $this->lenco->mapLencoStatus((string) $payload['status']);
 
         if ($internalStatus === 'completed') {
-            $this->membershipService->handlePaymentUpdate((int) $payment['id'], $this->resolveConfirmedAmountPaid($payment), [
-                'paidAt' => now(),
-                'lencoStatus' => $payload['status'],
-                'webhookReceived' => true,
-                'webhookPayload' => $rawPayload,
-                'webhookReceivedAt' => now(),
-            ]);
+            $resolved = $this->paymentService->resolveConfirmedCharge($payment);
+            if ($resolved !== null) {
+                $this->membershipService->handlePaymentUpdate((int) $payment['id'], $resolved['amountPaid'], array_merge($resolved['extra'], [
+                    'paidAt' => now(),
+                    'lencoStatus' => $payload['status'],
+                    'webhookReceived' => true,
+                    'webhookPayload' => $rawPayload,
+                    'webhookReceivedAt' => now(),
+                ]));
+            }
         } elseif (in_array($internalStatus, ['failed', 'cancelled'], true)) {
             $this->paymentService->markFailed((int) $payment['id'], [
                 'lencoStatus' => $payload['status'],

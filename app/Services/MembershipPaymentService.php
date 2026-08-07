@@ -79,6 +79,7 @@ class MembershipPaymentService
             'webhookReceived' => 'webhook_received',
             'webhookPayload' => 'webhook_payload',
             'webhookReceivedAt' => 'webhook_received_at',
+            'pendingChargeAmount' => 'pending_charge_amount',
             'metadata' => 'metadata',
         ];
 
@@ -104,8 +105,61 @@ class MembershipPaymentService
     }
 
     /**
+     * Resolves how much a just-confirmed Lenco charge should add to a
+     * payment, and the updates that consume it. A confirmed charge only ever
+     * covers what was actually requested for it (pending_charge_amount, set
+     * when the MoMo prompt was sent — see recordGatewayInitiation()) — this
+     * adds that to whatever was already paid, rather than assuming any
+     * successful charge clears the payment in full (a charge can be a
+     * partial installment now, see the Jan-Dec grace-period redesign).
+     *
+     * Returns null when there's nothing pending to credit — i.e.
+     * pending_charge_amount is already null, meaning this confirmation is a
+     * replay/duplicate (a second verify() poll, a redelivered webhook, or
+     * both racing) for an attempt this same method already processed.
+     * Callers must skip crediting entirely in that case, not just skip with
+     * a fallback, or a replay would double-credit the same charge.
+     *
+     * The returned `extra` clears payment_reference and pending_charge_amount
+     * as part of the same update that credits the charge, so (a) a later
+     * top-up isn't blocked by callers' "already in progress" checks against a
+     * stale reference, and (b) a replayed confirmation has nothing left to
+     * double-credit.
+     *
+     * @param  array<string, mixed>  $payment
+     * @return array{amountPaid: float, extra: array<string, mixed>}|null
+     */
+    public function resolveConfirmedCharge(array $payment): ?array
+    {
+        if ($payment['pendingChargeAmount'] === null) {
+            return null;
+        }
+
+        $amountPaid = min(
+            (float) $payment['amount'],
+            round((float) $payment['amountPaid'] + (float) $payment['pendingChargeAmount'], 2)
+        );
+
+        return [
+            'amountPaid' => $amountPaid,
+            'extra' => [
+                'paymentReference' => null,
+                'pendingChargeAmount' => null,
+            ],
+        ];
+    }
+
+    /**
      * Mark a non-terminal payment as failed (gateway declined / cancelled).
      * Membership stays PendingPayment so the member can initiate a fresh attempt.
+     *
+     * A PartiallyPaid payment already has real money credited against it —
+     * a failed/cancelled callback in that state can only be for a top-up
+     * *attempt* layered on top (see resolveConfirmedCharge()), never for the
+     * original payment itself, so it must not flip the whole row to the
+     * terminal Failed status and destroy the successful partial payment.
+     * That case is delegated to clearFailedTopUpAttempt() instead, which
+     * clears the in-flight attempt and leaves the payment retryable.
      *
      * @param  array<string, mixed>  $extra
      */
@@ -114,6 +168,10 @@ class MembershipPaymentService
         $payment = MembershipPayment::query()->find($id);
         if (! $payment || MembershipPaymentStatus::isTerminal($payment->status)) {
             return null;
+        }
+
+        if ($payment->status === MembershipPaymentStatus::PartiallyPaid) {
+            return $this->clearFailedTopUpAttempt($id, $extra);
         }
 
         $updates = [
@@ -139,6 +197,52 @@ class MembershipPaymentService
         $applied = MembershipPayment::query()
             ->whereKey($id)
             ->whereNotIn('status', MembershipPaymentStatus::TERMINAL)
+            ->update($updates) > 0;
+
+        if (! $applied) {
+            return null;
+        }
+
+        return $this->findById($id);
+    }
+
+    /**
+     * A failed/cancelled gateway callback for a top-up attempt on a payment
+     * that's already PartiallyPaid. Clears the in-flight attempt's gateway
+     * reference and pending_charge_amount — so the "already in progress"
+     * check in MembershipPaymentController::initiate() no longer blocks a
+     * retry, and a later replayed callback has nothing left to double-apply
+     * — while recording the failure details for the audit trail. Status
+     * stays PartiallyPaid throughout; the money already paid is untouched.
+     *
+     * @param  array<string, mixed>  $extra
+     */
+    private function clearFailedTopUpAttempt(int $id, array $extra): ?array
+    {
+        $updates = [
+            'payment_reference' => null,
+            'pending_charge_amount' => null,
+            'updated_at' => now(),
+        ];
+
+        $map = [
+            'lencoStatus' => 'lenco_status',
+            'lencoResponse' => 'lenco_response',
+            'webhookReceived' => 'webhook_received',
+            'webhookPayload' => 'webhook_payload',
+            'webhookReceivedAt' => 'webhook_received_at',
+            'metadata' => 'metadata',
+        ];
+
+        foreach ($map as $camel => $column) {
+            if (array_key_exists($camel, $extra)) {
+                $updates[$column] = $extra[$camel];
+            }
+        }
+
+        $applied = MembershipPayment::query()
+            ->whereKey($id)
+            ->where('status', MembershipPaymentStatus::PartiallyPaid)
             ->update($updates) > 0;
 
         if (! $applied) {

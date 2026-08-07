@@ -12,19 +12,19 @@ class MembershipPlanSeeder extends Seeder
     {
         $plans = [
             [
-                'name' => 'Annual',
+                'name' => 'Full annual payment',
                 'billing_cycle' => BillingCycle::Annual,
                 'price' => 1000.00,
                 'duration_months' => 12,
             ],
             [
-                'name' => 'Semi Annual',
+                'name' => 'K500 initial payment',
                 'billing_cycle' => BillingCycle::SemiAnnual,
                 'price' => 500.00,
                 'duration_months' => 6,
             ],
             [
-                'name' => 'Quarterly',
+                'name' => 'K250 initial payment',
                 'billing_cycle' => BillingCycle::Quarterly,
                 'price' => 250.00,
                 'duration_months' => 3,

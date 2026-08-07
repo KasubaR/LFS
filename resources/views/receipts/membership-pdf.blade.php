@@ -184,7 +184,7 @@
     <tbody>
       <tr>
         <td>
-          {{ $plan->name ?? 'LFS Membership' }} Membership
+          LFS Annual Membership
           @if($payment->status === 'partially_paid')
             <br><span style="color:#b45309;">(partial payment)</span>
           @endif

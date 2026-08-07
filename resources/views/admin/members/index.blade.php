@@ -7,16 +7,17 @@ $activePage  = 'members';
 $breadcrumbs = [];
 $members     = $members ?? [];
 
-$totalCount    = count($members);
-$activeCount   = count(array_filter($members, fn($m) => ($m['status'] ?? '') === 'active'));
-$pendingCount  = count(array_filter($members, fn($m) => ($m['status'] ?? '') === 'pending'));
-$inactiveCount = count(array_filter($members, fn($m) => ($m['status'] ?? '') === 'inactive'));
+$totalCount     = count($members);
+$activeCount    = count(array_filter($members, fn($m) => ($m['status'] ?? '') === 'active'));
+$pendingCount   = count(array_filter($members, fn($m) => ($m['status'] ?? '') === 'pending'));
+$suspendedCount = count(array_filter($members, fn($m) => ($m['status'] ?? '') === 'suspended'));
+$inactiveCount  = count(array_filter($members, fn($m) => ($m['status'] ?? '') === 'inactive'));
 @endphp
 
 <!-- ══════════════════════════════════════════════
      STATS
 ════════════════════════════════════════════════ -->
-<section class="stats-grid" style="grid-template-columns:repeat(4,1fr); margin-bottom:1.5rem;" aria-label="Member stats">
+<section class="stats-grid" style="grid-template-columns:repeat(5,1fr); margin-bottom:1.5rem;" aria-label="Member stats">
   <article class="stat-card stat-card--green">
     <div class="stat-card__icon"><i class="fas fa-users"></i></div>
     <p class="stat-card__label">Total</p>
@@ -31,6 +32,11 @@ $inactiveCount = count(array_filter($members, fn($m) => ($m['status'] ?? '') ===
     <div class="stat-card__icon"><i class="fas fa-user-clock"></i></div>
     <p class="stat-card__label">Pending</p>
     <p class="stat-card__value">{{ number_format($pendingCount) }}</p>
+  </article>
+  <article class="stat-card stat-card--blue">
+    <div class="stat-card__icon"><i class="fas fa-user-lock"></i></div>
+    <p class="stat-card__label">Suspended</p>
+    <p class="stat-card__value">{{ number_format($suspendedCount) }}</p>
   </article>
   <article class="stat-card stat-card--red">
     <div class="stat-card__icon"><i class="fas fa-user-xmark"></i></div>

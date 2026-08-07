@@ -385,11 +385,24 @@ class MembershipService
 
             // A PartiallyPaid first payment still activates the membership —
             // full access during the grace period is the whole point of
-            // letting members pay their annual fee in installments. Only a
-            // Suspended membership requires the FULL balance to reinstate.
+            // letting members pay their annual fee in installments. But that
+            // installment plan only exists within the Jan-Apr grace window
+            // (MembershipPaymentController::initiate() charges the full
+            // amount upfront once it's passed, so this should never see a
+            // PartiallyPaid payment past the window) — checked again here
+            // defensively, because activateOnPayment() stamps grace_period_
+            // ends_at from *now*, and computeMembershipYearDates() leaves it
+            // null past the window, which would let SuspendUnpaidMembershipsCommand's
+            // whereNotNull('grace_period_ends_at') filter skip the membership
+            // forever, i.e. an unpaid balance the member could never be
+            // suspended for. Only a Suspended membership requires the FULL
+            // balance to reinstate.
             if (
                 $membership->status === MembershipStatus::PendingPayment
-                && in_array($payment['status'], [MembershipPaymentStatus::Paid, MembershipPaymentStatus::PartiallyPaid], true)
+                && (
+                    $payment['status'] === MembershipPaymentStatus::Paid
+                    || ($payment['status'] === MembershipPaymentStatus::PartiallyPaid && $this->isWithinGraceWindow())
+                )
             ) {
                 $this->activateOnPayment($membership, $payment);
                 $membership->refresh();
