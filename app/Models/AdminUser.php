@@ -17,10 +17,13 @@ class AdminUser extends Authenticatable
         'role',
         'is_active',
         'last_login_at',
+        'totp_secret',
+        'totp_confirmed_at',
     ];
 
     protected $hidden = [
         'password',
+        'totp_secret',
     ];
 
     protected function casts(): array
@@ -29,6 +32,7 @@ class AdminUser extends Authenticatable
             'password' => 'hashed',
             'is_active' => 'boolean',
             'last_login_at' => 'datetime',
+            'totp_confirmed_at' => 'datetime',
         ];
     }
 
@@ -56,6 +60,23 @@ class AdminUser extends Authenticatable
     public function isReadOnlyAuditor(): bool
     {
         return $this->role === AdminRole::ReadOnlyAuditor;
+    }
+
+    public function requiresTotp(): bool
+    {
+        // Per the elections brief, every admin role with access to election
+        // data needs 2FA — not just the roles that can write to it. Election
+        // Observer is read-only but still an elections-facing admin role.
+        return in_array($this->role, [
+            AdminRole::ElectoralCommission,
+            AdminRole::ElectionObserver,
+            AdminRole::SuperAdmin,
+        ], true);
+    }
+
+    public function hasTotpEnabled(): bool
+    {
+        return $this->totp_secret !== null && $this->totp_confirmed_at !== null;
     }
 
     /**

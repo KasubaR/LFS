@@ -11,6 +11,10 @@
   $avatarUrl = $user?->avatarUrl();
   $initials = $user?->initials() ?? 'LF';
   $statusBadge = 'pending';
+  // Pages that don't track a membership in their view data (e.g. elections)
+  // pass no `membership` prop at all, so both of these must have a default
+  // outside the `if` below rather than only being set inside it.
+  $graceReminder = null;
   if ($membership) {
       $statusBadge = match ($membership->status) {
           'active' => 'active',
@@ -24,7 +28,7 @@
   // A non-blocking "balance due by 30 April" reminder during the grace
   // period — PartiallyPaid-but-still-Active memberships get full account
   // access (no gate), so this is purely informational.
-  $graceReminder = ($membership && $membership->status === 'active')
+  $graceReminder = $membership->status === 'active'
       ? app(\App\Services\MembershipService::class)->findGracePeriodBalanceReminder($user->id)
       : null;
   }
@@ -35,6 +39,7 @@
       'wishlist' => 'Wishlist',
       'payments' => 'Payments',
       'documents' => 'Documents',
+      'elections' => 'Elections',
       'settings' => 'Settings',
   ];
   $tabRoutes = [
@@ -43,6 +48,7 @@
       'wishlist' => 'account.wishlist',
       'payments' => 'account.payments',
       'documents' => 'account.documents',
+      'elections' => 'account.elections',
       'settings' => 'account.settings',
   ];
   $tabLabel = $tabLabels[$activeTab] ?? 'Account';

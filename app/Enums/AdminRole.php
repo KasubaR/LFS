@@ -16,6 +16,10 @@ class AdminRole
 
     public const ReadOnlyAuditor = 'read_only_auditor';
 
+    public const ElectoralCommission = 'electoral_commission';
+
+    public const ElectionObserver = 'election_observer';
+
     /** @var list<string> */
     public const ALL = [
         self::SuperAdmin,
@@ -24,6 +28,8 @@ class AdminRole
         self::EventsOfficer,
         self::SatelliteAdministrator,
         self::ReadOnlyAuditor,
+        self::ElectoralCommission,
+        self::ElectionObserver,
     ];
 
     /**
@@ -36,6 +42,8 @@ class AdminRole
         self::EventsOfficer => 'Events Officer',
         self::SatelliteAdministrator => 'Satellite Administrator',
         self::ReadOnlyAuditor => 'Read-only Auditor',
+        self::ElectoralCommission => 'Electoral Commission',
+        self::ElectionObserver => 'Election Observer',
     ];
 
     public static function label(string $role): string

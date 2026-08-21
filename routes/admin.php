@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\BlogController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DocumentController;
+use App\Http\Controllers\Admin\ElectionController;
 use App\Http\Controllers\Admin\EventController;
 use App\Http\Controllers\Admin\FaqController;
 use App\Http\Controllers\Admin\GalleryController;
@@ -26,6 +27,10 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
     // ── Auth (login slug + logout bypass the auth guard inside EnsureAdminAuthenticated) ──
     Route::get($loginSlug, [AuthController::class, 'showLogin']);
     Route::post($loginSlug, [AuthController::class, 'login']);
+    Route::get($loginSlug.'/2fa', [AuthController::class, 'showTotpChallenge']);
+    Route::post($loginSlug.'/2fa', [AuthController::class, 'verifyTotp']);
+    Route::get($loginSlug.'/2fa/setup', [AuthController::class, 'showTotpSetup']);
+    Route::post($loginSlug.'/2fa/setup', [AuthController::class, 'confirmTotpSetup']);
     Route::get('logout', [AuthController::class, 'logout']);
 
     // ── Root redirects ───────────────────────────────────────────────────────────────
@@ -171,6 +176,7 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
         Route::post('{id}/edit', [AdminUserController::class, 'update'])->where('id', '[0-9]+');
         Route::post('{id}/deactivate', [AdminUserController::class, 'deactivate'])->where('id', '[0-9]+');
         Route::post('{id}/activate', [AdminUserController::class, 'activate'])->where('id', '[0-9]+');
+        Route::post('{id}/reset-totp', [AdminUserController::class, 'resetTotp'])->where('id', '[0-9]+');
     });
 
     // ── Members ──────────────────────────────────────────────────────────────────────
@@ -206,5 +212,46 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
         Route::get('/', [OrderController::class, 'index']);
         Route::get('{id}', [OrderController::class, 'show'])->where('id', '[0-9]+');
         Route::post('{id}/status', [OrderController::class, 'updateStatus'])->where('id', '[0-9]+');
+    });
+
+    // ── Elections ────────────────────────────────────────────────────────────────────
+    Route::prefix('elections')->middleware('admin.can:elections,read')->group(function (): void {
+        $uuid = '[a-f0-9\-]{36}';
+        Route::get('/', [ElectionController::class, 'index']);
+        Route::get('create', [ElectionController::class, 'create']);
+        Route::post('create', [ElectionController::class, 'store']);
+        Route::get('roll-template', [ElectionController::class, 'downloadRollTemplate']);
+        Route::get('users/search', [ElectionController::class, 'searchUsers']);
+        Route::get('{id}', [ElectionController::class, 'show'])->where('id', $uuid);
+        Route::post('{id}', [ElectionController::class, 'update'])->where('id', $uuid);
+        Route::post('{id}/positions', [ElectionController::class, 'storePosition'])->where('id', $uuid);
+        Route::post('{id}/positions/{positionId}/delete', [ElectionController::class, 'destroyPosition'])
+            ->where(['id' => $uuid, 'positionId' => $uuid]);
+        Route::post('{id}/positions/{positionId}/candidates', [ElectionController::class, 'storeCandidate'])
+            ->where(['id' => $uuid, 'positionId' => $uuid]);
+        Route::post('{id}/candidates/{candidateId}/delete', [ElectionController::class, 'destroyCandidate'])
+            ->where(['id' => $uuid, 'candidateId' => $uuid]);
+        Route::post('{id}/roll/import', [ElectionController::class, 'importRoll'])->where('id', $uuid);
+        Route::post('{id}/roll/lock', [ElectionController::class, 'lockRoll'])->where('id', $uuid);
+        Route::post('{id}/roll/unlock', [ElectionController::class, 'unlockRoll'])->where('id', $uuid);
+        Route::post('{id}/voters/{voterId}/exclude', [ElectionController::class, 'excludeVoter'])
+            ->where(['id' => $uuid, 'voterId' => $uuid]);
+        Route::post('{id}/voters/{voterId}/link', [ElectionController::class, 'linkVoter'])
+            ->where(['id' => $uuid, 'voterId' => $uuid]);
+        Route::post('{id}/proxies', [ElectionController::class, 'approveProxy'])->where('id', $uuid);
+        Route::post('{id}/proxies/{proxyId}/revoke', [ElectionController::class, 'revokeProxy'])
+            ->where(['id' => $uuid, 'proxyId' => $uuid]);
+        Route::post('{id}/ballot/approve', [ElectionController::class, 'approveBallot'])->where('id', $uuid);
+        Route::post('{id}/ballot/unlock', [ElectionController::class, 'unlockBallot'])->where('id', $uuid);
+        Route::post('{id}/early-open-override', [ElectionController::class, 'earlyOpenOverride'])->where('id', $uuid);
+        Route::post('{id}/open', [ElectionController::class, 'open'])->where('id', $uuid);
+        Route::post('{id}/extend', [ElectionController::class, 'extend'])->where('id', $uuid);
+        Route::post('{id}/close', [ElectionController::class, 'close'])->where('id', $uuid);
+        Route::post('{id}/certify', [ElectionController::class, 'certify'])->where('id', $uuid);
+        Route::post('{id}/lock', [ElectionController::class, 'permanentLock'])->where('id', $uuid);
+        Route::post('{id}/quorum/confirm', [ElectionController::class, 'confirmQuorum'])->where('id', $uuid);
+        Route::get('{id}/certificate', [ElectionController::class, 'certificate'])->where('id', $uuid);
+        Route::get('{id}/participation', [ElectionController::class, 'participation'])->where('id', $uuid);
+        Route::post('{id}/complaints', [ElectionController::class, 'storeComplaint'])->where('id', $uuid);
     });
 });

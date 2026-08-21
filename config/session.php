@@ -169,7 +169,11 @@ return [
     |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    // Defaults to secure-only in production even if SESSION_SECURE_COOKIE is
+    // left unset — the elections admin session (and its TOTP state) should
+    // never travel over plain HTTP. Set SESSION_SECURE_COOKIE explicitly to
+    // override either way.
+    'secure' => env('SESSION_SECURE_COOKIE', env('APP_ENV') === 'production'),
 
     /*
     |--------------------------------------------------------------------------

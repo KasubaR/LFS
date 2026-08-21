@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -36,6 +37,16 @@ class AppServiceProvider extends ServiceProvider
         // column under utf8mb4 (1020 bytes). 191 chars keeps every index under
         // that limit regardless of host config.
         Schema::defaultStringLength(191);
+
+        // Generated URLs (redirects, asset links, email links) always come out
+        // https:// in production — including the admin/elections login and
+        // 2FA redirects — even if a proxy in front of the app reports http.
+        // This doesn't reject a plain-HTTP request itself (that's a host/proxy
+        // config concern, see docs/ELECTIONS_RUNBOOK.md), it just stops the
+        // app from ever generating an insecure link.
+        if (app()->environment('production')) {
+            URL::forceScheme('https');
+        }
 
         Password::defaults(fn () => Password::min(8)->mixedCase()->numbers()->symbols());
 

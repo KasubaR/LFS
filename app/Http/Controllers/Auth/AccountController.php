@@ -558,28 +558,10 @@ class AccountController extends Controller
      */
     private function resolveDisplayMembership(int $userId): ?Membership
     {
-        $priority = [
-            MembershipStatus::Active => 0,
-            // Suspended still needs the member's attention (pay the full
-            // balance to reinstate — see EnsureBalancePaid) and is the
-            // current-cycle record, so it outranks an older Expired/Cancelled
-            // membership from a prior cycle just like Active does.
-            MembershipStatus::Suspended => 1,
-            MembershipStatus::PendingPayment => 2,
-            MembershipStatus::Draft => 3,
-            MembershipStatus::Expired => 4,
-            MembershipStatus::Cancelled => 5,
-        ];
-
-        return Membership::query()
-            ->with('plan')
-            ->where('user_id', $userId)
-            ->get()
-            ->sort(function (Membership $a, Membership $b) use ($priority) {
-                $rank = ($priority[$a->status] ?? 99) <=> ($priority[$b->status] ?? 99);
-
-                return $rank !== 0 ? $rank : $b->created_at <=> $a->created_at;
-            })
-            ->first();
+        // Ranking logic now lives in MembershipService::resolveDisplayMembership()
+        // so other account-area controllers (e.g. elections) can show the same
+        // membership card without duplicating — and risking drift from — this
+        // priority order.
+        return $this->membershipService->resolveDisplayMembership($userId);
     }
 }

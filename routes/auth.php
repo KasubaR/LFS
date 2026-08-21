@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\AccountController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\ChangePasswordController;
+use App\Http\Controllers\Auth\ElectionController;
 use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\MembershipApplicationController;
 use App\Http\Controllers\Auth\MembershipPaymentController;
@@ -83,6 +84,22 @@ Route::middleware(['auth', 'verified', 'force.password.change', 'force.profile.c
     Route::get('/account/documents/{id}/download', [AccountController::class, 'downloadDocument'])
         ->where('id', '[0-9a-fA-F\-]{36}')
         ->name('account.documents.download');
+    Route::get('/account/elections', [ElectionController::class, 'index'])->name('account.elections');
+    Route::get('/account/elections/{id}', [ElectionController::class, 'show'])
+        ->where('id', '[0-9a-fA-F\-]{36}')
+        ->name('account.elections.show');
+    Route::post('/account/elections/{id}/check-in', [ElectionController::class, 'checkIn'])
+        ->where('id', '[0-9a-fA-F\-]{36}')
+        ->middleware('throttle:10,1')
+        ->name('account.elections.check-in');
+    Route::post('/account/elections/{id}/entitlements/{entitlementId}/cast', [ElectionController::class, 'cast'])
+        ->where(['id' => '[0-9a-fA-F\-]{36}', 'entitlementId' => '[0-9a-fA-F\-]{36}'])
+        ->middleware('throttle:20,1')
+        ->name('account.elections.cast');
+    Route::post('/account/elections/{id}/complaint', [ElectionController::class, 'complaint'])
+        ->where('id', '[0-9a-fA-F\-]{36}')
+        ->middleware('throttle:5,1')
+        ->name('account.elections.complaint');
     Route::get('/account/wishlist', [AccountController::class, 'wishlist'])->name('account.wishlist');
     Route::post('/account/wishlist', [WishlistController::class, 'store'])
         ->middleware('throttle:30,1')

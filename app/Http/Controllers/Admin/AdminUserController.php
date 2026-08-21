@@ -130,6 +130,22 @@ class AdminUserController extends Controller
     }
 
     /**
+     * Clears an admin's TOTP enrollment so they set it up fresh on next
+     * login — the recovery path when an EC/Super Admin account loses its
+     * authenticator device. Only reachable by Super Admin (admin_users
+     * write), and re-enrollment still requires the account's own password
+     * plus a confirmed 6-digit code, so this alone can't grant access.
+     */
+    public function resetTotp(int $id): RedirectResponse
+    {
+        $admin = AdminUser::query()->findOrFail($id);
+        $admin->forceFill(['totp_secret' => null, 'totp_confirmed_at' => null])->save();
+
+        return redirect('/admin/users')
+            ->with('flash', ['success' => "Two-factor authentication reset for {$admin->name}. They will set it up again on next login."]);
+    }
+
+    /**
      * @param  list<int|string>  $satelliteIds
      */
     private function syncSatellites(AdminUser $admin, string $role, array $satelliteIds): void

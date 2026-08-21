@@ -153,7 +153,7 @@ if (! function_exists('toDateTimeLocal')) {
       </label>
       <input type="datetime-local" id="eventDate" name="eventDate"
              value="{{ toDateTimeLocal($ev['eventDate'] ?? null) }}"
-             style="width:100%; padding:0.6rem 0.85rem; background:var(--black-soft); border:1px solid var(--border-mid); border-radius:8px; color:var(--off-white); font-family:var(--font-body); font-size:0.9rem;" />
+             class="admin-input" />
       <small id="eventDate_hint" style="display:none; margin-top:0.35rem; color:var(--text-dim); font-size:0.8rem;">
         Next occurrence date (optional for recurring events).
       </small>
@@ -291,13 +291,13 @@ if (! function_exists('toDateTimeLocal')) {
         <label class="form-label" for="registrationOpen">Registration opens</label>
         <input type="datetime-local" id="registrationOpen" name="registrationOpen"
                value="{{ toDateTimeLocal($ev['registrationOpen'] ?? null) }}"
-               style="width:100%; padding:0.6rem 0.85rem; background:var(--black-soft); border:1px solid var(--border-mid); border-radius:8px; color:var(--off-white); font-family:var(--font-body); font-size:0.9rem;" />
+               class="admin-input" />
       </div>
       <div class="form-group" style="margin-bottom:1.25rem;">
         <label class="form-label" for="registrationClose">Registration closes</label>
         <input type="datetime-local" id="registrationClose" name="registrationClose"
                value="{{ toDateTimeLocal($ev['registrationClose'] ?? null) }}"
-               style="width:100%; padding:0.6rem 0.85rem; background:var(--black-soft); border:1px solid var(--border-mid); border-radius:8px; color:var(--off-white); font-family:var(--font-body); font-size:0.9rem;" />
+               class="admin-input" />
       </div>
     </div>
 

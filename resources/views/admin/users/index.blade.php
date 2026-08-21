@@ -51,6 +51,12 @@ $users = $users ?? collect();
           <td>{{ $user->last_login_at?->format('j M Y H:i') ?? 'Never' }}</td>
           <td class="cell-actions">
             <a href="/admin/users/{{ $user->id }}/edit" class="admin-btn admin-btn--primary admin-btn--sm">Edit</a>
+            @if($user->requiresTotp() && $user->hasTotpEnabled())
+              <form method="post" action="/admin/users/{{ $user->id }}/reset-totp" onsubmit="return confirm('Reset two-factor authentication for {{ addslashes($user->name) }}? They will need to set it up again on next login.');">
+                @csrf
+                <button type="submit" class="admin-btn admin-btn--sm">Reset 2FA</button>
+              </form>
+            @endif
             @if($user->is_active)
               <form method="post" action="/admin/users/{{ $user->id }}/deactivate" onsubmit="return confirm('Deactivate this admin user?');">
                 @csrf

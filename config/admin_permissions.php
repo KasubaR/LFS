@@ -26,6 +26,7 @@ return [
         'orders',
         'api_clients',
         'admin_users',
+        'elections',
     ],
 
     'matrix' => [
@@ -44,6 +45,7 @@ return [
             'orders' => 'write',
             'api_clients' => 'write',
             'admin_users' => 'write',
+            'elections' => 'write',
         ],
         'finance' => [
             'dashboard' => 'read',
@@ -83,6 +85,14 @@ return [
             'products' => 'read',
             'orders' => 'read',
         ],
+        'electoral_commission' => [
+            'dashboard' => 'read',
+            'elections' => 'write',
+        ],
+        'election_observer' => [
+            'dashboard' => 'read',
+            'elections' => 'read',
+        ],
     ],
 
     /*
@@ -107,6 +117,7 @@ return [
         'orders' => 'orders',
         'api-clients' => 'api_clients',
         'users' => 'admin_users',
+        'elections' => 'elections',
         'profile' => null, // any authenticated admin
     ],
 ];

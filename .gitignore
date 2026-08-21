@@ -19,6 +19,7 @@
 /public/hot
 /public/storage
 /public/uploads/avatars
+/scratchpad
 /public/files/documents/*
 !/public/files/documents/.gitkeep
 /storage/*.key

@@ -74,6 +74,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('membership:suspend-unpaid')->daily();
         $schedule->command('membership:expire')->daily();
         $schedule->command('payments:poll-pending')->everyFiveMinutes();
+        $schedule->command('elections:flush-votes')->everyMinute();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

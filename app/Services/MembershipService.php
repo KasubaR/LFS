@@ -635,6 +635,41 @@ class MembershipService
     }
 
     /**
+     * The one membership row to show a member across their account —
+     * Active/Suspended-current-cycle outrank a stale Expired/Cancelled
+     * record from a prior cycle, and ties break to the most recent. Shared
+     * by every account-area page (dashboard, orders, elections, ...) that
+     * renders the account-shell membership card, so the ranking only lives
+     * in one place.
+     */
+    public function resolveDisplayMembership(int $userId): ?Membership
+    {
+        $priority = [
+            MembershipStatus::Active => 0,
+            // Suspended still needs the member's attention (pay the full
+            // balance to reinstate — see EnsureBalancePaid) and is the
+            // current-cycle record, so it outranks an older Expired/Cancelled
+            // membership from a prior cycle just like Active does.
+            MembershipStatus::Suspended => 1,
+            MembershipStatus::PendingPayment => 2,
+            MembershipStatus::Draft => 3,
+            MembershipStatus::Expired => 4,
+            MembershipStatus::Cancelled => 5,
+        ];
+
+        return Membership::query()
+            ->with('plan')
+            ->where('user_id', $userId)
+            ->get()
+            ->sort(function (Membership $a, Membership $b) use ($priority) {
+                $rank = ($priority[$a->status] ?? 99) <=> ($priority[$b->status] ?? 99);
+
+                return $rank !== 0 ? $rank : $b->created_at <=> $a->created_at;
+            })
+            ->first();
+    }
+
+    /**
      * Public wrapper around annualPricingFor(now()) — used when re-resolving
      * pricing for a fresh Lenco attempt (e.g. retrying after a Failed payment).
      *

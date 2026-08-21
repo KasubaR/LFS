@@ -7,6 +7,7 @@
       'wishlist' => ['label' => 'Wishlist', 'route' => 'account.wishlist', 'icon' => 'fa-heart'],
       'payments' => ['label' => 'Payments', 'route' => 'account.payments', 'icon' => 'fa-receipt'],
       'documents' => ['label' => 'Documents', 'route' => 'account.documents', 'icon' => 'fa-folder-open'],
+      'elections' => ['label' => 'Elections', 'route' => 'account.elections', 'icon' => 'fa-check-to-slot'],
       'settings' => ['label' => 'Settings', 'route' => 'account.settings', 'icon' => 'fa-gear'],
   ];
 @endphp

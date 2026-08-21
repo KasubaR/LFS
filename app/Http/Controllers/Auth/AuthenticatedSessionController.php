@@ -44,6 +44,18 @@ class AuthenticatedSessionController extends Controller
         $user = $this->resolveLoginUser($login);
 
         if ($user === null || ! Auth::attempt(['id' => $user->id, 'password' => $password], $request->boolean('remember'))) {
+            try {
+                app(\App\Services\Election\ElectionAuditService::class)->record(
+                    null,
+                    \App\Enums\ElectionAuditAction::LoginFailed,
+                    'member',
+                    null,
+                    ['login' => str_contains($login, '@') ? strtolower($login) : 'membership_number'],
+                    $request->ip(),
+                );
+            } catch (\Throwable) {
+            }
+
             throw ValidationException::withMessages([
                 'email' => 'These credentials do not match our records.',
             ]);

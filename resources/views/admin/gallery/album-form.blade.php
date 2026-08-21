@@ -69,7 +69,7 @@ $tagsValue = !empty($al['tags']) ? implode(', ', (array)$al['tags']) : '';
       <label class="form-label" for="date">Date</label>
       <input type="date" id="date" name="date"
              value="{{ formatDateInput($al['date'] ?? null) }}"
-             style="width:100%; padding:0.6rem 0.85rem; background:var(--black-soft); border:1px solid var(--border-mid); border-radius:8px; color:var(--off-white); font-family:var(--font-body); font-size:0.9rem;" />
+             class="admin-input" />
     </div>
 
     <!-- Location -->
