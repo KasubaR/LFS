@@ -47,8 +47,11 @@
             <form method="post" action="{{ route('account.elections.cast', [$election->id, $entitlement->id]) }}">
               @csrf
               @foreach($entitlement->position->candidates->where('is_active', true) as $candidate)
-                <label style="display:block;margin:.35rem 0;">
+                <label style="display:flex;align-items:center;gap:.5rem;margin:.35rem 0;">
                   <input type="radio" name="choice" value="candidate:{{ $candidate->id }}" required>
+                  @if($candidate->photo_url)
+                    <img src="{{ $candidate->photo_url }}" alt="{{ $candidate->name }}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;">
+                  @endif
                   {{ $candidate->name }}
                 </label>
               @endforeach

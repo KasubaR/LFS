@@ -308,9 +308,36 @@
       <ul class="election-candidate-list">
         @forelse($position->candidates as $candidate)
           <li class="election-candidate-list__item">
-            <span>{{ $candidate->name }}</span>
+            <span style="display:inline-flex;align-items:center;gap:.5rem;">
+              @if($candidate->photo_url)
+                <img src="{{ $candidate->photo_url }}" alt="{{ $candidate->name }}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">
+              @else
+                <span style="width:36px;height:36px;border-radius:50%;background:#eee;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;color:#999;">N/A</span>
+              @endif
+              {{ $candidate->name }}
+            </span>
             @if($canWrite && $election->isBallotMutable())
-              <form method="post" action="{{ url('/admin/elections/'.$election->id.'/candidates/'.$candidate->id.'/delete') }}">
+              <details style="display:inline-block;margin-left:.5rem;">
+                <summary class="admin-btn admin-btn--sm" style="display:inline-block;cursor:pointer;">Edit</summary>
+                <form method="post" action="{{ url('/admin/elections/'.$election->id.'/candidates/'.$candidate->id) }}" enctype="multipart/form-data" class="election-inline-form" style="margin-top:.5rem;">
+                  @csrf
+                  <div class="form-group">
+                    <label class="admin-label" for="candidate_name_{{ $candidate->id }}">Name</label>
+                    <input id="candidate_name_{{ $candidate->id }}" class="admin-input" name="name" value="{{ $candidate->name }}" required>
+                  </div>
+                  <div class="form-group">
+                    <label class="admin-label" for="candidate_photo_{{ $candidate->id }}">Photo</label>
+                    <input id="candidate_photo_{{ $candidate->id }}" type="file" class="admin-input" name="photo" accept="image/png,image/jpeg,image/webp">
+                  </div>
+                  @if($candidate->photo_url)
+                    <label style="display:block;margin:.35rem 0;">
+                      <input type="checkbox" name="remove_photo" value="1"> Remove current photo
+                    </label>
+                  @endif
+                  <button class="admin-btn admin-btn--sm admin-btn--primary" type="submit">Save</button>
+                </form>
+              </details>
+              <form method="post" action="{{ url('/admin/elections/'.$election->id.'/candidates/'.$candidate->id.'/delete') }}" style="display:inline-block;">
                 @csrf
                 <button class="admin-btn admin-btn--danger admin-btn--sm" type="submit">Remove</button>
               </form>
@@ -322,11 +349,15 @@
       </ul>
 
       @if($canWrite && $election->isBallotMutable())
-        <form method="post" action="{{ url('/admin/elections/'.$election->id.'/positions/'.$position->id.'/candidates') }}" class="election-inline-form">
+        <form method="post" action="{{ url('/admin/elections/'.$election->id.'/positions/'.$position->id.'/candidates') }}" enctype="multipart/form-data" class="election-inline-form">
           @csrf
           <div class="form-group">
             <label class="admin-label" for="candidate_{{ $position->id }}">Add candidate</label>
             <input id="candidate_{{ $position->id }}" class="admin-input" name="name" placeholder="Candidate name" required>
+          </div>
+          <div class="form-group">
+            <label class="admin-label" for="candidate_photo_new_{{ $position->id }}">Photo (optional)</label>
+            <input id="candidate_photo_new_{{ $position->id }}" type="file" class="admin-input" name="photo" accept="image/png,image/jpeg,image/webp">
           </div>
           <button class="admin-btn admin-btn--sm admin-btn--primary" type="submit">Add</button>
         </form>

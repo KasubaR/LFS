@@ -173,10 +173,31 @@ class ElectionController extends Controller
         $admin = $this->assertWrite();
         $election = Election::query()->findOrFail($id);
         $position = ElectionPosition::query()->where('election_id', $id)->findOrFail($positionId);
-        $data = $request->validate(['name' => ['required', 'string', 'max:255']]);
-        $this->elections->addCandidate($election, $position, $data, $admin);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'photo' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ]);
+        $this->elections->addCandidate($election, $position, $data, $admin, $request->file('photo'));
 
         return back()->with('flash', ['success' => 'Candidate added.']);
+    }
+
+    public function updateCandidate(Request $request, string $id, string $candidateId): RedirectResponse
+    {
+        $admin = $this->assertWrite();
+        $election = Election::query()->findOrFail($id);
+        $candidate = ElectionCandidate::query()
+            ->whereHas('position', fn ($q) => $q->where('election_id', $id))
+            ->findOrFail($candidateId);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'photo' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'remove_photo' => ['sometimes', 'boolean'],
+        ]);
+        $data['remove_photo'] = $request->boolean('remove_photo');
+        $this->elections->updateCandidate($election, $candidate, $data, $admin, $request->file('photo'));
+
+        return back()->with('flash', ['success' => 'Candidate updated.']);
     }
 
     public function destroyCandidate(string $id, string $candidateId): RedirectResponse

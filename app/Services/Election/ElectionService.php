@@ -11,6 +11,7 @@ use App\Models\Election;
 use App\Models\ElectionCandidate;
 use App\Models\ElectionPosition;
 use App\Support\Uuid;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
@@ -153,7 +154,7 @@ class ElectionService
     /**
      * @param  array{name: string}  $data
      */
-    public function addCandidate(Election $election, ElectionPosition $position, array $data, AdminUser $admin): ElectionCandidate
+    public function addCandidate(Election $election, ElectionPosition $position, array $data, AdminUser $admin, ?UploadedFile $photo = null): ElectionCandidate
     {
         $this->assertBallotMutable($election);
 
@@ -163,6 +164,7 @@ class ElectionService
             'id' => Uuid::v4(),
             'position_id' => $position->id,
             'name' => $data['name'],
+            'photo_path' => $photo ? $this->storeCandidatePhoto($photo) : null,
             'sort_order' => $max + 1,
             'is_active' => true,
         ]);
@@ -178,13 +180,54 @@ class ElectionService
         return $candidate;
     }
 
+    /**
+     * @param  array{name?: string, remove_photo?: bool}  $data
+     */
+    public function updateCandidate(Election $election, ElectionCandidate $candidate, array $data, AdminUser $admin, ?UploadedFile $photo = null): ElectionCandidate
+    {
+        $this->assertBallotMutable($election);
+
+        $oldPhotoPath = $candidate->photo_path;
+        $newPhotoPath = $oldPhotoPath;
+
+        if ($photo) {
+            $newPhotoPath = $this->storeCandidatePhoto($photo);
+        } elseif (! empty($data['remove_photo'])) {
+            $newPhotoPath = null;
+        }
+
+        $candidate->fill([
+            'name' => $data['name'] ?? $candidate->name,
+            'photo_path' => $newPhotoPath,
+        ])->save();
+
+        if ($newPhotoPath !== $oldPhotoPath && $oldPhotoPath) {
+            $this->deleteCandidatePhoto($oldPhotoPath);
+        }
+
+        $this->audit->record(
+            $election->id,
+            ElectionAuditAction::ElectionUpdated,
+            'admin',
+            (string) $admin->id,
+            ['event' => 'candidate_updated', 'position_id' => $candidate->position_id, 'candidate_id' => $candidate->id, 'name' => $candidate->name],
+        );
+
+        return $candidate;
+    }
+
     public function deleteCandidate(Election $election, ElectionCandidate $candidate, AdminUser $admin): void
     {
         $this->assertBallotMutable($election);
         $candidateId = $candidate->id;
         $positionId = $candidate->position_id;
         $name = $candidate->name;
+        $photoPath = $candidate->photo_path;
         $candidate->delete();
+
+        if ($photoPath) {
+            $this->deleteCandidatePhoto($photoPath);
+        }
 
         $this->audit->record(
             $election->id,
@@ -193,6 +236,48 @@ class ElectionService
             (string) $admin->id,
             ['event' => 'candidate_removed', 'position_id' => $positionId, 'candidate_id' => $candidateId, 'name' => $name],
         );
+    }
+
+    /**
+     * Moves an uploaded candidate photo into the public web root and returns
+     * its public path. The stored filename is derived from the file's
+     * sniffed mime type (not the client-supplied name) and a fresh UUID, so
+     * an attacker cannot plant an executable file in a publicly served
+     * directory via a crafted filename.
+     */
+    private function storeCandidatePhoto(UploadedFile $photo): string
+    {
+        $dir = public_path('images/election-candidates');
+        if (! is_dir($dir)) {
+            mkdir($dir, 0775, true);
+        }
+
+        $allowed = ['jpg', 'jpeg', 'png', 'webp'];
+        $guessed = strtolower((string) ($photo->extension() ?: $photo->guessExtension() ?: ''));
+        $ext = in_array($guessed, $allowed, true) ? $guessed : 'jpg';
+
+        $filename = 'candidate_'.Uuid::v4().'.'.$ext;
+        $photo->move($dir, $filename);
+
+        return '/images/election-candidates/'.$filename;
+    }
+
+    private function deleteCandidatePhoto(string $path): void
+    {
+        $prefix = '/images/election-candidates/';
+        if (str_contains($path, '..') || ! str_starts_with($path, $prefix)) {
+            return;
+        }
+
+        $full = public_path(ltrim($path, '/'));
+        $realFull = realpath($full);
+        $realDir = realpath(public_path(ltrim($prefix, '/')));
+
+        if ($realFull === false || $realDir === false || ! str_starts_with($realFull, $realDir)) {
+            return;
+        }
+
+        @unlink($realFull);
     }
 
     private function assertBallotMutable(Election $election): void

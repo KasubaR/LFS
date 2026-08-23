@@ -17,9 +17,12 @@ class ElectionCandidate extends Model
         'id',
         'position_id',
         'name',
+        'photo_path',
         'sort_order',
         'is_active',
     ];
+
+    protected $appends = ['photo_url'];
 
     protected function casts(): array
     {
@@ -32,5 +35,10 @@ class ElectionCandidate extends Model
     public function position(): BelongsTo
     {
         return $this->belongsTo(ElectionPosition::class, 'position_id');
+    }
+
+    public function getPhotoUrlAttribute(): ?string
+    {
+        return $this->photo_path ? asset($this->photo_path) : null;
     }
 }

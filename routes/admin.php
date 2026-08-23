@@ -229,6 +229,8 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
             ->where(['id' => $uuid, 'positionId' => $uuid]);
         Route::post('{id}/positions/{positionId}/candidates', [ElectionController::class, 'storeCandidate'])
             ->where(['id' => $uuid, 'positionId' => $uuid]);
+        Route::post('{id}/candidates/{candidateId}', [ElectionController::class, 'updateCandidate'])
+            ->where(['id' => $uuid, 'candidateId' => $uuid]);
         Route::post('{id}/candidates/{candidateId}/delete', [ElectionController::class, 'destroyCandidate'])
             ->where(['id' => $uuid, 'candidateId' => $uuid]);
         Route::post('{id}/roll/import', [ElectionController::class, 'importRoll'])->where('id', $uuid);
