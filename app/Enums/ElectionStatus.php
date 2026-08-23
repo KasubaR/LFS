@@ -59,6 +59,29 @@ class ElectionStatus
         return self::LABELS[$status] ?? ucfirst(str_replace('_', ' ', $status));
     }
 
+    /**
+     * Member-facing wording for the account-area election badge. The plain
+     * admin LABELS (e.g. "Open") read fine in a status column next to other
+     * admin controls, but are ambiguous to a voter scanning their own
+     * elections list — "Open" doesn't say open for what. This spells out
+     * what the status means for a voter instead.
+     *
+     * @var array<string, string>
+     */
+    public const MEMBER_LABELS = [
+        self::Scheduled => 'Voting opens soon',
+        self::BallotApproved => 'Voting opens soon',
+        self::Open => 'Voting open now',
+        self::Closed => 'Voting closed',
+        self::Certified => 'Results certified',
+        self::Locked => 'Results certified',
+    ];
+
+    public static function memberLabel(string $status): string
+    {
+        return self::MEMBER_LABELS[$status] ?? self::label($status);
+    }
+
     public static function isMutableBallot(string $status): bool
     {
         return in_array($status, [

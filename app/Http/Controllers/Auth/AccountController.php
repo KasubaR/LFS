@@ -469,27 +469,6 @@ class AccountController extends Controller
             ->with('auth_status', 'Your password has been updated.');
     }
 
-    /**
-     * @param  array<string, mixed>  $data
-     * @return array<string, mixed>
-     */
-    private function accountViewData(array $data, User $user): array
-    {
-        $viewData = $this->authViewData(array_merge([
-            'page' => 'auth',
-            'user' => $user,
-            'membership' => $data['membership'] ?? $this->resolveDisplayMembership((int) $user->id),
-            'bodyClass' => 'page-no-hero page-no-nav',
-            'hideNavbar' => true,
-        ], $data));
-
-        $viewData['extraStyles'] .= '<link rel="stylesheet" href="'.asset('css/dashboard.css').'">';
-        $viewData['extraScripts'] = ($viewData['extraScripts'] ?? '')
-            .'<script src="'.asset('js/account-nav.js').'"></script>';
-
-        return $viewData;
-    }
-
     private function accountUser(): User|RedirectResponse
     {
         $user = Auth::user();

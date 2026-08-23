@@ -42,6 +42,23 @@
     return isAccountUrl(url) && url.href !== window.location.href;
   }
 
+  // How much of the profile card to leave peeking above the tab panel after
+  // a soft-nav swap, so the page doesn't jump straight to "just the tabs" —
+  // it should read the same as landing on a tab via a normal top-of-page load.
+  const PANEL_SCROLL_PEEK_PX = 96;
+
+  function scrollPanelIntoView(panel) {
+    if (!panel) return;
+
+    const rect = panel.getBoundingClientRect();
+    const targetTop = window.scrollY + rect.top - PANEL_SCROLL_PEEK_PX;
+
+    window.scrollTo({
+      top: Math.max(0, targetTop),
+      behavior: 'auto',
+    });
+  }
+
   function scrollActiveAccountTabIntoView(root) {
     const scope = root && root.querySelector ? root : document;
     const list = scope.querySelector('.account-tabs__list');
@@ -138,7 +155,7 @@
         window.history.pushState({}, '', url);
       }
 
-      swapTarget.scrollIntoView({ block: 'start' });
+      scrollPanelIntoView(swapTarget);
       scrollActiveAccountTabIntoView(swapTarget);
       window.dispatchEvent(new CustomEvent('lfs:account-nav', { detail: { container: swapTarget } }));
     } catch (err) {
@@ -302,5 +319,72 @@
 
   window.addEventListener('lfs:account-nav', () => {
     document.body.classList.remove('membership-card-lightbox-open');
+  });
+})();
+
+/* ── Candidate photo lightbox (election ballots) ── */
+(() => {
+  function lightbox() {
+    return document.getElementById('candidate-photo-lightbox');
+  }
+
+  function openPhoto(src, name) {
+    const el = lightbox();
+    if (!el) return;
+
+    const img = el.querySelector('[data-candidate-photo-lightbox-img]');
+    const caption = el.querySelector('[data-candidate-photo-lightbox-caption]');
+    if (img) {
+      img.src = src;
+      img.alt = name || '';
+    }
+    if (caption) caption.textContent = name || '';
+
+    el.classList.remove('is-hidden');
+    el.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('candidate-photo-lightbox-open');
+    el.querySelector('[data-close-candidate-photo]')?.focus();
+  }
+
+  function closePhoto() {
+    const el = lightbox();
+    if (!el || el.classList.contains('is-hidden')) return;
+    el.classList.add('is-hidden');
+    el.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('candidate-photo-lightbox-open');
+  }
+
+  document.addEventListener('click', (e) => {
+    const trigger = e.target.closest('[data-candidate-photo]');
+    if (trigger) {
+      e.preventDefault();
+      openPhoto(trigger.getAttribute('data-candidate-photo'), trigger.getAttribute('data-candidate-name'));
+      return;
+    }
+
+    if (e.target.closest('[data-close-candidate-photo]') || e.target === lightbox()) {
+      e.preventDefault();
+      closePhoto();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closePhoto();
+  });
+
+  // Reflect the checked candidate on its card so the selection is obvious
+  // at a glance, not just via the small radio dot.
+  document.addEventListener('change', (e) => {
+    const radio = e.target.closest('.account-ballot-candidate-card__select input[type="radio"]');
+    if (!radio) return;
+
+    const group = radio.closest('.account-ballot-candidates');
+    group?.querySelectorAll('.account-ballot-candidate-card').forEach((card) => {
+      card.classList.toggle('is-selected', card.contains(radio) && radio.checked);
+    });
+  });
+
+  window.addEventListener('lfs:account-nav', () => {
+    document.body.classList.remove('candidate-photo-lightbox-open');
   });
 })();

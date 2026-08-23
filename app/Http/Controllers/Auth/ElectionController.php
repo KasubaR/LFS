@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Enums\ElectionAuditAction;
 use App\Enums\ElectionStatus;
 use App\Enums\ElectionVoterMatchStatus;
+use App\Http\Controllers\Concerns\ProvidesAuthViews;
 use App\Http\Controllers\Controller;
 use App\Models\Election;
 use App\Models\ElectionBallotEntitlement;
@@ -25,6 +26,8 @@ use Illuminate\Support\Facades\Auth;
 
 class ElectionController extends Controller
 {
+    use ProvidesAuthViews;
+
     public function __construct(
         private readonly ElectionEntitlementService $entitlements,
         private readonly ElectionBallotService $ballots,
@@ -50,12 +53,12 @@ class ElectionController extends Controller
             ->get()
             ->filter(fn (Election $e) => $this->userCanSee($e, (int) $user->id));
 
-        return view('pages.auth.account-elections', [
+        return view('pages.auth.account-elections', $this->accountViewData([
+            'title' => 'Elections',
+            'description' => 'Vote and follow LFS annual and EGM elections.',
             'activeTab' => 'elections',
             'elections' => $elections,
-            'user' => $user,
-            'membership' => $this->membershipService->resolveDisplayMembership((int) $user->id),
-        ]);
+        ], $user));
     }
 
     public function show(string $id): View|RedirectResponse
@@ -89,16 +92,16 @@ class ElectionController extends Controller
             $results = $this->tally->tally($election);
         }
 
-        return view('pages.auth.account-election-show', [
+        return view('pages.auth.account-election-show', $this->accountViewData([
+            'title' => $election->title,
+            'description' => 'Vote and follow this LFS election.',
             'activeTab' => 'elections',
             'election' => $election,
             'entitlements' => $entitlements,
             'attended' => $attended,
             'onRoll' => $onRoll,
             'results' => $results,
-            'user' => $user,
-            'membership' => $this->membershipService->resolveDisplayMembership((int) $user->id),
-        ]);
+        ], $user));
     }
 
     public function checkIn(string $id): RedirectResponse
@@ -107,7 +110,7 @@ class ElectionController extends Controller
         $election = Election::query()->findOrFail($id);
         $this->quorum->checkIn($election, $user);
 
-        return back()->with('status', 'You are checked in to the meeting. Check-in does not cast a vote.');
+        return back()->with('auth_status', 'You are checked in to the meeting. Check-in does not cast a vote.');
     }
 
     public function cast(Request $request, string $id, string $entitlementId): RedirectResponse
@@ -134,7 +137,7 @@ class ElectionController extends Controller
 
         return redirect()
             ->route('account.elections.show', $id)
-            ->with('status', 'Your ballot has been submitted. Thank you.');
+            ->with('auth_status', 'Your ballot has been submitted. Thank you.');
     }
 
     public function complaint(Request $request, string $id): RedirectResponse
@@ -153,7 +156,7 @@ class ElectionController extends Controller
             'status' => 'open',
         ]);
 
-        return back()->with('status', 'Your complaint has been submitted to the Electoral Commission.');
+        return back()->with('auth_status', 'Your complaint has been submitted to the Electoral Commission.');
     }
 
     private function userCanSee(Election $election, int $userId): bool

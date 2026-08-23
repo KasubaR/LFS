@@ -575,7 +575,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initA11y();
 
   // Ripple slight delay so DOM is painted
-  requestAnimationFrame(initRipple);
+  requestAnimationFrame(() => initRipple());
 
 });
 
