@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\ElectionStatus;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Election extends Model
@@ -16,6 +17,7 @@ class Election extends Model
 
     protected $fillable = [
         'id',
+        'meeting_id',
         'title',
         'type',
         'status',
@@ -51,6 +53,11 @@ class Election extends Model
             'quorum_percent' => 'integer',
             'incomplete_ballot_count' => 'integer',
         ];
+    }
+
+    public function meeting(): BelongsTo
+    {
+        return $this->belongsTo(Meeting::class, 'meeting_id');
     }
 
     public function positions(): HasMany

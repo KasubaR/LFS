@@ -5,16 +5,15 @@ namespace App\Services\Election;
 use App\Enums\ElectionAuditAction;
 use App\Enums\ElectionStatus;
 use App\Enums\ElectionType;
-use App\Enums\ElectionVoterMatchStatus;
+use App\Enums\MeetingType;
 use App\Models\AdminUser;
 use App\Models\Election;
 use App\Models\ElectionCandidate;
 use App\Models\ElectionPosition;
+use App\Models\Meeting;
 use App\Support\Uuid;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use RuntimeException;
 
 class ElectionService
 {
@@ -27,15 +26,31 @@ class ElectionService
      */
     public function create(array $data, AdminUser $admin): Election
     {
-        $election = Election::query()->create([
+        $quorumPercent = (int) ($data['quorum_percent'] ?? config('elections.quorum_percent_default', 50));
+        $type = (string) ($data['type'] ?? ElectionType::ByElection);
+
+        // Every election is conducted during a meeting; a by-election is
+        // always held during a virtual EGM per the developer brief, so
+        // that's the closest honest default for meeting type.
+        $meeting = Meeting::query()->create([
             'id' => Uuid::v4(),
             'title' => (string) $data['title'],
-            'type' => (string) ($data['type'] ?? ElectionType::ByElection),
+            'type' => $type === ElectionType::Agm ? MeetingType::Agm : MeetingType::Egm,
+            'description' => $data['description'] ?? null,
+            'scheduled_starts_at' => $data['scheduled_open_at'] ?? null,
+            'quorum_percent' => $quorumPercent,
+        ]);
+
+        $election = Election::query()->create([
+            'id' => Uuid::v4(),
+            'meeting_id' => $meeting->id,
+            'title' => (string) $data['title'],
+            'type' => $type,
             'status' => ElectionStatus::Draft,
             'description' => $data['description'] ?? null,
             'scheduled_open_at' => $data['scheduled_open_at'] ?? null,
             'scheduled_close_at' => $data['scheduled_close_at'] ?? null,
-            'quorum_percent' => (int) ($data['quorum_percent'] ?? config('elections.quorum_percent_default', 50)),
+            'quorum_percent' => $quorumPercent,
         ]);
 
         $this->audit->record(
@@ -58,9 +73,11 @@ class ElectionService
             throw ValidationException::withMessages(['election' => 'This election is permanently locked.']);
         }
 
+        $type = $data['type'] ?? $election->type;
+
         $election->fill([
             'title' => $data['title'] ?? $election->title,
-            'type' => $data['type'] ?? $election->type,
+            'type' => $type,
             'description' => array_key_exists('description', $data) ? $data['description'] : $election->description,
             'scheduled_open_at' => array_key_exists('scheduled_open_at', $data) ? $data['scheduled_open_at'] : $election->scheduled_open_at,
             'scheduled_close_at' => array_key_exists('scheduled_close_at', $data) ? $data['scheduled_close_at'] : $election->scheduled_close_at,
@@ -70,6 +87,17 @@ class ElectionService
         if ($election->status === ElectionStatus::BallotApproved && $election->scheduled_open_at) {
             $election->update(['status' => ElectionStatus::Scheduled]);
         }
+
+        // Older elections created before meetings existed have no linked
+        // meeting to sync — leave them as-is rather than silently creating
+        // one behind an unrelated edit.
+        $election->meeting?->update([
+            'title' => $election->title,
+            'type' => $type === ElectionType::Agm ? MeetingType::Agm : MeetingType::Egm,
+            'description' => $election->description,
+            'scheduled_starts_at' => $election->scheduled_open_at,
+            'quorum_percent' => $election->quorum_percent,
+        ]);
 
         $this->audit->record(
             $election->id,
