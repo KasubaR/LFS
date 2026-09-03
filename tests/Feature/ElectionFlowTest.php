@@ -7,23 +7,26 @@ use App\Enums\ElectionAuditAction;
 use App\Enums\ElectionStatus;
 use App\Enums\ElectionType;
 use App\Enums\ElectionVoterMatchStatus;
+use App\Enums\MeetingType;
 use App\Models\AdminUser;
 use App\Models\Election;
+use App\Models\ElectionAuditLog;
 use App\Models\ElectionCandidate;
 use App\Models\ElectionComplaint;
 use App\Models\ElectionPosition;
 use App\Models\ElectionVote;
 use App\Models\ElectionVoter;
+use App\Models\Meeting;
 use App\Models\User;
 use App\Services\Election\ElectionBallotLockService;
 use App\Services\Election\ElectionBallotService;
-use App\Services\Election\ElectionEntitlementService;
 use App\Services\Election\ElectionLifecycleService;
 use App\Services\Election\ElectionProxyService;
-use App\Services\Election\ElectionQuorumService;
 use App\Services\Election\ElectionRollService;
+use App\Services\Election\ElectionService;
 use App\Services\Election\ElectionTallyService;
 use App\Services\Election\ElectionVoteFlushService;
+use App\Services\Meeting\MeetingQuorumService;
 use App\Support\Uuid;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -50,7 +53,7 @@ class ElectionFlowTest extends TestCase
             'user_id' => $user->id,
         ]);
 
-        $roll = app(\App\Services\Election\ElectionRollService::class);
+        $roll = app(ElectionRollService::class);
         $roll->lock($election->fresh(), $admin);
         $this->assertNotNull($election->fresh()->roll_locked_at);
 
@@ -72,15 +75,15 @@ class ElectionFlowTest extends TestCase
         app(ElectionBallotLockService::class)->approve($election->fresh(), $admin);
         $this->assertNotNull($election->fresh()->ballot_approved_at);
 
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
-        app(\App\Services\Election\ElectionService::class)->addCandidate($election->fresh(), $position, ['name' => 'Late'], $admin);
+        $this->expectException(ValidationException::class);
+        app(ElectionService::class)->addCandidate($election->fresh(), $position, ['name' => 'Late'], $admin);
     }
 
     public function test_ballot_composition_changes_are_audited(): void
     {
         $admin = $this->makeEcAdmin();
         $election = $this->makeElection();
-        $service = app(\App\Services\Election\ElectionService::class);
+        $service = app(ElectionService::class);
 
         // Audit rows share a UUID primary key (not chronologically sortable)
         // and can land in the same created_at second, so each step's new
@@ -88,7 +91,7 @@ class ElectionFlowTest extends TestCase
         // than by ordering.
         $seenIds = [];
         $newEvent = function () use ($election, &$seenIds): string {
-            $rows = \App\Models\ElectionAuditLog::query()
+            $rows = ElectionAuditLog::query()
                 ->where('election_id', $election->id)
                 ->where('action', ElectionAuditAction::ElectionUpdated)
                 ->get(['id', 'metadata']);
@@ -137,10 +140,10 @@ class ElectionFlowTest extends TestCase
         $this->assertDatabaseHas('election_votes', ['election_id' => $election->id]);
         $this->assertDatabaseMissing('election_vote_outbox', ['election_id' => $election->id]);
 
-        $vote = \App\Models\ElectionVote::query()->where('election_id', $election->id)->first();
+        $vote = ElectionVote::query()->where('election_id', $election->id)->first();
         $this->assertNull($vote->getAttribute('user_id') ?? null);
 
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $this->expectException(ValidationException::class);
         $ballots->cast($election, $user, $entitlement->id, [
             'candidate_id' => $candidateId,
             'abstain' => false,
@@ -193,7 +196,7 @@ class ElectionFlowTest extends TestCase
         $this->assertTrue($grantors[0]->fresh()->represented_by_proxy);
 
         // A 6th proxy for the same holder is rejected — max 5 per holder.
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $this->expectException(ValidationException::class);
         $proxies->approve($election->fresh(), $grantors[5], $holder->id, $admin);
     }
 
@@ -239,7 +242,7 @@ class ElectionFlowTest extends TestCase
         ]);
         app(ElectionLifecycleService::class)->open($election->fresh(), $admin);
 
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $this->expectException(ValidationException::class);
         app(ElectionProxyService::class)->revoke($election->fresh(), $proxy, $admin);
     }
 
@@ -267,11 +270,12 @@ class ElectionFlowTest extends TestCase
         ]);
 
         $election->update(['status' => ElectionStatus::Scheduled]);
+        $meeting = $election->fresh()->meeting;
 
-        $quorum = app(ElectionQuorumService::class);
-        $quorum->checkIn($election->fresh(), $attendee);
+        $quorum = app(MeetingQuorumService::class);
+        $quorum->checkIn($meeting->fresh(), $attendee);
 
-        $snapshot = $quorum->snapshot($election->fresh());
+        $snapshot = $quorum->snapshot($meeting->fresh());
 
         // good_standing reflects the roll (matched, non-excluded voter rows),
         // not the attendee/other users' live Membership status.
@@ -283,14 +287,14 @@ class ElectionFlowTest extends TestCase
         $this->assertTrue($snapshot['quorum_met']);
         $this->assertNull($snapshot['quorum_confirmed_at']);
 
-        $confirmed = $quorum->confirmQuorum($election->fresh(), $admin);
+        $confirmed = $quorum->confirmQuorum($meeting->fresh(), $admin);
         $this->assertNotNull($confirmed->quorum_confirmed_at);
 
         // Re-confirming after quorum is already confirmed is fine (idempotent
         // outcome); what matters is the timestamp and audit trail exist.
         $this->assertDatabaseHas('election_audit_logs', [
             'election_id' => $election->id,
-            'action' => \App\Enums\ElectionAuditAction::QuorumConfirmed,
+            'action' => ElectionAuditAction::QuorumConfirmed,
         ]);
     }
 
@@ -310,16 +314,18 @@ class ElectionFlowTest extends TestCase
             'user_id' => $onRoll->id,
         ]);
 
-        $quorum = app(ElectionQuorumService::class);
-        $attendance = $quorum->checkIn($election->fresh(), $onRoll);
+        $meeting = $election->fresh()->meeting;
+
+        $quorum = app(MeetingQuorumService::class);
+        $attendance = $quorum->checkIn($meeting->fresh(), $onRoll);
 
         $this->assertNotNull($attendance->checked_in_at);
         $this->assertDatabaseCount('election_votes', 0);
         $this->assertDatabaseCount('election_vote_outbox', 0);
         $this->assertDatabaseCount('election_ballot_entitlements', 0);
 
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
-        $quorum->checkIn($election->fresh(), $notOnRoll);
+        $this->expectException(ValidationException::class);
+        $quorum->checkIn($meeting->fresh(), $notOnRoll);
     }
 
     public function test_tally_counts_valid_rejected_abstain_incomplete_and_handles_ties(): void
@@ -548,8 +554,16 @@ class ElectionFlowTest extends TestCase
 
     private function makeElection(): Election
     {
+        $meeting = Meeting::query()->create([
+            'id' => Uuid::v4(),
+            'title' => 'Test',
+            'type' => MeetingType::Egm,
+            'quorum_percent' => 50,
+        ]);
+
         return Election::query()->create([
             'id' => Uuid::v4(),
+            'meeting_id' => $meeting->id,
             'title' => 'Test',
             'type' => ElectionType::Egm,
             'status' => ElectionStatus::Draft,
@@ -590,7 +604,7 @@ class ElectionFlowTest extends TestCase
             'is_active' => true,
         ]);
 
-        app(\App\Services\Election\ElectionRollService::class)->lock($election->fresh(), $admin);
+        app(ElectionRollService::class)->lock($election->fresh(), $admin);
         app(ElectionBallotLockService::class)->approve($election->fresh(), $admin);
 
         $election->refresh();

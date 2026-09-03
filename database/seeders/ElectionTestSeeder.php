@@ -6,11 +6,13 @@ use App\Enums\AdminRole;
 use App\Enums\ElectionStatus;
 use App\Enums\ElectionType;
 use App\Enums\ElectionVoterMatchStatus;
+use App\Enums\MeetingType;
 use App\Models\AdminUser;
 use App\Models\Election;
 use App\Models\ElectionCandidate;
 use App\Models\ElectionPosition;
 use App\Models\ElectionVoter;
+use App\Models\Meeting;
 use App\Models\User;
 use App\Support\Uuid;
 use Illuminate\Database\Seeder;
@@ -50,8 +52,18 @@ class ElectionTestSeeder extends Seeder
             ]
         );
 
+        $meeting = Meeting::query()->create([
+            'id' => Uuid::v4(),
+            'title' => 'Test EGM By-election',
+            'type' => MeetingType::Egm,
+            'description' => 'Seeded test meeting for EC UAT.',
+            'scheduled_starts_at' => now()->addDays(3),
+            'quorum_percent' => 50,
+        ]);
+
         $election = Election::query()->create([
             'id' => Uuid::v4(),
+            'meeting_id' => $meeting->id,
             'title' => 'Test EGM By-election',
             'type' => ElectionType::Egm,
             'status' => ElectionStatus::Draft,

@@ -15,8 +15,8 @@ use App\Models\ElectionVoter;
 use App\Services\Election\ElectionAuditService;
 use App\Services\Election\ElectionBallotService;
 use App\Services\Election\ElectionEntitlementService;
-use App\Services\Election\ElectionQuorumService;
 use App\Services\Election\ElectionTallyService;
+use App\Services\Meeting\MeetingQuorumService;
 use App\Services\MembershipService;
 use App\Support\Uuid;
 use Illuminate\Contracts\View\View;
@@ -31,7 +31,7 @@ class ElectionController extends Controller
     public function __construct(
         private readonly ElectionEntitlementService $entitlements,
         private readonly ElectionBallotService $ballots,
-        private readonly ElectionQuorumService $quorum,
+        private readonly MeetingQuorumService $quorum,
         private readonly ElectionTallyService $tally,
         private readonly ElectionAuditService $audit,
         private readonly MembershipService $membershipService,
@@ -80,7 +80,9 @@ class ElectionController extends Controller
         );
 
         $entitlements = $this->entitlements->availableForUser($election, (int) $user->id);
-        $attended = $election->attendances()->where('user_id', $user->id)->exists();
+        $attended = $election->meeting
+            ? $election->meeting->attendances()->where('user_id', $user->id)->exists()
+            : false;
         $onRoll = ElectionVoter::query()
             ->where('election_id', $election->id)
             ->where('user_id', $user->id)
@@ -108,7 +110,12 @@ class ElectionController extends Controller
     {
         $user = Auth::user();
         $election = Election::query()->findOrFail($id);
-        $this->quorum->checkIn($election, $user);
+
+        if (! $election->meeting) {
+            abort(404, 'This election has no associated meeting to check in to.');
+        }
+
+        $this->quorum->checkIn($election->meeting, $user);
 
         return back()->with('auth_status', 'You are checked in to the meeting. Check-in does not cast a vote.');
     }

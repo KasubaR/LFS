@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Enums\ElectionStatus;
 use App\Enums\ElectionType;
 use App\Http\Controllers\Controller;
+use App\Models\AdminUser;
 use App\Models\Election;
 use App\Models\ElectionCandidate;
 use App\Models\ElectionComplaint;
@@ -17,17 +18,23 @@ use App\Services\ContactMessageService;
 use App\Services\Election\ElectionBallotLockService;
 use App\Services\Election\ElectionLifecycleService;
 use App\Services\Election\ElectionProxyService;
-use App\Services\Election\ElectionQuorumService;
 use App\Services\Election\ElectionRollImportService;
 use App\Services\Election\ElectionRollService;
 use App\Services\Election\ElectionService;
 use App\Services\Election\ElectionTallyService;
+use App\Services\Meeting\MeetingQuorumService;
 use App\Support\Uuid;
+use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Contracts\View\View;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class ElectionController extends Controller
 {
@@ -38,7 +45,7 @@ class ElectionController extends Controller
         private readonly ElectionBallotLockService $ballotLock,
         private readonly ElectionProxyService $proxies,
         private readonly ElectionLifecycleService $lifecycle,
-        private readonly ElectionQuorumService $quorum,
+        private readonly MeetingQuorumService $quorum,
         private readonly ElectionTallyService $tally,
         private readonly AdminPermissionService $permissions,
         private readonly ContactMessageService $messages,
@@ -91,6 +98,7 @@ class ElectionController extends Controller
     public function show(string $id): View
     {
         $election = Election::query()->with([
+            'meeting',
             'positions.candidates',
             'voters',
             'proxies.holder',
@@ -99,7 +107,7 @@ class ElectionController extends Controller
             'complaints',
         ])->findOrFail($id);
 
-        $quorum = $this->quorum->snapshot($election);
+        $quorum = $election->meeting ? $this->quorum->snapshot($election->meeting) : null;
         $tally = null;
         if ($election->isClosedOrLater()) {
             $tally = $this->tally->tally($election);
@@ -227,9 +235,9 @@ class ElectionController extends Controller
         ]);
     }
 
-    public function downloadRollTemplate(): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    public function downloadRollTemplate(): BinaryFileResponse
     {
-        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet;
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Voters');
 
@@ -241,7 +249,7 @@ class ElectionController extends Controller
         ]);
         foreach ($headers as $index => $header) {
             $col = $index + 1;
-            $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col).'1';
+            $coord = Coordinate::stringFromColumnIndex($col).'1';
             $sheet->setCellValue($coord, $header);
         }
 
@@ -258,11 +266,11 @@ class ElectionController extends Controller
         foreach ($headers as $index => $header) {
             $value = $examplesByHeader[$header] ?? '';
             $col = $index + 1;
-            $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col).'2';
+            $coord = Coordinate::stringFromColumnIndex($col).'2';
             $sheet->setCellValueExplicit(
                 $coord,
                 $value,
-                \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
+                DataType::TYPE_STRING
             );
             $sheet->getStyle($coord)->getNumberFormat()->setFormatCode('@');
             $sheet->getColumnDimensionByColumn($col)->setAutoSize(true);
@@ -272,7 +280,7 @@ class ElectionController extends Controller
         $xlsx = $tmp.'.xlsx';
         @unlink($tmp);
 
-        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer = new Xlsx($spreadsheet);
         $writer->save($xlsx);
 
         return response()->download(
@@ -424,7 +432,13 @@ class ElectionController extends Controller
     public function confirmQuorum(string $id): RedirectResponse
     {
         $admin = $this->assertWrite();
-        $this->quorum->confirmQuorum(Election::query()->findOrFail($id), $admin);
+        $election = Election::query()->findOrFail($id);
+
+        if (! $election->meeting) {
+            abort(404, 'This election has no associated meeting.');
+        }
+
+        $this->quorum->confirmQuorum($election->meeting, $admin);
 
         return back()->with('flash', ['success' => 'Quorum confirmed.']);
     }
@@ -464,7 +478,7 @@ class ElectionController extends Controller
         return back()->with('flash', ['success' => 'Complaint logged.']);
     }
 
-    public function searchUsers(Request $request): \Illuminate\Http\JsonResponse
+    public function searchUsers(Request $request): JsonResponse
     {
         $q = trim((string) $request->query('q', ''));
         if (strlen($q) < 2) {
@@ -493,7 +507,7 @@ class ElectionController extends Controller
         return $this->permissions->can($admin, 'elections', AdminPermissionService::LEVEL_WRITE);
     }
 
-    private function assertWrite(): \App\Models\AdminUser
+    private function assertWrite(): AdminUser
     {
         $admin = $this->permissions->currentAdmin(request());
         if (! $this->permissions->can($admin, 'elections', AdminPermissionService::LEVEL_WRITE)) {

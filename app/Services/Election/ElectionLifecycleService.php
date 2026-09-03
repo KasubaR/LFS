@@ -161,6 +161,7 @@ class ElectionLifecycleService
         $filename = 'election-participation-'.$election->id.'.csv';
 
         return response()->streamDownload(function () use ($election) {
+            $meeting = $election->meeting;
             $out = fopen('php://output', 'w');
             fputcsv($out, [
                 'membership_number',
@@ -189,8 +190,8 @@ class ElectionLifecycleService
                     ? $election->entitlements()->where('holder_user_id', $voter->user_id)->where('type', 'direct')->whereNotNull('expired_at')->count()
                     : 0;
 
-                $attended = $voter->user_id
-                    ? $election->attendances()->where('user_id', $voter->user_id)->exists()
+                $attended = ($voter->user_id && $meeting)
+                    ? $meeting->attendances()->where('user_id', $voter->user_id)->exists()
                     : false;
 
                 fputcsv($out, [

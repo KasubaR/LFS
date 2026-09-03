@@ -135,6 +135,7 @@
 {{-- Quorum --}}
 <div class="admin-card">
   <p class="admin-card__title">Quorum</p>
+  @if($quorum)
   <div class="election-stats">
     <div class="election-stat">
       <span class="election-stat__label">Good standing</span>
@@ -158,11 +159,14 @@
     <strong>{{ $quorum['quorum_met'] ? 'met' : 'not met' }}</strong>
     · Confirmed: {{ $quorum['quorum_confirmed_at'] ?? '—' }}
   </p>
-  @if($canWrite && $quorum['quorum_met'] && !$election->quorum_confirmed_at)
+  @if($canWrite && $quorum['quorum_met'] && !$election->meeting->quorum_confirmed_at)
     <form method="post" action="{{ url('/admin/elections/'.$election->id.'/quorum/confirm') }}">
       @csrf
       <button class="admin-btn admin-btn--primary" type="submit">Confirm quorum</button>
     </form>
+  @endif
+  @else
+    <p class="dashboard-empty">This election has no associated meeting.</p>
   @endif
 </div>
 
