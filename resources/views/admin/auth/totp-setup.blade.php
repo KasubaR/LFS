@@ -14,7 +14,6 @@ $loginSlug = config('admin.login_slug', 'door');
       </div>
       <h1 class="auth-card__title">Set up two-factor authentication</h1>
       <p class="auth-card__subtitle">
-        Electoral Commission, Election Observer, and Super Admin accounts require 2FA.
         Add this secret in your authenticator app, then enter a 6-digit code to confirm.
       </p>
     </header>

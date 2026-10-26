@@ -62,16 +62,10 @@ class AdminUser extends Authenticatable
         return $this->role === AdminRole::ReadOnlyAuditor;
     }
 
+    /** 2FA is optional: it is only enforced once the admin has enrolled from their profile. */
     public function requiresTotp(): bool
     {
-        // Per the elections brief, every admin role with access to election
-        // data needs 2FA — not just the roles that can write to it. Election
-        // Observer is read-only but still an elections-facing admin role.
-        return in_array($this->role, [
-            AdminRole::ElectoralCommission,
-            AdminRole::ElectionObserver,
-            AdminRole::SuperAdmin,
-        ], true);
+        return $this->hasTotpEnabled();
     }
 
     public function hasTotpEnabled(): bool

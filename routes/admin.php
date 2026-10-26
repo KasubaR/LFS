@@ -40,6 +40,8 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
     // ── Profile (any authenticated admin) ────────────────────────────────────────────
     Route::get('profile', [ProfileController::class, 'edit']);
     Route::post('profile', [ProfileController::class, 'update']);
+    Route::post('profile/2fa/enable', [ProfileController::class, 'enableTotp']);
+    Route::post('profile/2fa/disable', [ProfileController::class, 'disableTotp']);
 
     // ── Dashboard & activity ───────────────────────────────────────────────────────────
     Route::middleware('admin.can:dashboard,read')->group(function (): void {

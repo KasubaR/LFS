@@ -68,4 +68,28 @@ $admin = $admin ?? null;
   </form>
 </div>
 
+<div class="admin-form-card" style="margin-top:1.5rem;">
+  <h3 style="margin-bottom:.5rem;font-size:1rem;">Two-factor authentication</h3>
+  @if($admin?->hasTotpEnabled())
+    <p style="margin-bottom:1rem;opacity:.8;">Two-factor authentication is <strong>on</strong>. You will be asked for a code from your authenticator app each time you sign in.</p>
+    <form method="post" action="{{ url('/admin/profile/2fa/disable') }}">
+      @csrf
+      <div class="form-group{{ $errors->has('totp_password') ? ' form-group--error' : '' }}">
+        <label for="totp_password" class="admin-label">Confirm your password to turn it off</label>
+        <input type="password" id="totp_password" name="password" class="admin-input" autocomplete="current-password" required>
+        @error('totp_password')
+        <p class="form-group__error" role="alert">{{ $message }}</p>
+        @enderror
+      </div>
+      <button type="submit" class="admin-btn admin-btn--danger">Turn off 2FA</button>
+    </form>
+  @else
+    <p style="margin-bottom:1rem;opacity:.8;">Optional. Add an authenticator app (such as Google Authenticator) for extra protection when you sign in.</p>
+    <form method="post" action="{{ url('/admin/profile/2fa/enable') }}">
+      @csrf
+      <button type="submit" class="admin-btn admin-btn--primary">Turn on 2FA</button>
+    </form>
+  @endif
+</div>
+
 @endsection

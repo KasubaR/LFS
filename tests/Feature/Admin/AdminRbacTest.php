@@ -44,39 +44,42 @@ class AdminRbacTest extends TestCase
         $this->assertSame($admin->id, session(config('admin.session_user_key')));
     }
 
-    public function test_electoral_commission_login_requires_totp_setup(): void
+    public function test_totp_is_optional_so_election_roles_log_in_without_it(): void
     {
-        $this->makeAdminUser([
-            'email' => 'ec-login@lfs.test',
-            'password' => 'secret-pass-1',
-            'role' => AdminRole::ElectoralCommission,
-        ]);
+        foreach ([AdminRole::ElectoralCommission, AdminRole::ElectionObserver, AdminRole::SuperAdmin] as $i => $role) {
+            $this->makeAdminUser([
+                'email' => "optional-totp-{$i}@lfs.test",
+                'password' => 'secret-pass-1',
+                'role' => $role,
+            ]);
 
-        $response = $this->post($this->adminLoginPath(), [
-            'email' => 'ec-login@lfs.test',
-            'password' => 'secret-pass-1',
-        ]);
-
-        $response->assertRedirect('/admin/'.config('admin.login_slug').'/2fa/setup');
+            $this->post($this->adminLoginPath(), [
+                'email' => "optional-totp-{$i}@lfs.test",
+                'password' => 'secret-pass-1',
+            ])->assertRedirect('/admin/dashboard');
+        }
     }
 
-    public function test_election_observer_login_also_requires_totp_setup(): void
+    public function test_enrolled_admin_is_asked_for_a_totp_code(): void
     {
-        // Observer is read-only, but it's still an elections-facing admin
-        // role — the brief's "administrators should use 2FA" isn't scoped
-        // to write access only.
-        $this->makeAdminUser([
-            'email' => 'observer-login@lfs.test',
+        $admin = $this->makeAdminUser([
+            'email' => 'enrolled@lfs.test',
             'password' => 'secret-pass-1',
-            'role' => AdminRole::ElectionObserver,
+            'role' => AdminRole::SuperAdmin,
         ]);
+        $admin->forceFill(['totp_secret' => 'SOMESECRETVALUE', 'totp_confirmed_at' => now()])->save();
 
-        $response = $this->post($this->adminLoginPath(), [
-            'email' => 'observer-login@lfs.test',
+        $this->post($this->adminLoginPath(), [
+            'email' => 'enrolled@lfs.test',
             'password' => 'secret-pass-1',
-        ]);
+        ])->assertRedirect('/admin/'.config('admin.login_slug').'/2fa');
+    }
 
-        $response->assertRedirect('/admin/'.config('admin.login_slug').'/2fa/setup');
+    public function test_admin_can_start_totp_enrolment_from_profile(): void
+    {
+        $this->actingAsAdmin()
+            ->post('/admin/profile/2fa/enable')
+            ->assertRedirect('/admin/'.config('admin.login_slug').'/2fa/setup');
     }
 
     public function test_super_admin_can_reset_another_admins_totp_enrollment(): void
@@ -99,13 +102,12 @@ class AdminRbacTest extends TestCase
         $this->assertNull($ec->totp_confirmed_at);
         $this->assertFalse($ec->hasTotpEnabled());
 
-        // Confirms the reset actually re-triggers setup on next login, not
-        // just that the columns were cleared.
+        // With 2FA optional, a reset admin simply logs in with a password again.
         $response = $this->post($this->adminLoginPath(), [
             'email' => 'reset-target@lfs.test',
             'password' => 'password',
         ]);
-        $response->assertRedirect('/admin/'.config('admin.login_slug').'/2fa/setup');
+        $response->assertRedirect('/admin/dashboard');
     }
 
     public function test_finance_admin_cannot_reset_totp_for_others(): void
