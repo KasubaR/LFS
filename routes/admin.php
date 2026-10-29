@@ -160,14 +160,15 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
     });
 
     // ── API keys (partner event websites) ────────────────────────────────────────────
-    Route::prefix('api-clients')->middleware('admin.can:api_clients,read')->group(function (): void {
-        Route::get('/', [ApiClientsController::class, 'index']);
-        Route::get('create', [ApiClientsController::class, 'create']);
-        Route::post('create', [ApiClientsController::class, 'store']);
-        Route::post('{id}/rotate', [ApiClientsController::class, 'rotate'])->where('id', '[0-9]+');
-        Route::post('{id}/revoke', [ApiClientsController::class, 'revoke'])->where('id', '[0-9]+');
-        Route::post('{id}/restore', [ApiClientsController::class, 'restore'])->where('id', '[0-9]+');
-    });
+    // Hidden for now — uncomment to bring the section back (and the nav link in layouts/admin.blade.php).
+    // Route::prefix('api-clients')->middleware('admin.can:api_clients,read')->group(function (): void {
+    //     Route::get('/', [ApiClientsController::class, 'index']);
+    //     Route::get('create', [ApiClientsController::class, 'create']);
+    //     Route::post('create', [ApiClientsController::class, 'store']);
+    //     Route::post('{id}/rotate', [ApiClientsController::class, 'rotate'])->where('id', '[0-9]+');
+    //     Route::post('{id}/revoke', [ApiClientsController::class, 'revoke'])->where('id', '[0-9]+');
+    //     Route::post('{id}/restore', [ApiClientsController::class, 'restore'])->where('id', '[0-9]+');
+    // });
 
     // ── Admin users (Super Admin) ────────────────────────────────────────────────────
     Route::prefix('users')->middleware('admin.can:admin_users,read')->group(function (): void {

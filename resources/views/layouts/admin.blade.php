@@ -128,9 +128,10 @@
       if (!empty($canRead['orders'])) {
           $navItem('orders',    '/admin/orders',     'fas fa-bag-shopping',              'Orders',   (int)($counts['pendingOrders']   ?? 0));
       }
-      if (!empty($canRead['api_clients'])) {
-          $navItem('api-clients', '/admin/api-clients', 'fas fa-key',                    'API Keys');
-      }
+      // API Keys section hidden for now (routes disabled in routes/admin.php).
+      // if (!empty($canRead['api_clients'])) {
+      //     $navItem('api-clients', '/admin/api-clients', 'fas fa-key',                    'API Keys');
+      // }
       if (!empty($canRead['admin_users'])) {
           $navItem('users', '/admin/users', 'fas fa-user-shield', 'Admin Users');
       }

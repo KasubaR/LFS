@@ -23,7 +23,11 @@ $scopeLabels = $scopeLabels ?? [];
   <div class="admin-form-card" style="margin-bottom:1.5rem;border-left:4px solid #16a34a;">
     <p><strong>API key issued for {{ $newTokenName }}.</strong></p>
     <p>Copy it now &mdash; only a hash is stored, so it cannot be shown again. If it is lost, rotate the key.</p>
-    <pre style="user-select:all;word-break:break-all;white-space:pre-wrap;padding:.75rem;background:#111827;color:#4ade80;border-radius:6px;font-size:.85rem;">{{ $newToken }}</pre>
+    <pre id="newApiToken" data-token="{{ $newToken }}" style="word-break:break-all;white-space:pre-wrap;padding:.75rem;background:#111827;color:#4ade80;border-radius:6px;font-size:.85rem;">{{ str_repeat('•', 40) }}</pre>
+    <div style="display:flex;gap:.5rem;margin-top:.5rem;">
+      <button type="button" class="admin-btn admin-btn--primary admin-btn--sm" id="toggleApiToken">Show</button>
+      <button type="button" class="admin-btn admin-btn--primary admin-btn--sm" id="copyApiToken">Copy</button>
+    </div>
     <p style="margin-top:.5rem;">Send it to the event site developer over a secure channel, not plain email.</p>
   </div>
 @endif
@@ -53,7 +57,7 @@ $scopeLabels = $scopeLabels ?? [];
               <br><small class="text-muted">{{ $client->contact_email }}</small>
             @endif
           </td>
-          <td><code>{{ $client->key_id }}</code></td>
+          <td><code>{{ substr($client->key_id, 0, 4) }}{{ str_repeat('•', 8) }}</code></td>
           <td>
             @foreach($client->scopes ?? [] as $scope)
               <span class="status-pill status-pill--muted" title="{{ $scopeLabels[$scope] ?? $scope }}">{{ $scope }}</span>
@@ -94,6 +98,30 @@ $scopeLabels = $scopeLabels ?? [];
       </tbody>
     </table>
   </div>
+@endif
+
+@if(!empty($newToken))
+<script>
+(function () {
+  var pre = document.getElementById('newApiToken');
+  var toggle = document.getElementById('toggleApiToken');
+  var copy = document.getElementById('copyApiToken');
+  if (!pre || !toggle || !copy) return;
+  var mask = pre.textContent;
+  var shown = false;
+  toggle.addEventListener('click', function () {
+    shown = !shown;
+    pre.textContent = shown ? pre.dataset.token : mask;
+    toggle.textContent = shown ? 'Hide' : 'Show';
+  });
+  copy.addEventListener('click', function () {
+    navigator.clipboard.writeText(pre.dataset.token).then(function () {
+      copy.textContent = 'Copied';
+      setTimeout(function () { copy.textContent = 'Copy'; }, 1500);
+    });
+  });
+})();
+</script>
 @endif
 
 @endsection
