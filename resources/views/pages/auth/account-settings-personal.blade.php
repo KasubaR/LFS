@@ -120,6 +120,12 @@
           @error('satellite_id')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
         </div>
 
+        <div class="form-group{{ $errors->has('date_of_birth') ? ' form-group--error' : '' }}">
+          <label for="settings-dob">Date of birth</label>
+          <input type="date" id="settings-dob" name="date_of_birth" value="{{ old('date_of_birth', $user->date_of_birth?->toDateString()) }}" max="{{ now()->subDay()->toDateString() }}" autocomplete="bday">
+          @error('date_of_birth')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
+        </div>
+
         <div class="form-group{{ $errors->has('town') ? ' form-group--error' : '' }}">
           <label for="settings-town">Town</label>
           <input type="text" id="settings-town" name="town" value="{{ old('town', $user->town) }}" required autocomplete="address-level2">

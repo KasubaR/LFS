@@ -26,6 +26,7 @@ class RegisterRequest extends FormRequest
             'password' => ['required', 'string', 'confirmed', Password::defaults()],
             'phone' => ['required', 'string', 'max:30', 'regex:/\d{6,}/'],
             'gender' => ['required', 'string', 'in:male,female,other,prefer_not_to_say'],
+            'date_of_birth' => ['required', 'date', 'before:today', 'after:1900-01-01'],
             'nationality' => ['required', 'string', 'max:100'],
             't_shirt_size' => ['required', 'string', Rule::in(TShirtSize::ALL)],
             'town' => ['required', 'string', 'max:100'],

@@ -92,6 +92,12 @@
       @error('t_shirt_size')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
     </div>
 
+    <div class="form-group{{ $errors->has('date_of_birth') ? ' form-group--error' : '' }}">
+      <label for="date_of_birth">Date of birth</label>
+      <input type="date" id="date_of_birth" name="date_of_birth" value="{{ old('date_of_birth') }}" max="{{ now()->subDay()->toDateString() }}" autocomplete="bday" required>
+      @error('date_of_birth')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
+    </div>
+
     <div class="form-group{{ $errors->has('town') ? ' form-group--error' : '' }}">
       <label for="town">Town</label>
       <input type="text" id="town" name="town" value="{{ old('town') }}" required>

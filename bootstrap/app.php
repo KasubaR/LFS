@@ -73,6 +73,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withSchedule(function (Schedule $schedule): void {
         $schedule->command('membership:suspend-unpaid')->daily();
         $schedule->command('membership:expire')->daily();
+        $schedule->command('members:send-birthday-greetings')->dailyAt('07:00');
         $schedule->command('payments:poll-pending')->everyFiveMinutes();
         $schedule->command('elections:flush-votes')->everyMinute();
     })

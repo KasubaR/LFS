@@ -44,6 +44,7 @@ class RegistrationTest extends TestCase
             'password_confirmation' => 'Password123!',
             'phone' => '0977000000',
             'gender' => 'female',
+            'date_of_birth' => '1990-05-14',
             'nationality' => 'Zambian',
             't_shirt_size' => 'M',
             'town' => 'Lusaka',
@@ -65,5 +66,31 @@ class RegistrationTest extends TestCase
         $this->assertNull(Membership::query()->where('user_id', $user->id)->first());
 
         Notification::assertSentTo($user, VerifyEmailNotification::class);
+    }
+
+    public function test_registration_succeeds_when_verification_email_cannot_be_sent(): void
+    {
+        \Illuminate\Support\Facades\Event::listen(
+            \Illuminate\Auth\Events\Registered::class,
+            fn () => throw new \RuntimeException('SMTP down'),
+        );
+
+        $response = $this->post('/create-account', [
+            'last_name' => 'Runner',
+            'other_names' => 'Jane',
+            'email' => 'jane@example.com',
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+            'phone' => '0977000000',
+            'gender' => 'female',
+            'date_of_birth' => '1990-05-14',
+            'nationality' => 'Zambian',
+            't_shirt_size' => 'M',
+            'town' => 'Lusaka',
+        ]);
+
+        $response->assertRedirect(route('verification.notice'));
+        $this->assertDatabaseHas('users', ['email' => 'jane@example.com']);
+        $this->assertAuthenticated();
     }
 }

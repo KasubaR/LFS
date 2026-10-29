@@ -41,6 +41,7 @@ class RegisteredUserController extends Controller
                     'password' => $validated['password'],
                     'phone' => $validated['phone'],
                     'gender' => $validated['gender'],
+                    'date_of_birth' => $validated['date_of_birth'],
                     'nationality' => $validated['nationality'],
                     't_shirt_size' => $validated['t_shirt_size'],
                     'town' => $validated['town'],
@@ -54,12 +55,21 @@ class RegisteredUserController extends Controller
                 ->withErrors(['_general' => 'Sorry, we could not create your account. Please try again.']);
         }
 
-        event(new Registered($user));
+        // The account already exists; a mail outage must not turn that into an error page.
+        $emailSent = true;
+        try {
+            event(new Registered($user));
+        } catch (Throwable $e) {
+            report($e);
+            $emailSent = false;
+        }
 
         Auth::login($user);
         $request->session()->regenerate();
 
         return redirect()->route('verification.notice')
-            ->with('auth_status', 'Account created! Please verify your email to continue.');
+            ->with('auth_status', $emailSent
+                ? 'Account created! Please verify your email to continue.'
+                : 'Account created, but we could not send the verification email right now. Please use "Resend" below in a few minutes.');
     }
 }

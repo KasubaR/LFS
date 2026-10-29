@@ -23,6 +23,7 @@ class UpdateProfileRequest extends FormRequest
             'other_names' => ['required', 'string', 'max:120'],
             'phone' => ['required', 'string', 'max:30', 'regex:/\d{6,}/'],
             'gender' => ['required', 'string', 'in:male,female,other,prefer_not_to_say'],
+            'date_of_birth' => ['nullable', 'date', 'before:today', 'after:1900-01-01'],
             'nationality' => ['required', 'string', 'max:100'],
             'satellite_id' => ['required', 'integer', Rule::exists('satellites', 'id')->where('is_active', true)],
             'town' => ['required', 'string', 'max:100'],

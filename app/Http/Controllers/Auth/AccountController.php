@@ -390,6 +390,7 @@ class AccountController extends Controller
             'other_names' => $data['other_names'],
             'phone' => $data['phone'],
             'gender' => $data['gender'],
+            'date_of_birth' => $data['date_of_birth'] ?? null,
             'nationality' => $data['nationality'],
             'satellite_id' => $data['satellite_id'],
             'town' => $data['town'],
