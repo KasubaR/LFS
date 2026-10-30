@@ -321,7 +321,8 @@ $lowStock     = ($product['totalStock'] ?? 0) > 0 && ($product['totalStock'] ?? 
           </div>
 
           <div class="pd-size-grid" role="group" aria-labelledby="pd-size-label" id="pd-size-btns">
-            @foreach($allSizes as $sizeEntry):
+            @foreach($allSizes as $sizeEntry)
+            @php
               $available = ($sizeEntry['stock'] ?? 0) > 0;
             @endphp
               <button
