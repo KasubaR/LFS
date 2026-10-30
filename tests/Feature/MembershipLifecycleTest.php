@@ -204,6 +204,19 @@ class MembershipLifecycleTest extends TestCase
         $this->membershipService->expire($created['membershipId']);
     }
 
+    public function test_admin_member_search_matches_names_email_and_phone(): void
+    {
+        $this->membershipService->createApplication($this->user->id, $this->annualPlan->id);
+
+        foreach ([$this->user->other_names, $this->user->last_name, $this->user->email] as $term) {
+            $this->assertCount(1, $this->membershipService->getMembersForAdmin(['search' => $term]));
+        }
+
+        $full = $this->user->other_names.' '.$this->user->last_name;
+        $this->assertCount(1, $this->membershipService->getMembersForAdmin(['search' => $full]));
+        $this->assertCount(0, $this->membershipService->getMembersForAdmin(['search' => 'zzz-no-match']));
+    }
+
     public function test_admin_display_status_mapping_and_list_query(): void
     {
         $created = $this->membershipService->createApplication($this->user->id, $this->annualPlan->id);

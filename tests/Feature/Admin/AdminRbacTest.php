@@ -144,10 +144,10 @@ class AdminRbacTest extends TestCase
             ->assertOk()
             ->assertSee('Admin Users');
 
+        // API Keys admin section is hidden for now (routes/admin.php); re-enable with it.
         $this->actingAsAdmin()
             ->get('/admin/api-clients')
-            ->assertOk()
-            ->assertSee('API Keys');
+            ->assertNotFound();
     }
 
     public function test_finance_cannot_access_members(): void

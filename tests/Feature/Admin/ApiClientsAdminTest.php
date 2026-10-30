@@ -13,6 +13,14 @@ class ApiClientsAdminTest extends TestCase
 {
     use ActsAsAdmin, RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // The API Keys admin section is hidden for now (routes/admin.php).
+        $this->markTestSkipped('API Keys admin section is disabled.');
+    }
+
     public function test_index_requires_admin_session(): void
     {
         $this->get('/admin/api-clients')->assertRedirect($this->adminLoginPath());

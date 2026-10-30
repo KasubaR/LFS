@@ -762,7 +762,9 @@ class MembershipService
 
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
+                $q->where('last_name', 'like', "%{$search}%")
+                    ->orWhere('other_names', 'like', "%{$search}%")
+                    ->orWhereRaw("CONCAT_WS(' ', other_names, last_name) like ?", ["%{$search}%"])
                     ->orWhere('email', 'like', "%{$search}%")
                     ->orWhere('phone', 'like', "%{$search}%");
             });
