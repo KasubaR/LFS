@@ -191,4 +191,26 @@ class LoginTest extends TestCase
         $response->assertRedirect('/');
         $this->assertGuest();
     }
+
+    public function test_first_login_succeeds_when_verification_email_cannot_be_sent(): void
+    {
+        config([
+            'mail.default' => 'smtp',
+            'mail.mailers.smtp.host' => '127.0.0.1',
+            'mail.mailers.smtp.port' => 1,
+        ]);
+
+        $user = User::factory()->unverified()->create([
+            'email' => 'member@example.com',
+            'password' => 'password123',
+        ]);
+
+        $this->post('/login', [
+            'email' => 'member@example.com',
+            'password' => 'password123',
+        ])->assertRedirect('/email/verify');
+
+        $this->assertAuthenticatedAs($user);
+        $this->assertNotNull($user->fresh()->first_login);
+    }
 }

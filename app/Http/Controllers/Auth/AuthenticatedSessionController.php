@@ -14,6 +14,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class AuthenticatedSessionController extends Controller
 {
@@ -88,8 +89,13 @@ class AuthenticatedSessionController extends Controller
             // actually show up and log in — see MemberImportService — so the
             // signed link is fresh relative to now rather than the import
             // batch, which could've run days or weeks earlier.
+            // A mail outage must not block login; they can use "Resend" on the verify page.
             if (! $user->hasVerifiedEmail()) {
-                $user->sendEmailVerificationNotification();
+                try {
+                    $user->sendEmailVerificationNotification();
+                } catch (Throwable $e) {
+                    report($e);
+                }
             }
         }
 

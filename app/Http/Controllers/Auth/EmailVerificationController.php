@@ -11,6 +11,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Throwable;
 
 class EmailVerificationController extends Controller
 {
@@ -64,7 +65,13 @@ class EmailVerificationController extends Controller
             return redirect($this->onboardingService->resolveNextRoute($user));
         }
 
-        $user->sendEmailVerificationNotification();
+        try {
+            $user->sendEmailVerificationNotification();
+        } catch (Throwable $e) {
+            report($e);
+
+            return back()->with('auth_status', 'We could not send the verification email right now. Please try again in a few minutes.');
+        }
 
         return back()->with('auth_status', 'A new verification link has been sent to your email address.');
     }

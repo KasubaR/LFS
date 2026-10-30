@@ -91,4 +91,20 @@ class EmailVerificationTest extends TestCase
         $response->assertRedirect();
         $response->assertSessionHas('auth_status');
     }
+
+    public function test_resend_reports_failure_instead_of_erroring_when_mail_is_down(): void
+    {
+        config([
+            'mail.default' => 'smtp',
+            'mail.mailers.smtp.host' => '127.0.0.1',
+            'mail.mailers.smtp.port' => 1,
+        ]);
+
+        $user = User::factory()->unverified()->create();
+
+        $response = $this->actingAs($user)->post('/email/verification-notification');
+
+        $response->assertRedirect();
+        $response->assertSessionHas('auth_status', fn ($m) => str_contains($m, 'could not send'));
+    }
 }
