@@ -187,6 +187,10 @@ $sizesToString = function (mixed $sizes): string {
       <p class="admin-help-text">
         Upload up to 5 images. Stored under <code>/uploads/products/{productId}</code>.
       </p>
+      <p class="admin-help-text">
+        <strong>Recommended size:</strong> 1200 × 1200 px (square, 1:1), JPG, PNG or WebP.
+        Images are shown in a square frame, so keep the product centred with some space around it.
+      </p>
 
       @if(!empty($p['images']) && is_array($p['images']))
         <div class="admin-image-grid">
