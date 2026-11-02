@@ -332,6 +332,21 @@ class ProductService
     }
 
     /**
+     * Categories that currently have at least one visible product.
+     *
+     * @return list<string>
+     */
+    public function getActiveCategories(): array
+    {
+        return Product::query()
+            ->where('is_active', true)
+            ->whereNotNull('category')
+            ->distinct()
+            ->pluck('category')
+            ->all();
+    }
+
+    /**
      * The stored thumbnail, unless it points at a local file that no longer
      * exists (e.g. a stale upload folder) — then the first image that does.
      */

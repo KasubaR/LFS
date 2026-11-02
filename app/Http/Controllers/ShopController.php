@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\ProductCategory;
 use App\Http\Controllers\Concerns\RespondsWithJson;
 use App\Http\Requests\AddToCartRequest;
 use App\Services\ProductService;
@@ -64,9 +65,41 @@ class ShopController extends Controller
             'pages' => max(1, (int) ($pages ?? 1)),
             'cartCount' => $this->cartItemCount(),
             'filters' => compact('category', 'gender', 'size', 'sort', 'minPrice', 'maxPrice'),
+            'categoryOptions' => $this->filterOptions($this->categoriesWithProducts(), 'All Categories'),
+            'genderOptions' => $this->filterOptions(['male', 'female', 'unisex'], 'All'),
             'extraStyles' => '<link rel="stylesheet" href="'.asset('css/shop.css').'">',
             'extraScripts' => '<script src="'.asset('js/shop.js').'"></script>',
         ]);
+    }
+
+    /**
+     * Known categories, in the admin's order, that have at least one visible product.
+     *
+     * @return list<string>
+     */
+    private function categoriesWithProducts(): array
+    {
+        try {
+            $active = $this->productService->getActiveCategories();
+        } catch (Throwable) {
+            return [];
+        }
+
+        return array_values(array_filter(ProductCategory::ALL, fn (string $c): bool => in_array($c, $active, true)));
+    }
+
+    /**
+     * @param  list<string>  $values
+     * @return list<array{value: string, label: string}>
+     */
+    private function filterOptions(array $values, string $allLabel): array
+    {
+        $options = [['value' => '', 'label' => $allLabel]];
+        foreach ($values as $value) {
+            $options[] = ['value' => $value, 'label' => ucwords(str_replace('-', ' ', $value))];
+        }
+
+        return $options;
     }
 
     public function show(string $slug): View|\Illuminate\Http\Response
