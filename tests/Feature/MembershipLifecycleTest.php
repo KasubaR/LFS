@@ -59,7 +59,7 @@ class MembershipLifecycleTest extends TestCase
     public function test_new_signup_flow_from_draft_to_active_on_payment(): void
     {
         // Freeze inside the normal Jan-Apr renewal window — the real "now" in
-        // this sandbox is already past the 1 June late-joiner cutoff, which
+        // this sandbox is already past the 1 July late-joiner cutoff, which
         // would otherwise halve the annual fee this test expects.
         Carbon::setTestNow('2026-01-15 10:00:00');
 
@@ -379,7 +379,7 @@ class MembershipLifecycleTest extends TestCase
 
     public function test_registration_after_grace_window_but_before_late_joiner_cutoff_pays_full_with_no_grace(): void
     {
-        // 15 May: past the 30 April grace deadline, but before the 1 June
+        // 15 May: past the 30 April grace deadline, but before the 1 July
         // late-joiner cutoff — full price, no partial-payment allowance.
         Carbon::setTestNow('2026-05-15 10:00:00');
 
@@ -460,12 +460,12 @@ class MembershipLifecycleTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_registration_on_may_31_still_pays_full_price_with_no_grace(): void
+    public function test_registration_on_june_30_still_pays_full_price_with_no_grace(): void
     {
-        // Last day before the 1 June late-joiner cutoff — still full price,
+        // Last day before the 1 July late-joiner cutoff — still full price,
         // still no grace period. Off-by-one check against
         // test_late_joiner_registering_after_june_gets_reduced_fee_and_no_grace_period().
-        Carbon::setTestNow('2026-05-31 23:59:00');
+        Carbon::setTestNow('2026-06-30 23:59:00');
 
         $created = $this->membershipService->createApplication($this->user->id, $this->annualPlan->id);
         $submitted = $this->membershipService->submitApplication($created['membershipId']);
@@ -479,11 +479,11 @@ class MembershipLifecycleTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_registration_on_june_1_is_the_first_day_of_the_reduced_late_joiner_fee(): void
+    public function test_registration_on_july_1_is_the_first_day_of_the_reduced_late_joiner_fee(): void
     {
         // The exact cutoff instant — annualFeeDue() uses gte(), so this must
         // already get the reduced fee, not the following day.
-        Carbon::setTestNow('2026-06-01 00:00:00');
+        Carbon::setTestNow('2026-07-01 00:00:00');
 
         $created = $this->membershipService->createApplication($this->user->id, $this->annualPlan->id);
         $submitted = $this->membershipService->submitApplication($created['membershipId']);

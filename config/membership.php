@@ -18,7 +18,7 @@ return [
     // reduced fee for the remainder of the calendar year (see
     // MembershipService::annualFeeDue()).
     'late_joiner' => [
-        'cutoff_month_day' => '06-01',
+        'cutoff_month_day' => '07-01',
         'fee' => 500.00,
     ],
 

@@ -592,11 +592,11 @@ class MembershipService
     /**
      * The annual fee due for someone registering/renewing on $registeredAt:
      * the Annual plan's price normally, or the reduced late-joiner fee for
-     * anyone registering on/after this year's cutoff (1 June by default).
+     * anyone registering on/after this year's cutoff (1 July by default).
      */
     private function annualFeeDue(Carbon $registeredAt): float
     {
-        $cutoff = $this->monthDayDate((int) $registeredAt->year, config('membership.late_joiner.cutoff_month_day', '06-01'));
+        $cutoff = $this->monthDayDate((int) $registeredAt->year, config('membership.late_joiner.cutoff_month_day', '07-01'));
 
         if ($registeredAt->gte($cutoff)) {
             return (float) config('membership.late_joiner.fee', 500.00);
