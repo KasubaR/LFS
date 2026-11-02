@@ -87,7 +87,8 @@ class ProductController extends Controller
         }
 
         $data = $this->buildProductData($body);
-        $uploadedImages = (array) $request->input('_productImages', []);
+        $uploadKey = 'tmp-'.uniqid();
+        $uploadedImages = $this->saveUploadedImages($request, $uploadKey);
         if ($uploadedImages !== []) {
             $data['images'] = $uploadedImages;
             $data['thumbnail'] = $uploadedImages[0];
@@ -95,8 +96,7 @@ class ProductController extends Controller
 
         try {
             $created = $this->productService->createProduct($data);
-            $uploadKey = $request->input('_productUploadKey');
-            if ($created && ! empty($created['id']) && $uploadKey && str_starts_with((string) $uploadKey, 'tmp-')) {
+            if ($created && ! empty($created['id']) && $uploadedImages !== []) {
                 $this->renameUploadDir((string) $uploadKey, (string) $created['id'], $data);
             }
 
@@ -146,7 +146,7 @@ class ProductController extends Controller
         }
 
         $data = $this->buildProductData($body);
-        $uploadedImages = (array) $request->input('_productImages', []);
+        $uploadedImages = $this->saveUploadedImages($request, $id);
         if ($uploadedImages !== []) {
             $existingImages = is_array($existing['images'] ?? null) ? $existing['images'] : [];
             $data['images'] = array_merge($existingImages, $uploadedImages);
@@ -310,6 +310,39 @@ class ProductController extends Controller
         $str = preg_replace('/[\s\-]+/', '-', $str);
 
         return trim($str, '-');
+    }
+
+    /**
+     * Move uploaded productImages[] files into public/uploads/products/{key} and return their URLs.
+     *
+     * @return list<string>
+     */
+    private function saveUploadedImages(Request $request, string $key): array
+    {
+        $files = $request->file('productImages');
+        if (! is_array($files)) {
+            $files = $files ? [$files] : [];
+        }
+
+        $dir = public_path('uploads/products/'.$key);
+        $urls = [];
+        foreach ($files as $file) {
+            if (! $file || ! $file->isValid()) {
+                continue;
+            }
+            $ext = strtolower((string) ($file->guessExtension() ?: $file->extension()));
+            if (! in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
+                continue;
+            }
+            if (! is_dir($dir)) {
+                mkdir($dir, 0775, true);
+            }
+            $filename = uniqid('img_').'.'.$ext;
+            $file->move($dir, $filename);
+            $urls[] = '/uploads/products/'.$key.'/'.$filename;
+        }
+
+        return $urls;
     }
 
     /**
