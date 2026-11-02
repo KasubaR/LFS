@@ -1757,11 +1757,18 @@ input[type="file"].admin-input::file-selector-button:hover {
   font-family: var(--font-body);
   font-size: 0.85rem;
   outline: none;
+  color-scheme: dark;
 }
 
 .admin-select:focus {
   border-color: var(--green);
   background: rgba(74,124,89,0.06);
+}
+
+/* The open list is drawn by the browser, so it needs its own solid colours. */
+.admin-select option {
+  background: #1c1c1c;
+  color: var(--off-white);
 }
 
 /* Generic admin buttons */
