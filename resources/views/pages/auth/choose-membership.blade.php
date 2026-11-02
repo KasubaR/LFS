@@ -33,17 +33,24 @@
             <span class="auth-plan-option__card">
               <span>
                 <span class="auth-plan-option__name">{{ $plan['name'] }}</span>
-                <span class="auth-plan-option__meta">{{ (float) $plan['price'] >= 1000 ? 'Pay the annual fee in full' : 'Partial payment toward the annual fee' }}</span>
+                <span class="auth-plan-option__meta">{{ (float) $plan['price'] >= 1000 ? (($withinGrace ?? true) ? 'Pay the annual fee in full' : 'Pay in full to join for the rest of the year') : 'Partial payment toward the annual fee' }}</span>
               </span>
-              <span class="auth-plan-option__price">K{{ number_format($plan['price']) }}</span>
+              <span class="auth-plan-option__price">K{{ number_format($amountDue ?? $plan['price']) }}</span>
             </span>
           </label>
         @endforeach
       </div>
-      <p class="auth-plan-note">
-        This is one annual membership running through 31 December. K250 and K500
-        are partial payments toward the K1,000 annual fee, which is due by 30 April.
-      </p>
+      @if($withinGrace ?? true)
+        <p class="auth-plan-note">
+          This is one annual membership running through 31 December. K250 and K500
+          are partial payments toward the K1,000 annual fee, which is due by 30 April.
+        </p>
+      @else
+        <p class="auth-plan-note">
+          The 30 April deadline for paying in instalments has passed, so the full
+          amount is payable now. This membership runs through 31 December.
+        </p>
+      @endif
       @error('plan_id')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
     </div>
 

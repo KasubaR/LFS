@@ -32,12 +32,26 @@ class MembershipApplicationController extends Controller
             return redirect()->route('account');
         }
 
+        $plans = $this->planService->getActivePlans();
+        $withinGrace = $this->membershipService->isWithinGraceWindow();
+        $amountDue = null;
+
+        // Past the grace window there are no installments: checkout charges the
+        // full amount due (late-joiner/promotion aware), so only offer that.
+        if (! $withinGrace) {
+            $amountDue = $this->membershipService->currentAnnualPricing()['amount'];
+            $annual = collect($plans)->sortByDesc('price')->first();
+            $plans = $annual ? [$annual] : [];
+        }
+
         return view('pages.auth.choose-membership', $this->signupViewData([
             'title' => 'Annual Membership',
             'description' => 'Select your nearest satellite and initial payment amount.',
             'page' => 'auth',
             'satellites' => $this->satelliteService->getActiveSatellites(),
-            'plans' => $this->planService->getActivePlans(),
+            'plans' => $plans,
+            'withinGrace' => $withinGrace,
+            'amountDue' => $amountDue,
         ]));
     }
 
