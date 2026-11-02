@@ -331,6 +331,28 @@ class ProductService
         return $value !== '' ? $value : $fallback;
     }
 
+    /**
+     * The stored thumbnail, unless it points at a local file that no longer
+     * exists (e.g. a stale upload folder) — then the first image that does.
+     */
+    private function resolveThumbnail(Product $product): string
+    {
+        $placeholder = '/images/products/placeholder.webp';
+        $candidates = array_merge([$product->thumbnail], (array) ($product->images ?? []));
+
+        foreach ($candidates as $candidate) {
+            $url = $this->sanitiseImageUrl($candidate);
+            if ($url === '') {
+                continue;
+            }
+            if (! str_starts_with($url, '/') || is_file(public_path(ltrim($url, '/')))) {
+                return $url;
+            }
+        }
+
+        return $placeholder;
+    }
+
     private function buildProductQuery(
         bool $admin,
         mixed $category,
@@ -378,10 +400,7 @@ class ProductService
             'description' => $product->description ?? '',
             'shortDescription' => $product->short_description ?? '',
             'images' => $product->images ?? [],
-            'thumbnail' => $this->sanitiseImageUrl(
-                $product->thumbnail,
-                '/images/products/placeholder.webp'
-            ),
+            'thumbnail' => $this->resolveThumbnail($product),
             'category' => $product->category,
             'gender' => $product->gender ?? 'unisex',
             'tags' => $product->tags ?? [],
