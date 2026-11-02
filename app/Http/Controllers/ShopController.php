@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\ProductCategory;
 use App\Http\Controllers\Concerns\RespondsWithJson;
 use App\Http\Requests\AddToCartRequest;
+use App\Services\ProductCategoryService;
 use App\Services\ProductService;
+use App\Services\SizeGuideService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -18,6 +19,8 @@ class ShopController extends Controller
 
     public function __construct(
         private readonly ProductService $productService,
+        private readonly ProductCategoryService $categoryService,
+        private readonly SizeGuideService $sizeGuideService,
     ) {}
 
     public function index(Request $request): View
@@ -65,41 +68,43 @@ class ShopController extends Controller
             'pages' => max(1, (int) ($pages ?? 1)),
             'cartCount' => $this->cartItemCount(),
             'filters' => compact('category', 'gender', 'size', 'sort', 'minPrice', 'maxPrice'),
-            'categoryOptions' => $this->filterOptions($this->categoriesWithProducts(), 'All Categories'),
-            'genderOptions' => $this->filterOptions(['male', 'female', 'unisex'], 'All'),
+            'categoryOptions' => $this->categoryFilterOptions((string) $category),
+            'genderOptions' => $this->genderFilterOptions(),
             'extraStyles' => '<link rel="stylesheet" href="'.asset('css/shop.css').'">',
             'extraScripts' => '<script src="'.asset('js/shop.js').'"></script>',
         ]);
     }
 
     /**
-     * Known categories, in the admin's order, that have at least one visible product.
+     * Active categories that have at least one visible product, in the admin's order.
      *
-     * @return list<string>
-     */
-    private function categoriesWithProducts(): array
-    {
-        try {
-            $active = $this->productService->getActiveCategories();
-        } catch (Throwable) {
-            return [];
-        }
-
-        return array_values(array_filter(ProductCategory::ALL, fn (string $c): bool => in_array($c, $active, true)));
-    }
-
-    /**
-     * @param  list<string>  $values
      * @return list<array{value: string, label: string}>
      */
-    private function filterOptions(array $values, string $allLabel): array
+    private function categoryFilterOptions(string $selected): array
     {
-        $options = [['value' => '', 'label' => $allLabel]];
-        foreach ($values as $value) {
-            $options[] = ['value' => $value, 'label' => ucwords(str_replace('-', ' ', $value))];
+        $options = [['value' => '', 'label' => 'All Categories']];
+
+        try {
+            foreach ($this->categoryService->filterOptions(false, $selected) as $slug => $name) {
+                $options[] = ['value' => (string) $slug, 'label' => $name];
+            }
+        } catch (Throwable) {
         }
 
         return $options;
+    }
+
+    /**
+     * @return list<array{value: string, label: string}>
+     */
+    private function genderFilterOptions(): array
+    {
+        return [
+            ['value' => '', 'label' => 'All'],
+            ['value' => 'male', 'label' => 'Male'],
+            ['value' => 'female', 'label' => 'Female'],
+            ['value' => 'unisex', 'label' => 'Unisex'],
+        ];
     }
 
     public function show(string $slug): View|\Illuminate\Http\Response
@@ -124,7 +129,14 @@ class ShopController extends Controller
         } catch (Throwable) {
         }
 
+        $sizeGuide = null;
+        try {
+            $sizeGuide = $this->sizeGuideService->getById($product['sizeGuideId'] ?? null);
+        } catch (Throwable) {
+        }
+
         return view('pages.productDetails', [
+            'sizeGuide' => $sizeGuide,
             'title' => $product['name'].' — LFS Shop',
             'description' => $product['shortDescription']
                 ?? substr($product['description'] ?? '', 0, 155)

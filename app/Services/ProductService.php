@@ -260,6 +260,7 @@ class ProductService
             'featured' => (bool) ($data['featured'] ?? false),
             'is_active' => ($data['isActive'] ?? true) !== false,
             'sort_order' => (int) ($data['sortOrder'] ?? 0),
+            'size_guide_id' => isset($data['sizeGuideId']) ? (int) $data['sizeGuideId'] : null,
         ]);
 
         return $this->getProductById($id, ['admin' => true]) ?? [];
@@ -287,6 +288,7 @@ class ProductService
             'featured' => ['featured', 'bool'],
             'isActive' => ['is_active', 'bool'],
             'sortOrder' => ['sort_order', 'int'],
+            'sizeGuideId' => ['size_guide_id', 'null_int'],
         ];
 
         $updates = [];
@@ -300,6 +302,7 @@ class ProductService
                 'string' => (string) $value,
                 'float' => (float) $value,
                 'null_float' => $value !== null ? (float) $value : null,
+                'null_int' => $value !== null && $value !== '' ? (int) $value : null,
                 'int' => (int) $value,
                 'bool' => (bool) $value,
                 'json' => is_array($value) ? $value : [],
@@ -329,21 +332,6 @@ class ProductService
         $value = trim((string) ($url ?? ''));
 
         return $value !== '' ? $value : $fallback;
-    }
-
-    /**
-     * Categories that currently have at least one visible product.
-     *
-     * @return list<string>
-     */
-    public function getActiveCategories(): array
-    {
-        return Product::query()
-            ->where('is_active', true)
-            ->whereNotNull('category')
-            ->distinct()
-            ->pluck('category')
-            ->all();
     }
 
     /**
@@ -424,6 +412,7 @@ class ProductService
             'featured' => (bool) $product->featured,
             'isActive' => (bool) $product->is_active,
             'sortOrder' => (int) ($product->sort_order ?? 0),
+            'sizeGuideId' => $product->size_guide_id !== null ? (int) $product->size_guide_id : null,
             'createdAt' => (string) $product->created_at,
             'updatedAt' => (string) $product->updated_at,
         ];

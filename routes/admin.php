@@ -14,9 +14,11 @@ use App\Http\Controllers\Admin\GalleryController;
 use App\Http\Controllers\Admin\MembersController;
 use App\Http\Controllers\Admin\MessageController;
 use App\Http\Controllers\Admin\OrderController;
+use App\Http\Controllers\Admin\ProductCategoryController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProfileController;
 use App\Http\Controllers\Admin\PromotionController;
+use App\Http\Controllers\Admin\SizeGuideController;
 use Illuminate\Support\Facades\Route;
 
 $loginSlug = config('admin.login_slug');
@@ -106,6 +108,25 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
             Route::patch('{id}/event-highlight', [GalleryController::class, 'toggleMediaEventHighlight'])->where('id', '[^/]+');
             Route::delete('{id}', [GalleryController::class, 'deleteMedia'])->where('id', '[^/]+');
         });
+    });
+
+    // ── Product categories (registered before products so 'categories' isn't read as a product id) ──
+    Route::prefix('products/categories')->middleware('admin.can:products,read')->group(function (): void {
+        Route::get('/', [ProductCategoryController::class, 'index']);
+        Route::post('/', [ProductCategoryController::class, 'store']);
+        Route::get('{id}/edit', [ProductCategoryController::class, 'edit'])->where('id', '[0-9]+');
+        Route::post('{id}/edit', [ProductCategoryController::class, 'update'])->where('id', '[0-9]+');
+        Route::post('{id}/delete', [ProductCategoryController::class, 'destroy'])->where('id', '[0-9]+');
+    });
+
+    // ── Size guides (also before products, for the same reason) ──────────────────────
+    Route::prefix('products/size-guides')->middleware('admin.can:products,read')->group(function (): void {
+        Route::get('/', [SizeGuideController::class, 'index']);
+        Route::get('create', [SizeGuideController::class, 'create']);
+        Route::post('/', [SizeGuideController::class, 'store']);
+        Route::get('{id}/edit', [SizeGuideController::class, 'edit'])->where('id', '[0-9]+');
+        Route::post('{id}/edit', [SizeGuideController::class, 'update'])->where('id', '[0-9]+');
+        Route::post('{id}/delete', [SizeGuideController::class, 'destroy'])->where('id', '[0-9]+');
     });
 
     // ── Products ─────────────────────────────────────────────────────────────────────

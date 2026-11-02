@@ -31,6 +31,7 @@ class Product extends Model
         'featured',
         'is_active',
         'sort_order',
+        'size_guide_id',
     ];
 
     protected function casts(): array
@@ -45,6 +46,7 @@ class Product extends Model
             'featured' => 'boolean',
             'is_active' => 'boolean',
             'sort_order' => 'integer',
+            'size_guide_id' => 'integer',
         ];
     }
 

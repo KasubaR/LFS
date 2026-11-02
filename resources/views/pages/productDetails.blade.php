@@ -314,10 +314,12 @@ $lowStock     = ($product['totalStock'] ?? 0) > 0 && ($product['totalStock'] ?? 
             <label class="pd-form__label" for="pd-size-select">
               Select Size <span class="pd-form__required" aria-hidden="true">*</span>
             </label>
+            @if(!empty($sizeGuide))
             <button type="button" class="pd-form__size-guide" aria-label="View size guide">
               <i class="fas fa-ruler-horizontal" aria-hidden="true"></i>
               Size Guide
             </button>
+            @endif
           </div>
 
           <div class="pd-size-grid" role="group" aria-labelledby="pd-size-label" id="pd-size-btns">
@@ -488,6 +490,7 @@ $lowStock     = ($product['totalStock'] ?? 0) > 0 && ($product['totalStock'] ?? 
         type="button"
       >Details &amp; Care</button>
 
+      @if(!empty($sizeGuide))
       <button
         class="pd-tabs__tab"
         role="tab"
@@ -496,6 +499,7 @@ $lowStock     = ($product['totalStock'] ?? 0) > 0 && ($product['totalStock'] ?? 
         id="btn-sizing"
         type="button"
       >Size Guide</button>
+      @endif
     </div>
 
     <!-- Description panel -->
@@ -554,6 +558,7 @@ $lowStock     = ($product['totalStock'] ?? 0) > 0 && ($product['totalStock'] ?? 
       </div>
     </div>
 
+    @if(!empty($sizeGuide))
     <!-- Size Guide panel -->
     <div
       class="pd-tabs__panel"
@@ -563,30 +568,33 @@ $lowStock     = ($product['totalStock'] ?? 0) > 0 && ($product['totalStock'] ?? 
       hidden
     >
       <div class="pd-size-guide">
-        <p class="pd-size-guide__note">
-          Measurements are in centimetres. If between sizes, size up for a relaxed fit.
-        </p>
+        @if($sizeGuide['note'] !== '')
+        <p class="pd-size-guide__note">{{ $sizeGuide['note'] }}</p>
+        @endif
         <div class="pd-size-guide__table-wrap">
           <table class="pd-size-guide__table" aria-label="Size guide measurements">
             <thead>
               <tr>
                 <th scope="col">Size</th>
-                <th scope="col">Chest (cm)</th>
-                <th scope="col">Waist (cm)</th>
-                <th scope="col">Hips (cm)</th>
+                @foreach($sizeGuide['columns'] as $col)
+                <th scope="col">{{ $col }}</th>
+                @endforeach
               </tr>
             </thead>
             <tbody>
-              <tr><td>S</td><td>86–91</td><td>71–76</td><td>91–96</td></tr>
-              <tr><td>M</td><td>91–97</td><td>76–81</td><td>96–102</td></tr>
-              <tr><td>L</td><td>97–102</td><td>81–86</td><td>102–107</td></tr>
-              <tr><td>XL</td><td>107–112</td><td>91–97</td><td>112–117</td></tr>
-              <tr><td>XXL</td><td>117–122</td><td>97–107</td><td>122–127</td></tr>
+              @foreach($sizeGuide['rows'] as $row)
+              <tr>
+                @foreach($row as $cell)
+                <td>{{ $cell }}</td>
+                @endforeach
+              </tr>
+              @endforeach
             </tbody>
           </table>
         </div>
       </div>
     </div>
+    @endif
 
   </div><!-- /.pd-tabs__inner -->
 </section>
@@ -604,7 +612,8 @@ $lowStock     = ($product['totalStock'] ?? 0) > 0 && ($product['totalStock'] ?? 
     </div>
 
     <div class="pd-related__grid" role="list">
-      @foreach($related as $rel):
+      @foreach($related as $rel)
+      @php
         $relInStock = false;
         if (!empty($rel['sizes']) && is_array($rel['sizes'])) {
           foreach ($rel['sizes'] as $s) {
@@ -672,6 +681,7 @@ $lowStock     = ($product['totalStock'] ?? 0) > 0 && ($product['totalStock'] ?? 
 <!-- ══════════════════════════════════════════
      SIZE GUIDE MODAL
      ══════════════════════════════════════════ -->
+@if(!empty($sizeGuide))
 <div
   class="pd-modal"
   id="size-guide-modal"
@@ -689,32 +699,34 @@ $lowStock     = ($product['totalStock'] ?? 0) > 0 && ($product['totalStock'] ?? 
       </button>
     </div>
     <div class="pd-modal__body">
-      <p class="pd-size-guide__note">
-        All measurements are in centimetres. For a relaxed/race fit, go one size up.
-      </p>
+      @if($sizeGuide['note'] !== '')
+      <p class="pd-size-guide__note">{{ $sizeGuide['note'] }}</p>
+      @endif
       <div class="pd-size-guide__table-wrap">
         <table class="pd-size-guide__table" aria-label="Full size guide">
           <thead>
             <tr>
               <th scope="col">Size</th>
-              <th scope="col">Chest</th>
-              <th scope="col">Waist</th>
-              <th scope="col">Hips</th>
-              <th scope="col">Height</th>
+              @foreach($sizeGuide['columns'] as $col)
+              <th scope="col">{{ $col }}</th>
+              @endforeach
             </tr>
           </thead>
           <tbody>
-            <tr><td>S</td><td>86–91</td><td>71–76</td><td>91–96</td><td>165–170</td></tr>
-            <tr><td>M</td><td>91–97</td><td>76–81</td><td>96–102</td><td>170–175</td></tr>
-            <tr><td>L</td><td>97–102</td><td>81–86</td><td>102–107</td><td>175–180</td></tr>
-            <tr><td>XL</td><td>107–112</td><td>91–97</td><td>112–117</td><td>180–185</td></tr>
-            <tr><td>XXL</td><td>117–122</td><td>97–107</td><td>122–127</td><td>185–190</td></tr>
+            @foreach($sizeGuide['rows'] as $row)
+            <tr>
+              @foreach($row as $cell)
+              <td>{{ $cell }}</td>
+              @endforeach
+            </tr>
+            @endforeach
           </tbody>
         </table>
       </div>
     </div>
   </div>
 </div>
+@endif
 
 <!-- ══════════════════════════════════════════
      TOAST — cart confirmation

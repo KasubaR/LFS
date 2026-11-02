@@ -102,10 +102,10 @@ $sizesToString = function (mixed $sizes): string {
         </label>
         <select id="category" name="category" class="admin-input" required>
           <option value="">— Select —</option>
-          @foreach($PRODUCT_CATEGORIES as $c)
-            <option value="{{ $c }}"
-              {{ ($p['category'] ?? '') === $c ? 'selected' : '' }}>
-              {{ str_replace('-', ' ', $c) }}
+          @foreach($PRODUCT_CATEGORIES as $slug => $label)
+            <option value="{{ $slug }}"
+              {{ ($p['category'] ?? '') === $slug ? 'selected' : '' }}>
+              {{ $label }}
             </option>
           @endforeach
         </select>
@@ -143,6 +143,23 @@ $sizesToString = function (mixed $sizes): string {
                placeholder="e.g. S:10, M:8, L:4" />
         <p class="admin-help-text">Format: SIZE:QTY — comma-separated. Example: S:10, M:8, L:4</p>
       </div>
+    </div>
+
+    <!-- Size guide -->
+    <div class="admin-form__field">
+      <label class="admin-label" for="sizeGuideId">Size guide</label>
+      <select id="sizeGuideId" name="sizeGuideId" class="admin-input">
+        <option value="">None — don't show a size guide</option>
+        @foreach(($SIZE_GUIDES ?? []) as $guideId => $guideName)
+          <option value="{{ $guideId }}"
+            {{ (string) ($p['sizeGuideId'] ?? '') === (string) $guideId ? 'selected' : '' }}>
+            {{ $guideName }}
+          </option>
+        @endforeach
+      </select>
+      <p class="admin-help-text">
+        Shown on this product's page. <a href="/admin/products/size-guides">Manage size guides</a>
+      </p>
     </div>
 
     <!-- Stock & sort -->

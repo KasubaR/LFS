@@ -4,9 +4,10 @@ namespace App\Http\Controllers\Admin;
 
 use Illuminate\Http\Response;
 
-use App\Enums\ProductCategory;
 use App\Http\Controllers\Controller;
+use App\Services\ProductCategoryService;
 use App\Services\ProductService;
+use App\Services\SizeGuideService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,6 +22,8 @@ class ProductController extends Controller
 
     public function __construct(
         private readonly ProductService $productService,
+        private readonly ProductCategoryService $categoryService,
+        private readonly SizeGuideService $sizeGuideService,
     ) {}
 
     public function index(Request $request): View
@@ -57,7 +60,7 @@ class ProductController extends Controller
             'pages' => $pages,
             'currentPage' => $page,
             'filters' => ['category' => $category, 'search' => $search],
-            'PRODUCT_CATEGORIES' => ProductCategory::ALL,
+            'PRODUCT_CATEGORIES' => $this->categoriesWithProducts((string) $category),
             'formatPrice' => fn ($v) => 'ZMW '.number_format((float) $v, 2),
         ]);
     }
@@ -68,8 +71,9 @@ class ProductController extends Controller
             'pageTitle' => 'New Product',
             'activePage' => 'products',
             'product' => null,
-            'PRODUCT_CATEGORIES' => ProductCategory::ALL,
+            'PRODUCT_CATEGORIES' => $this->categoryService->formOptions(),
             'GENDER_OPTIONS' => self::GENDER_OPTIONS,
+            'SIZE_GUIDES' => $this->sizeGuideService->options(),
             'isEdit' => false,
             'error' => null,
         ]);
@@ -117,8 +121,9 @@ class ProductController extends Controller
             'pageTitle' => 'Edit Product',
             'activePage' => 'products',
             'product' => $product,
-            'PRODUCT_CATEGORIES' => ProductCategory::ALL,
+            'PRODUCT_CATEGORIES' => $this->categoryService->formOptions($product['category'] ?? null),
             'GENDER_OPTIONS' => self::GENDER_OPTIONS,
+            'SIZE_GUIDES' => $this->sizeGuideService->options(),
             'isEdit' => true,
             'error' => null,
         ]);
@@ -139,7 +144,7 @@ class ProductController extends Controller
         }
 
         $body = $request->all();
-        if ($error = $this->validateProductBody($body)) {
+        if ($error = $this->validateProductBody($body, $existing['category'] ?? null)) {
             $merged = array_merge($existing, $body);
 
             return $this->renderFormWithError($merged, true, 'Edit Product', $merged, $error);
@@ -174,6 +179,7 @@ class ProductController extends Controller
         $related = $this->productService->findRelatedByCategory($product['category'], $product['id'], 4);
 
         return view('pages.productDetails', [
+            'sizeGuide' => $this->sizeGuideService->getById($product['sizeGuideId'] ?? null),
             'title' => $product['name'].' — LFS Shop (Preview)',
             'description' => $product['shortDescription']
                 ?? substr($product['description'] ?? '', 0, 155)
@@ -202,13 +208,35 @@ class ProductController extends Controller
     }
 
     /**
+     * Filter options for the product list: categories that have any product
+     * (hidden included), plus the one currently selected so the filter doesn't
+     * silently reset.
+     *
+     * @return array<string, string>
+     */
+    private function categoriesWithProducts(string $selected): array
+    {
+        try {
+            return $this->categoryService->filterOptions(true, $selected);
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /**
      * @param  array<string, mixed>  $body
      */
-    private function validateProductBody(array $body): ?string
+    private function validateProductBody(array $body, ?string $currentCategory = null): ?string
     {
         if (empty($body['name']) || ! isset($body['price']) || $body['price'] === ''
             || empty($body['category']) || empty($body['gender'])) {
             return 'Name, price, category and gender are required.';
+        }
+        if (! $this->categoryService->isAssignable((string) $body['category'], $currentCategory)) {
+            return 'Please choose a valid category.';
+        }
+        if (($body['sizeGuideId'] ?? '') !== '' && ! $this->sizeGuideService->exists((int) $body['sizeGuideId'])) {
+            return 'Please choose a valid size guide.';
         }
         $numericPrice = (float) $body['price'];
         if ($numericPrice < 0 || ! is_finite($numericPrice)) {
@@ -239,6 +267,7 @@ class ProductController extends Controller
             'featured' => $this->normaliseCheckbox($body['featured'] ?? null),
             'isActive' => $this->normaliseCheckbox($body['isActive'] ?? null),
             'sortOrder' => ($body['sortOrder'] ?? '') !== '' ? (int) $body['sortOrder'] : 0,
+            'sizeGuideId' => ($body['sizeGuideId'] ?? '') !== '' ? (int) $body['sizeGuideId'] : null,
         ];
     }
 
@@ -251,8 +280,9 @@ class ProductController extends Controller
             'pageTitle' => $pageTitle,
             'activePage' => 'products',
             'product' => $product ?? $formData,
-            'PRODUCT_CATEGORIES' => ProductCategory::ALL,
+            'PRODUCT_CATEGORIES' => $this->categoryService->formOptions(($product ?? $formData)['category'] ?? null),
             'GENDER_OPTIONS' => self::GENDER_OPTIONS,
+            'SIZE_GUIDES' => $this->sizeGuideService->options(),
             'isEdit' => $isEdit,
             'error' => $error,
             'breadcrumbs' => [

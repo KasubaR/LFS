@@ -6,6 +6,7 @@ use App\Models\Membership;
 use App\Models\MembershipPlan;
 use App\Models\Satellite;
 use App\Models\User;
+use Carbon\Carbon;
 use Database\Seeders\MembershipPlanSeeder;
 use Database\Seeders\SatelliteSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -24,6 +25,8 @@ class MembershipApplicationTest extends TestCase
 
     public function test_verified_user_can_view_membership_apply_page(): void
     {
+        // Inside the Jan-Apr grace window instalments are offered.
+        Carbon::setTestNow('2026-02-10 10:00:00');
         $user = User::factory()->create();
 
         $response = $this->actingAs($user)->get('/membership/apply');
@@ -36,6 +39,31 @@ class MembershipApplicationTest extends TestCase
         $response->assertSee('Full annual payment', false);
         $response->assertDontSee('Quarterly', false);
         $response->assertDontSee('Semi Annual', false);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_apply_page_offers_only_the_full_amount_after_the_grace_window(): void
+    {
+        $user = User::factory()->create();
+
+        // 15 May: no instalments, full K1,000.
+        Carbon::setTestNow('2026-05-15 10:00:00');
+        $this->actingAs($user)->get('/membership/apply')
+            ->assertOk()
+            ->assertSee('K1,000', false)
+            ->assertDontSee('K250 initial payment', false)
+            ->assertDontSee('K500 initial payment', false);
+
+        // From 1 July: the reduced late-joiner fee.
+        Carbon::setTestNow('2026-07-01 10:00:00');
+        $this->actingAs($user)->get('/membership/apply')
+            ->assertOk()
+            ->assertSee('K500', false)
+            ->assertDontSee('K250 initial payment', false)
+            ->assertDontSee('K1,000', false);
+
+        Carbon::setTestNow();
     }
 
     public function test_verified_user_can_submit_membership_application(): void
