@@ -83,6 +83,18 @@ class AccountController extends Controller
                 : $amountDue;
         }
 
+        // Past the grace window there are no instalments: the full amount due is
+        // charged whatever plan was picked, so offer no choice (payment panel)
+        // or only that one amount (renewal), instead of K250/K500/K1,000 options
+        // that wouldn't be honoured.
+        $withinGrace = $this->membershipService->isWithinGraceWindow();
+        $renewalPlans = $this->planService->getActivePlans();
+        if (! $withinGrace && $renewalPlans !== []) {
+            $fullPlan = collect($renewalPlans)->sortByDesc('price')->first();
+            $fullPlan['displayPrice'] = $this->membershipService->currentAnnualPricing()['amount'];
+            $renewalPlans = [$fullPlan];
+        }
+
         $viewData = $this->accountViewData(array_merge([
             'title' => 'My Dashboard',
             'description' => 'Your LFS member dashboard and membership status.',
@@ -92,8 +104,9 @@ class AccountController extends Controller
             'canRenew' => $membership !== null && $membership->status === MembershipStatus::Expired,
             'hasPaidMembership' => $hasPaidMembership,
             'chargeAmountNow' => $chargeAmountNow,
-            'renewalPlans' => $this->planService->getActivePlans(),
-            'changePlans' => $canContinuePayment ? $this->planService->getActivePlans() : [],
+            'withinGrace' => $withinGrace,
+            'renewalPlans' => $renewalPlans,
+            'changePlans' => ($canContinuePayment && $withinGrace) ? $this->planService->getActivePlans() : [],
             'announcements' => $hasPaidMembership ? $this->announcementService->getActiveForMembers(5) : [],
             'extraScripts' => $canContinuePayment
                 ? '<script src="'.asset('js/account-payment.js').'"></script>'

@@ -111,7 +111,7 @@
           @if($canRenew)
             <div class="auth-account-card auth-renewal-panel">
               <p class="auth-renewal-panel__text">
-                Your annual membership has expired. Choose how much to pay now to renew.
+                {{ ($withinGrace ?? true) ? 'Your annual membership has expired. Choose how much to pay now to renew.' : 'Your annual membership has expired. Renew by paying the amount below.' }}
               </p>
               <form action="{{ url('/account/renew') }}" method="post" class="space-y-4">
                 @csrf
@@ -126,15 +126,22 @@
                             <span class="auth-plan-option__name">{{ $plan['name'] }}</span>
                             <span class="auth-plan-option__meta">Pay now</span>
                           </span>
-                          <span class="auth-plan-option__price">K{{ number_format($plan['price']) }}</span>
+                          <span class="auth-plan-option__price">K{{ number_format($plan['displayPrice'] ?? $plan['price']) }}</span>
                         </span>
                       </label>
                     @endforeach
                   </div>
-                  <p class="auth-plan-note">
-                    Every option renews the same annual membership through 31 December.
-                    K250 and K500 are partial payments toward the annual fee.
-                  </p>
+                  @if($withinGrace ?? true)
+                    <p class="auth-plan-note">
+                      Every option renews the same annual membership through 31 December.
+                      K250 and K500 are partial payments toward the annual fee.
+                    </p>
+                  @else
+                    <p class="auth-plan-note">
+                      The 30 April deadline for paying in instalments has passed, so the full
+                      amount is payable now. This renews your membership through 31 December.
+                    </p>
+                  @endif
                   @error('plan_id')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
                 </div>
                 <button type="submit" class="btn btn-primary w-full justify-center">
