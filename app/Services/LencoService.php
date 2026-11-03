@@ -9,8 +9,6 @@ use RuntimeException;
 
 class LencoService
 {
-    private const BASE_URL_V2 = 'https://api.lenco.co/access/v2';
-
     private const MAX_RETRIES = 3;
 
     private const TIMEOUT_SEC = 30;
@@ -21,8 +19,11 @@ class LencoService
 
     private string $webhookSecret;
 
+    private string $baseUrl;
+
     public function __construct()
     {
+        $this->baseUrl = rtrim((string) config('services.lenco.base_url'), '/');
         $this->apiKey = (string) config('services.lenco.api_secret_key', '');
         $this->webhookSecret = (string) config('services.lenco.webhook_secret', '');
     }
@@ -50,7 +51,7 @@ class LencoService
             'description' => 'LFS order '.($order['orderNumber'] ?? ''),
         ];
 
-        $response = $this->request('POST', self::BASE_URL_V2.'/collections/mobile-money', $payload);
+        $response = $this->request('POST', $this->baseUrl.'/collections/mobile-money', $payload);
         $collection = $response['data'] ?? $response;
 
         return $this->normalise($collection, $reference);
@@ -62,8 +63,8 @@ class LencoService
     public function verifyPayment(string $identifier, bool $byReference = true): array
     {
         $path = $byReference
-            ? self::BASE_URL_V2.'/collections/status/'.urlencode($identifier)
-            : self::BASE_URL_V2.'/collections/'.urlencode($identifier);
+            ? $this->baseUrl.'/collections/status/'.urlencode($identifier)
+            : $this->baseUrl.'/collections/'.urlencode($identifier);
 
         try {
             $response = $this->request('GET', $path);

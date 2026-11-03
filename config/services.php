@@ -38,6 +38,8 @@ return [
     'lenco' => [
         'api_secret_key' => env('LENCO_API_SECRET_KEY', ''),
         'webhook_secret' => env('LENCO_WEBHOOK_SECRET', ''),
+        // Production: https://api.lenco.co/access/v2 — Sandbox: https://sandbox.lenco.co/access/v2
+        'base_url' => env('LENCO_BASE_URL', 'https://api.lenco.co/access/v2'),
     ],
 
 ];
