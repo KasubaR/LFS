@@ -47,10 +47,30 @@ $_heroFeatureCount = count($_feBanners);
      1. HERO
      ══════════════════════════════════════════════ -->
 <section id="hero"
-  class="home-hero home-hero--compact relative overflow-hidden flex flex-col justify-center">
+  class="home-hero home-hero--compact relative overflow-hidden flex flex-col justify-center{{ $_heroFeatureCount > 0 ? ' home-hero--featured-active' : '' }}">
 
   <div class="home-hero__bg" id="heroSliderBg" aria-hidden="true">
     @foreach($_slideUrls as $_i => $_url)
+      @if($_i < $_heroFeatureCount)
+      {{-- Featured event banner: shown whole over a blurred copy of itself (see home.css). --}}
+      @php
+        $_cssUrl = str_replace(["'", '"', '(', ')', ' '], ['%27', '%22', '%28', '%29', '%20'], $_url);
+      @endphp
+      <div
+        class="home-hero__slide home-hero__slide--featured{{ $_i === 0 ? ' home-hero__slide--active' : '' }}"
+        style="--hero-bg: url('{{ $_cssUrl }}')"
+        aria-hidden="true">
+        <div class="home-hero__poster-wrap">
+          <img
+            src="{{ $_url }}"
+            class="home-hero__poster"
+            alt=""
+            loading="{{ $_i === 0 ? 'eager' : 'lazy' }}"
+            aria-hidden="true"
+          >
+        </div>
+      </div>
+      @else
       <img
         src="{{ $_url }}"
         class="home-hero__slide{{ $_i === 0 ? ' home-hero__slide--active' : '' }}"
@@ -58,6 +78,7 @@ $_heroFeatureCount = count($_feBanners);
         loading="{{ $_i === 0 ? 'eager' : 'lazy' }}"
         aria-hidden="true"
       >
+      @endif
     @endforeach
   </div>
 
@@ -181,9 +202,12 @@ $_heroFeatureCount = count($_feBanners);
   const featuredCount = wrap ? parseInt(wrap.getAttribute('data-hero-featured-count') || '0', 10) : 0;
   const panels = document.querySelectorAll('.home-hero__featured-panel');
   const genericContent = document.getElementById('heroGenericContent');
+  const heroEl = document.getElementById('hero');
 
   function syncFeaturedPanels(slideIndex) {
     const isFeaturedSlide = wrap && featuredCount > 0 && slideIndex < featuredCount;
+    // Lets narrow screens leave room above the text for the poster.
+    if (heroEl) heroEl.classList.toggle('home-hero--featured-active', !!isFeaturedSlide);
 
     if (isFeaturedSlide) {
       wrap.classList.remove('home-hero__featured-wrap--conceal');

@@ -415,6 +415,16 @@ if (! function_exists('toDateTimeLocal')) {
       <input type="file" id="bannerImageFile" name="bannerImageFile"
              accept="image/jpeg,image/png,image/webp" class="event-form__file" />
       <p class="event-form__banner-hint">Upload an image or paste a URL below. Leave both empty for no banner.</p>
+      <div id="bannerSizeHint" class="event-form__banner-hint" style="margin-top:0.5rem; padding:0.6rem 0.8rem; border:1px dashed var(--border-mid); border-radius:8px;">
+        <strong style="color:var(--off-white);"><i class="fas fa-image" aria-hidden="true"></i> Recommended banner size</strong>
+        <ul style="margin:0.35rem 0 0 1.1rem; padding:0; list-style:disc; line-height:1.55;">
+          <li><strong>1920 × 1080 px</strong> (16:9, landscape) fills the home hero best. Minimum 1280 × 720.</li>
+          <li>A portrait poster (for example <strong>1080 × 1350 px</strong>, 4:5) also works. It is shown whole but smaller, so use at least 1080 px wide.</li>
+          <li>JPG, PNG or WebP, under <strong>5&nbsp;MB</strong>. Upload the original design file: images forwarded through WhatsApp are compressed and look soft.</li>
+          <li>The <strong>home page hero</strong> shows the whole banner (nothing is cropped) beside the event title, so a poster with text works well.</li>
+          <li>On the event page the banner is a wide strip and can be trimmed at the top and bottom, so keep important text and faces away from the edges.</li>
+        </ul>
+      </div>
       <label class="form-label" for="bannerImage">Or banner image URL</label>
       <input type="text" id="bannerImage" name="bannerImage" class="admin-input"
              value="{{ $ev['bannerImage'] ?? '' }}"

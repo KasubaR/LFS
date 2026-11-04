@@ -25,10 +25,15 @@
   visibility: hidden;
 }
 
+/*
+ * All featured panels share ONE grid cell, so the container is as tall and as
+ * wide as the largest panel and the title, date and buttons are never clipped.
+ * (They used to be position:absolute inside a fixed min-height box: that gave
+ * the block no intrinsic size, so long titles wrapped one word per line and
+ * pushed the "View Event Details" button out of the hero.)
+ */
 .home-hero__featured-panels {
-  position: relative;
-  /* Must clear headline + meta + CTA (panels are stacked absolutely) */
-  min-height: clamp(12rem, 36vw, 24rem);
+  display: grid;
 }
 
 .home-hero__featured {
@@ -36,10 +41,8 @@
 }
 
 .home-hero__featured-panel {
-  position: absolute;
-  left: 0;
-  top: 0;
-  right: 0;
+  grid-area: 1 / 1;
+  min-width: 0;
   opacity: 0;
   pointer-events: none;
   transition: opacity 1s ease;
@@ -119,6 +122,69 @@
 }
 .home-hero__slide--active {
   opacity: 1;
+}
+
+/*
+ * Featured event slide: the banner is usually a poster with text in it, so it
+ * is shown WHOLE (object-fit: contain) instead of being zoomed and cropped.
+ * A blurred, darkened copy fills the rest of the hero so there are no bars.
+ * Gallery slides keep the full-bleed cover treatment above.
+ */
+.home-hero__slide--featured {
+  background: #0f0f0f;
+  overflow: hidden;
+}
+
+.home-hero__slide--featured::before {
+  content: '';
+  position: absolute;
+  inset: -6%;
+  background: var(--hero-bg) center / cover no-repeat;
+  filter: blur(26px) brightness(0.55) saturate(1.1);
+}
+
+/*
+ * The wrapper reserves the fixed navbar (73px) above the poster and a little
+ * room below, and the image is centred inside what is left. The image keeps
+ * its own shape (no cropping), so the rounded corners and shadow hug it.
+ */
+.home-hero__poster-wrap {
+  position: absolute;
+  top: 5.5rem;      /* clears the fixed navbar */
+  bottom: 2.5rem;   /* clears the slider dots */
+  left: 40%;
+  right: 4%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.home-hero__poster {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+}
+
+/* Narrow screens: poster across the top (below the navbar), text underneath it. */
+@media (max-width: 899px) {
+  .home-hero__poster-wrap {
+    top: 6.25rem;     /* the mobile navbar is about 89px tall */
+    bottom: auto;
+    left: 1rem;
+    right: 1rem;
+    height: 52vw;
+    justify-content: center;
+  }
+
+  .home-hero--featured-active .home-hero__content {
+    /* The hero already pads 4rem at the top; the poster ends at 6.25rem + 52vw. */
+    padding-top: calc(52vw + 3.5rem);
+  }
 }
 
 /* Dot indicators */
