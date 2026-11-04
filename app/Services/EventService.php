@@ -331,7 +331,8 @@ class EventService
 
         $ticketing = [];
         if (array_key_exists('registrationType', $data)) {
-            $ticketing = $this->normaliseTicketing($data);
+            // A partial update may omit the category; fall back to the stored one.
+            $ticketing = $this->normaliseTicketing($data + ['category' => Event::query()->whereKey($id)->value('category')]);
             $this->guardTicketingChange($id, $data, $ticketing);
         }
 
@@ -558,8 +559,8 @@ class EventService
 
     /**
      * Tickets already committed against an event's capacity: tickets on paid
-     * orders, on pending orders still inside their reservation window, and on
-     * orders held for payment review (money received, not yet resolved).
+     * orders and on pending orders still inside their reservation window.
+     * (Orders held for payment review do not count; see TicketAvailability.)
      */
     public function committedTicketCount(string $eventId): int
     {
@@ -595,6 +596,13 @@ class EventService
                 'ticket_sales_open' => true,
                 'ticket_status' => 'scheduled',
             ];
+        }
+
+        if (! in_array((string) ($data['category'] ?? ''), \App\Enums\EventCategory::TICKETABLE, true)) {
+            throw $this->codeException(
+                'Paid tickets are only available for Social events. Other events keep the normal registration options.',
+                self::TICKETING_INVALID_CODE
+            );
         }
 
         if (($data['recurrenceType'] ?? 'none') === 'weekly') {

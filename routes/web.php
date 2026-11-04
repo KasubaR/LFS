@@ -4,6 +4,7 @@ use App\Http\Controllers\BlogController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\CookieController;
 use App\Http\Controllers\EventController;
+use App\Http\Controllers\TicketController;
 use App\Http\Controllers\GalleryController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\MembershipVerifyController;
@@ -22,6 +23,20 @@ Route::get('/', [HomeController::class, 'index']);
 
 Route::get('/events', [EventController::class, 'index']);
 Route::get('/events/{slug}', [EventController::class, 'show'])->where('slug', '[^/]+');
+
+// ── Event tickets (paid events) ──────────────────────────────────────────────
+Route::get('/events/{slug}/tickets', [TicketController::class, 'checkout'])->where('slug', '[^/]+');
+Route::post('/events/{slug}/tickets/quote', [TicketController::class, 'quote'])
+    ->where('slug', '[^/]+')->middleware('throttle:30,1');
+Route::post('/events/{slug}/tickets/order', [TicketController::class, 'order'])
+    ->where('slug', '[^/]+')->middleware('throttle:10,1');
+
+Route::get('/tickets/find', [TicketController::class, 'findForm']);
+Route::post('/tickets/find', [TicketController::class, 'find'])->middleware('throttle:5,1');
+Route::get('/tickets/{orderNumber}', [TicketController::class, 'show'])
+    ->where('orderNumber', '[^/]+')->name('tickets.show');
+Route::get('/tickets/{orderNumber}/status', [TicketController::class, 'status'])
+    ->where('orderNumber', '[^/]+')->middleware('throttle:60,1');
 
 Route::get('/news', [BlogController::class, 'index']);
 Route::get('/news/{slug}', [BlogController::class, 'show'])->where('slug', '[^/]+');

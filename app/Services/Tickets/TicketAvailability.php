@@ -95,23 +95,26 @@ class TicketAvailability
     }
 
     /**
-     * Tickets holding capacity: paid orders, orders held for payment review
-     * (money received, unresolved), and pending orders still inside their
-     * reservation window. An expired pending order stops counting immediately,
-     * before the poller has formally cancelled it.
+     * Tickets holding capacity: paid orders, and pending orders still inside
+     * their reservation window. An expired pending order stops counting
+     * immediately, before the poller has formally cancelled it.
+     *
+     * Orders in `payment_review_required` deliberately do NOT count. Money has
+     * been received but no ticket is valid, and the usual reason they are in
+     * review is that their tickets were already sold to someone else. Counting
+     * them would double-count capacity. An admin resolving one as "fulfil"
+     * re-checks capacity at that moment and fails safely if it is gone.
      */
     public function committedTickets(string $eventId): int
     {
         return (int) EventTicketOrder::query()
             ->where('event_id', $eventId)
             ->where(function ($q): void {
-                $q->whereIn('status', [
-                    EventTicketOrder::STATUS_PAID,
-                    EventTicketOrder::STATUS_PAYMENT_REVIEW_REQUIRED,
-                ])->orWhere(function ($q2): void {
-                    $q2->where('status', EventTicketOrder::STATUS_PENDING_PAYMENT)
-                        ->where('expires_at', '>', now());
-                });
+                $q->where('status', EventTicketOrder::STATUS_PAID)
+                    ->orWhere(function ($q2): void {
+                        $q2->where('status', EventTicketOrder::STATUS_PENDING_PAYMENT)
+                            ->where('expires_at', '>', now());
+                    });
             })
             ->sum('quantity');
     }

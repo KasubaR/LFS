@@ -124,6 +124,12 @@ if (! function_exists('formatEventDate')) {
             <td style="padding:0.75rem; color:var(--text-dim); font-size:0.85rem;">{{ $ev['slug'] ?? '—' }}</td>
             <td style="padding:0.75rem;">
               <div class="upcoming-events__actions">
+                @if(($ev['registrationType'] ?? '') === 'paid')
+                <a href="/admin/events/{{ $ev['id'] }}/tickets"
+                   class="admin-btn admin-btn--sm">
+                  <i class="fas fa-ticket" aria-hidden="true"></i> Tickets
+                </a>
+                @endif
                 <a href="/admin/events/{{ $ev['id'] }}/edit"
                    class="admin-btn admin-btn--primary admin-btn--sm">
                   <i class="fas fa-pen" aria-hidden="true"></i> Edit

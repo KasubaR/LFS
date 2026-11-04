@@ -73,6 +73,34 @@ class PaymentService
             ->update($updates) > 0;
     }
 
+    /**
+     * Fills in the gateway details on a payment row that was written BEFORE
+     * the gateway call (write-ahead). Does not change `status`.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function recordGatewayInitiation(int $id, array $data): bool
+    {
+        $map = [
+            'lencoTransactionId' => 'lenco_transaction_id',
+            'lencoReference' => 'lenco_reference',
+            'lencoProvider' => 'lenco_provider',
+            'lencoStatus' => 'lenco_status',
+            'lencoResponse' => 'lenco_response',
+            'paymentInstructions' => 'payment_instructions',
+            'expiresAt' => 'expires_at',
+        ];
+
+        $updates = ['updated_at' => now()];
+        foreach ($map as $camel => $column) {
+            if (array_key_exists($camel, $data)) {
+                $updates[$column] = $data[$camel];
+            }
+        }
+
+        return Payment::query()->whereKey($id)->update($updates) > 0;
+    }
+
     public function findById(int $id): ?array
     {
         $payment = Payment::query()->find($id);

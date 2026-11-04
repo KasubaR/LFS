@@ -95,6 +95,95 @@ trait MakesTicketFixtures
     }
 
     /**
+     * Replaces Lenco's initiation call (everything else stays real, so our
+     * own generateReference() still runs). $result overrides the fake reply.
+     *
+     * @param  array<string, mixed>  $result
+     */
+    /**
+     * Wraps a REAL LencoService (constructor run, config read) so any method
+     * without an expectation still behaves normally, e.g. generateReference()
+     * and verifyWebhookSignature(). Mockery::partialMock() would skip the
+     * constructor and leave typed properties uninitialised.
+     *
+     * @param  callable(\Mockery\MockInterface): void  $configure
+     */
+    protected function lencoPartial(callable $configure): void
+    {
+        $mock = \Mockery::mock(new \App\Services\LencoService);
+        $configure($mock);
+        $this->instance(\App\Services\LencoService::class, $mock);
+    }
+
+    protected function mockLencoInitiation(array $result = []): void
+    {
+        $this->lencoPartial(function ($mock) use ($result): void {
+            $mock->shouldReceive('initiateMobileMoneyPayment')->andReturnUsing(
+                fn (array $order, string $phone, string $op, ?string $reference = null): array => array_merge([
+                    'transactionId' => 'lenco-'.Str::random(8),
+                    'lencoReference' => 'LR-'.Str::random(6),
+                    'reference' => $reference,
+                    'status' => 'pending',
+                    'internalStatus' => 'pending',
+                    'amount' => $order['totals']['total'],
+                    'currency' => 'ZMW',
+                    'paymentInstructions' => 'Approve the payment on your phone.',
+                    'paymentUrl' => null,
+                    'expiresAt' => null,
+                    'rawResponse' => [],
+                ], $result)
+            );
+        });
+    }
+
+    /**
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    protected function orderInput(array $overrides = []): array
+    {
+        return array_merge([
+            'buyerName' => 'John Banda',
+            'buyerEmail' => 'john@example.com',
+            'buyerPhone' => '0971111111',
+            'payerPhone' => '0971111111',
+            'provider' => 'mtn',
+            'quantity' => 1,
+            'attendees' => [['name' => 'John Banda']],
+            'buyerAttending' => true,
+        ], $overrides);
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     */
+    protected function placeTicketOrder(Event $event, array $input = [], ?User $user = null): \App\Services\Tickets\TicketOrderResult
+    {
+        return app(\App\Services\Tickets\TicketOrderService::class)->create($event->id, $this->orderInput($input), $user);
+    }
+
+    /**
+     * A normalised "Lenco says it succeeded" result for an order.
+     *
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    protected function lencoSuccess(EventTicketOrder $order, array $overrides = []): array
+    {
+        return array_merge([
+            'status' => 'successful',
+            'internalStatus' => 'completed',
+            'amount' => (float) $order->total,
+            'currency' => 'ZMW',
+        ], $overrides);
+    }
+
+    protected function paymentFor(EventTicketOrder $order): \App\Models\Payment
+    {
+        return \App\Models\Payment::query()->where('order_number', $order->order_number)->firstOrFail();
+    }
+
+    /**
      * @param  array<string, mixed>  $overrides
      */
     protected function makeTicketOrder(Event $event, string $status, int $quantity, array $overrides = []): EventTicketOrder

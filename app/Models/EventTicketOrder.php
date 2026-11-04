@@ -49,6 +49,7 @@ class EventTicketOrder extends Model
         'cancelled_at',
         'confirmation_email_sent_at',
         'idempotency_token',
+        'review_reason',
     ];
 
     protected function casts(): array

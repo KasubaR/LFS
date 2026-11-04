@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\EventTicketOrder;
 use App\Models\MembershipPayment;
 use App\Models\Payment;
 use App\Services\LencoService;
@@ -9,6 +10,8 @@ use App\Services\MembershipPaymentService;
 use App\Services\MembershipService;
 use App\Services\OrderService;
 use App\Services\PaymentService;
+use App\Services\Tickets\TicketConfirmationService;
+use App\Services\Tickets\TicketPaymentOutcomeService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -34,18 +37,26 @@ class PollPendingPaymentsCommand extends Command
         OrderService $orders,
         MembershipPaymentService $membershipPayments,
         MembershipService $membershipService,
+        TicketPaymentOutcomeService $ticketOutcome,
+        TicketConfirmationService $ticketConfirmations,
     ): int {
         $cutoff = now()->subMinutes(self::STALE_AFTER_MINUTES);
 
         [$orderChecked, $orderResolved] = $this->pollOrderPayments($lenco, $payments, $orders, $cutoff);
         [$membershipChecked, $membershipResolved] = $this->pollMembershipPayments($lenco, $membershipPayments, $membershipService, $cutoff);
+        [$ticketChecked, $ticketResolved] = $this->pollTicketPayments($lenco, $ticketOutcome, $cutoff);
+
+        // Paid ticket orders whose confirmation email failed to send (mail outage).
+        $ticketConfirmations->retryUnsent();
 
         $this->info(sprintf(
-            'Shop: checked %d, resolved %d. Membership: checked %d, resolved %d.',
+            'Shop: checked %d, resolved %d. Membership: checked %d, resolved %d. Tickets: checked %d, resolved %d.',
             $orderChecked,
             $orderResolved,
             $membershipChecked,
             $membershipResolved,
+            $ticketChecked,
+            $ticketResolved,
         ));
 
         return self::SUCCESS;
@@ -56,9 +67,13 @@ class PollPendingPaymentsCommand extends Command
      */
     private function pollOrderPayments(LencoService $lenco, PaymentService $payments, OrderService $orders, Carbon $cutoff): array
     {
+        // Event ticket payments are settled by pollTicketPayments(); the shop
+        // path below would mark a shop order that doesn't exist and restore
+        // stock that was never taken.
         $stuck = Payment::query()
             ->where('status', 'pending')
             ->whereNotNull('transaction_id')
+            ->where('order_number', 'not like', config('tickets.order_prefix', 'LFSEV-').'%')
             ->where('created_at', '<', $cutoff)
             ->limit(self::BATCH_LIMIT)
             ->get();
@@ -116,6 +131,72 @@ class PollPendingPaymentsCommand extends Command
             }
 
             $resolved++;
+        }
+
+        return [$checked, $resolved];
+    }
+
+    /**
+     * Settles event ticket payments through the same single path as the
+     * webhook and verify endpoint, and releases reservations that lapsed.
+     *
+     * @return array{0: int, 1: int}
+     */
+    private function pollTicketPayments(LencoService $lenco, TicketPaymentOutcomeService $outcome, Carbon $cutoff): array
+    {
+        $prefix = (string) config('tickets.order_prefix', 'LFSEV-');
+
+        $stuck = Payment::query()
+            ->where('status', 'pending')
+            ->whereNotNull('transaction_id')
+            ->where('order_number', 'like', $prefix.'%')
+            ->where('created_at', '<', $cutoff)
+            ->limit(self::BATCH_LIMIT)
+            ->get();
+
+        $checked = 0;
+        $resolved = 0;
+
+        foreach ($stuck as $payment) {
+            $checked++;
+
+            try {
+                $result = $lenco->verifyPayment($payment->transaction_id, true);
+            } catch (Throwable $e) {
+                Log::warning('[PollPendingPaymentsCommand] ticket verify failed', [
+                    'paymentId' => $payment->id,
+                    'error' => $e->getMessage(),
+                ]);
+
+                continue;
+            }
+
+            $result = $result + ['internalStatus' => 'pending'];
+
+            if (in_array($result['internalStatus'], ['completed', 'failed', 'cancelled'], true)) {
+                if ($outcome->apply($payment, $result, 'poller') !== TicketPaymentOutcomeService::NOOP) {
+                    $resolved++;
+                }
+
+                continue;
+            }
+
+            // Still pending at the gateway: release the reservation once it lapses.
+            $order = EventTicketOrder::query()->where('order_number', $payment->order_number)->first();
+            if ($order === null) {
+                continue;
+            }
+
+            if ($outcome->expireIfStale($order)) {
+                $resolved++;
+            }
+
+            // Give up on a payment the gateway never resolves, so it isn't polled forever.
+            // (The order stays cancelled. Money arriving after this point is logged as critical.)
+            $giveUpAfter = $order->expires_at?->copy()->addHours((int) config('tickets.poll_give_up_hours', 24));
+            if ($giveUpAfter !== null && now()->greaterThan($giveUpAfter)) {
+                $outcome->giveUpOnPayment($payment);
+            }
         }
 
         return [$checked, $resolved];

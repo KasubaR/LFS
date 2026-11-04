@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DocumentController;
 use App\Http\Controllers\Admin\ElectionController;
 use App\Http\Controllers\Admin\EventController;
+use App\Http\Controllers\Admin\EventTicketController;
 use App\Http\Controllers\Admin\FaqController;
 use App\Http\Controllers\Admin\GalleryController;
 use App\Http\Controllers\Admin\MembersController;
@@ -59,6 +60,16 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
         Route::post('/', [EventController::class, 'store']);
         Route::get('{id}/edit', [EventController::class, 'edit'])->where('id', '[^/]+');
         Route::post('{id}/delete', [EventController::class, 'destroy'])->where('id', '[^/]+');
+
+        // Paid-event tickets: sales list, entrance attendance, export. Registered
+        // before the catch-all POST {id} so '/tickets/...' is never read as an event id.
+        Route::get('{id}/tickets', [EventTicketController::class, 'index'])->where('id', '[^/]+');
+        Route::get('{id}/tickets/export', [EventTicketController::class, 'export'])->where('id', '[^/]+');
+        Route::get('{id}/attendance', [EventTicketController::class, 'attendancePage'])->where('id', '[^/]+');
+        Route::get('{id}/attendance/search', [EventTicketController::class, 'search'])->where('id', '[^/]+');
+        Route::post('{id}/tickets/{ticketId}/present', [EventTicketController::class, 'present'])->where(['id' => '[^/]+', 'ticketId' => '[^/]+']);
+        Route::post('{id}/tickets/{ticketId}/undo-present', [EventTicketController::class, 'undo'])->where(['id' => '[^/]+', 'ticketId' => '[^/]+']);
+
         Route::post('{id}', [EventController::class, 'update'])->where('id', '[^/]+');
     });
 

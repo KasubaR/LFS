@@ -130,6 +130,83 @@ class EventTicketingAdminTest extends TestCase
         $this->assertDatabaseCount('events', 0);
     }
 
+    public function test_paid_tickets_are_only_allowed_for_social_events(): void
+    {
+        foreach (['LSD', 'Road Race', 'Training', 'Training Camp', 'Other', ''] as $category) {
+            $this->actingAsAdmin()
+                ->post('/admin/events', $this->paidPayload(['category' => $category]))
+                ->assertOk()
+                ->assertSee('only available for Social events');
+        }
+
+        $this->assertDatabaseCount('events', 0);
+
+        // Social is allowed.
+        $this->createPaidEvent(['category' => 'Social']);
+        $this->assertDatabaseCount('events', 1);
+    }
+
+    public function test_every_non_social_event_keeps_its_normal_registration_options(): void
+    {
+        foreach (['open', 'members', 'none'] as $type) {
+            foreach (['LSD', 'Road Race', 'Training Camp', 'Social'] as $category) {
+                $this->actingAsAdmin()
+                    ->post('/admin/events', $this->paidPayload([
+                        'category' => $category,
+                        'registrationType' => $type,
+                        'registrationLink' => 'https://squidal.com/event',
+                        'slug' => 'evt-'.$type.'-'.str_replace(' ', '-', strtolower($category)),
+                    ]))
+                    ->assertRedirect('/admin/events');
+            }
+        }
+
+        $this->assertDatabaseCount('events', 12);
+        $event = Event::query()->where('slug', 'evt-open-lsd')->firstOrFail();
+        $this->assertSame('open', $event->registration_type);
+        $this->assertSame('https://squidal.com/event', $event->registration_link, 'external registration link still works');
+        $this->assertNull($event->ticket_price_member);
+    }
+
+    public function test_a_social_event_can_still_use_the_normal_registration_instead_of_tickets(): void
+    {
+        $this->actingAsAdmin()->post('/admin/events', $this->paidPayload([
+            'category' => 'Social', 'registrationType' => 'open', 'registrationLink' => 'https://squidal.com/party',
+        ]))->assertRedirect('/admin/events');
+
+        $event = Event::query()->firstOrFail();
+        $this->assertSame('open', $event->registration_type);
+        $this->assertNull($event->ticket_price_member);
+
+        $this->get('/events/'.$event->slug)->assertOk()->assertDontSee('Get tickets');
+    }
+
+    public function test_changing_a_paid_event_to_a_non_social_category_is_refused(): void
+    {
+        $event = $this->createPaidEvent();
+
+        $this->actingAsAdmin()
+            ->post('/admin/events/'.$event->id, $this->paidPayload(['slug' => $event->slug, 'category' => 'LSD']))
+            ->assertOk()
+            ->assertSee('only available for Social events');
+
+        $this->assertSame('Social', $event->fresh()->category);
+        $this->assertSame('paid', $event->fresh()->registration_type);
+    }
+
+    public function test_form_offers_paid_tickets_as_an_optional_extra_for_social_only(): void
+    {
+        $html = $this->actingAsAdmin()->get('/admin/events/create')->assertOk()->getContent();
+
+        // The normal options are all still there.
+        foreach (['Open to all', 'Members only', 'No registration', 'External registration link'] as $label) {
+            $this->assertStringContainsString($label, $html);
+        }
+        $this->assertStringContainsString('Paid tickets', $html);
+        $this->assertStringContainsString('["Social"]', $html, 'the page is told which categories may sell tickets');
+        $this->assertStringContainsString('Social events only', $html);
+    }
+
     public function test_weekly_recurrence_is_rejected_for_paid_events(): void
     {
         $this->actingAsAdmin()
@@ -171,35 +248,36 @@ class EventTicketingAdminTest extends TestCase
         $event = $this->createPaidEvent();
 
         $this->makeOrder($event, EventTicketOrder::STATUS_PAID, 40);
-        $this->makeOrder($event, EventTicketOrder::STATUS_PAYMENT_REVIEW_REQUIRED, 5);
         $this->makeOrder($event, EventTicketOrder::STATUS_PENDING_PAYMENT, 5, [
             'expires_at' => now()->addMinutes(10),
         ]);
-        // These must NOT count: expired reservation, failed and cancelled orders.
+        // These must NOT count: payment review (no valid tickets), expired
+        // reservation, failed and cancelled orders.
+        $this->makeOrder($event, EventTicketOrder::STATUS_PAYMENT_REVIEW_REQUIRED, 5);
         $this->makeOrder($event, EventTicketOrder::STATUS_PENDING_PAYMENT, 20, [
             'expires_at' => now()->subMinutes(10),
         ]);
         $this->makeOrder($event, EventTicketOrder::STATUS_FAILED, 20);
         $this->makeOrder($event, EventTicketOrder::STATUS_CANCELLED, 20);
 
-        // 50 committed. 49 is refused...
+        // 45 committed. 44 is refused...
         $this->actingAsAdmin()
             ->post('/admin/events/'.$event->id, $this->paidPayload([
                 'slug' => $event->slug,
-                'ticketCapacity' => '49',
+                'ticketCapacity' => '44',
             ]))
             ->assertOk()
-            ->assertSee('50 ticket(s) already sold or reserved');
+            ->assertSee('45 ticket(s) already sold or reserved');
         $this->assertSame(100, $event->fresh()->ticket_capacity);
 
-        // ...exactly 50 is allowed, and so is raising it.
+        // ...exactly 45 is allowed, and so is raising it.
         $this->actingAsAdmin()
             ->post('/admin/events/'.$event->id, $this->paidPayload([
                 'slug' => $event->slug,
-                'ticketCapacity' => '50',
+                'ticketCapacity' => '45',
             ]))
             ->assertRedirect('/admin/events');
-        $this->assertSame(50, $event->fresh()->ticket_capacity);
+        $this->assertSame(45, $event->fresh()->ticket_capacity);
 
         $this->actingAsAdmin()
             ->post('/admin/events/'.$event->id, $this->paidPayload([

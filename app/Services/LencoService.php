@@ -37,9 +37,15 @@ class LencoService
      * @param  array<string, mixed>  $order
      * @return array<string, mixed>
      */
-    public function initiateMobileMoneyPayment(array $order, string $phone, string $operator): array
+    /**
+     * @param  string|null  $reference  caller-supplied reference. Ticket orders
+     *                                  generate and save it BEFORE this call so a
+     *                                  charge can always be found again by
+     *                                  reference even if saving the response fails.
+     */
+    public function initiateMobileMoneyPayment(array $order, string $phone, string $operator, ?string $reference = null): array
     {
-        $reference = $this->generateReference($order['orderNumber']);
+        $reference ??= $this->generateReference($order['orderNumber']);
 
         $payload = [
             'phone' => $phone,
@@ -48,7 +54,7 @@ class LencoService
             'currency' => $order['currency'] ?? 'ZMW',
             'reference' => $reference,
             'country' => $order['country'] ?? 'ZM',
-            'description' => 'LFS order '.($order['orderNumber'] ?? ''),
+            'description' => $order['description'] ?? 'LFS order '.($order['orderNumber'] ?? ''),
         ];
 
         $response = $this->request('POST', $this->baseUrl.'/collections/mobile-money', $payload);

@@ -140,7 +140,7 @@ class TicketAvailabilityTest extends TestCase
         $this->assertTrue($this->availability->check($event, 2)->ok());
     }
 
-    public function test_capacity_counts_paid_review_and_live_pending_only(): void
+    public function test_capacity_counts_paid_and_live_pending_only(): void
     {
         $event = $this->makePaidEvent(['ticket_capacity' => 100]);
 
@@ -152,8 +152,9 @@ class TicketAvailabilityTest extends TestCase
         $this->makeTicketOrder($event, EventTicketOrder::STATUS_FAILED, 30);
         $this->makeTicketOrder($event, EventTicketOrder::STATUS_CANCELLED, 30);
 
-        $this->assertSame(17, $this->availability->committedTickets($event->id));
-        $this->assertSame(83, $this->availability->remainingCapacity($event));
+        // 10 paid + 2 live pending. The review order (5) holds no capacity.
+        $this->assertSame(12, $this->availability->committedTickets($event->id));
+        $this->assertSame(88, $this->availability->remainingCapacity($event));
     }
 
     public function test_pending_order_without_expiry_does_not_hold_capacity(): void

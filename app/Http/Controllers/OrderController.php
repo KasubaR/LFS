@@ -7,7 +7,9 @@ use App\Http\Controllers\Concerns\RespondsWithJson;
 use App\Http\Requests\PlaceOrderRequest;
 use App\Services\LencoService;
 use App\Services\OrderService;
+use App\Models\Payment;
 use App\Services\PaymentService;
+use App\Services\Tickets\TicketPaymentOutcomeService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
@@ -27,6 +29,7 @@ class OrderController extends Controller
         private readonly LencoService $lenco,
         private readonly OrderService $orders,
         private readonly PaymentService $payments,
+        private readonly TicketPaymentOutcomeService $ticketOutcome,
     ) {}
 
     public function placeOrder(PlaceOrderRequest $request): JsonResponse
@@ -202,6 +205,12 @@ class OrderController extends Controller
             return $this->jsonError('Payment not found.', 404);
         }
 
+        // Event ticket payments share this endpoint's plumbing but must never
+        // touch shop orders or stock; they settle through the ticket service.
+        if (TicketPaymentOutcomeService::isTicketOrderNumber($orderNumber)) {
+            return $this->verifyTicketPayment($payment, $txId, $orderNumber);
+        }
+
         if (in_array($payment['status'], self::PAYMENT_TERMINAL_STATUSES, true)) {
             return $this->jsonResponse([
                 'ok' => true,
@@ -340,6 +349,13 @@ class OrderController extends Controller
             return;
         }
 
+        $ticketOrderNumber = (string) ($payment['orderNumber'] ?? '');
+        if (TicketPaymentOutcomeService::isTicketOrderNumber($ticketOrderNumber)) {
+            $this->applyTicketWebhook($payment, $data, $rawPayload);
+
+            return;
+        }
+
         if (in_array($payment['status'], self::PAYMENT_TERMINAL_STATUSES, true)) {
             return;
         }
@@ -377,6 +393,74 @@ class OrderController extends Controller
             );
             $this->orders->restoreStockForOrder($orderNumber);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $payment  payment array from PaymentService
+     * @param  array<string, mixed>  $data  parsed webhook payload
+     * @param  array<string, mixed>  $rawPayload
+     */
+    private function applyTicketWebhook(array $payment, array $data, array $rawPayload): void
+    {
+        $model = Payment::query()->find($payment['id']);
+        if ($model === null) {
+            return;
+        }
+
+        $internal = $this->lenco->mapLencoStatus($data['status'] ?? 'pending');
+
+        $this->ticketOutcome->apply(
+            $model,
+            [
+                'status' => $data['status'] ?? null,
+                'internalStatus' => $internal,
+                'amount' => $data['amount'] ?? null,
+                'currency' => $data['currency'] ?? 'ZMW',
+                'failureReason' => $data['failureReason'] ?? null,
+            ],
+            'webhook',
+            TicketPaymentOutcomeService::parseTimestamp($data['completedAt'] ?? null),
+            [
+                'webhookReceived' => 1,
+                'webhookPayload' => $rawPayload,
+                'webhookReceivedAt' => now()->toDateTimeString(),
+            ],
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $payment
+     */
+    private function verifyTicketPayment(array $payment, string $txId, string $orderNumber): JsonResponse
+    {
+        $order = \App\Models\EventTicketOrder::query()->where('order_number', $orderNumber)->first();
+
+        if (! in_array($payment['status'], self::PAYMENT_TERMINAL_STATUSES, true)) {
+            try {
+                $result = $this->lenco->verifyPayment($payment['transactionId'] ?? $txId, true);
+                $model = Payment::query()->find($payment['id']);
+                if ($model !== null) {
+                    $this->ticketOutcome->apply($model, $result, 'verify');
+                }
+            } catch (Throwable) {
+                return $this->jsonResponse([
+                    'ok' => false,
+                    'status' => $payment['status'] ?? 'pending',
+                    'orderStatus' => $order?->status,
+                    'message' => 'Could not reach payment provider.',
+                ], 503);
+            }
+        }
+
+        $fresh = $this->payments->findById((int) $payment['id']);
+
+        return $this->jsonResponse([
+            'ok' => true,
+            'status' => $fresh['status'] ?? $payment['status'],
+            'lencoStatus' => $fresh['lencoStatus'] ?? null,
+            'orderStatus' => $order?->fresh()?->status,
+            'orderNumber' => $orderNumber,
+        ]);
     }
 
     private function generateOrderNumber(): string

@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Event;
 use App\Services\EventService;
+use App\Services\Tickets\TicketAvailability;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -51,8 +53,40 @@ class EventController extends Controller
             'description' => $event['description'] ?? '',
             'page' => 'events',
             'event' => $event,
+            'ticketing' => $this->ticketingFor($event),
             'extraStyles' => '<link rel="stylesheet" href="/css/events.css">',
             'extraScripts' => '<script src="/js/events.js"></script>',
         ]);
+    }
+
+    /**
+     * Ticket sale state for paid events (null for every other kind of event).
+     * Display only: the order endpoint decides again at purchase time.
+     *
+     * @param  array<string, mixed>  $event
+     * @return array<string, mixed>|null
+     */
+    private function ticketingFor(array $event): ?array
+    {
+        if (($event['registrationType'] ?? '') !== 'paid' || ! isset($event['ticketPriceMember'], $event['ticketPriceNonMember'])) {
+            return null;
+        }
+
+        $model = Event::query()->find($event['id']);
+        if ($model === null) {
+            return null;
+        }
+
+        $check = app(TicketAvailability::class)->check($model, 1);
+
+        return [
+            'available' => $check->ok(),
+            'reason' => $check->reason,
+            'message' => $check->message(),
+            'remaining' => $check->remaining,
+            'url' => url('/events/'.$event['slug'].'/tickets'),
+            'memberPrice' => (float) $event['ticketPriceMember'],
+            'standardPrice' => (float) $event['ticketPriceNonMember'],
+        ];
     }
 }

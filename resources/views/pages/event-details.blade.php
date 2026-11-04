@@ -33,6 +33,8 @@ $status        = getEventStatus($ev, $now);
 $isCompleted   = $status['key'] === 'completed';
 $isOpen        = $status['key'] === 'open';
 $isMembersOnly = ($ev['registrationType'] ?? 'open') === 'members';
+$isPaid        = ($ev['registrationType'] ?? 'open') === 'paid';
+$ticketing     = $ticketing ?? null;   // set by EventController for paid events
 $registerLabel = $isMembersOnly ? 'Join Now' : 'Register Now';
 $registerIcon  = $isMembersOnly ? 'fa-users' : 'fa-id-card';
 
@@ -136,6 +138,16 @@ if (is_string($brochureRaw) && $brochureRaw !== '') {
           <a href="{{ $ev['photosLink'] ?? '/gallery' }}" class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,0.4)">
             <i class="fas fa-camera" aria-hidden="true"></i> View Photos
           </a>
+          @elseif($isPaid && $ticketing)
+          @if($ticketing['available'])
+          <a href="{{ $ticketing['url'] }}" class="btn btn-primary">
+            <i class="fas fa-ticket" aria-hidden="true"></i> Get tickets
+          </a>
+          @else
+          <span class="btn btn-primary" style="opacity:.7;cursor:default;" aria-disabled="true">
+            <i class="fas fa-ticket" aria-hidden="true"></i> {{ $ticketing['message'] }}
+          </span>
+          @endif
           @elseif($isOpen)
           @php $regHref = !empty($ev['registrationLink']) ? $ev['registrationLink'] : ($isMembersOnly ? route('register') : url('/contact')); @endphp
           <a href="{{ $regHref }}" class="btn btn-primary" target="_blank" rel="noopener noreferrer">
@@ -436,9 +448,24 @@ if (is_string($brochureRaw) && $brochureRaw !== '') {
           <span>Registration</span>
         </div>
         <div class="event-detail-card__body">
+          @if($isPaid && $ticketing)
+          <div class="event-detail-reg-status event-detail-reg-status--{{ $ticketing['available'] ? 'open' : 'closed' }}">
+            {{ $ticketing['available'] ? 'Tickets on sale' : $ticketing['message'] }}
+          </div>
+          <div class="mt-4">
+            <div class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:rgba(0,0,0,0.4)">Ticket prices</div>
+            <div class="event-detail-fee">Members K{{ number_format($ticketing['memberPrice'], $ticketing['memberPrice'] == floor($ticketing['memberPrice']) ? 0 : 2) }}</div>
+            <div class="text-sm font-semibold mt-1">Everyone else K{{ number_format($ticketing['standardPrice'], $ticketing['standardPrice'] == floor($ticketing['standardPrice']) ? 0 : 2) }}</div>
+            <div class="text-xs mt-2" style="color:#6b7280">The member price covers one ticket per active member (their own).</div>
+            @if($ticketing['available'] && $ticketing['remaining'] !== null && $ticketing['remaining'] <= 20)
+            <div class="text-xs mt-2" style="color:#b45309">Only {{ $ticketing['remaining'] }} left</div>
+            @endif
+          </div>
+          @else
           <div class="event-detail-reg-status event-detail-reg-status--{{ $status['key'] }}">
             {{ $status['label'] }}
           </div>
+          @endif
 
           @if(!empty($ev['entryFee']))
           <div class="mt-4">
@@ -491,6 +518,13 @@ if (is_string($brochureRaw) && $brochureRaw !== '') {
               $sidebarRegTarget = '';
             }
           @endphp
+          @if($isPaid && $ticketing)
+            @if($ticketing['available'])
+            <a href="{{ $ticketing['url'] }}" class="btn btn-primary w-full justify-center mt-5">
+              <i class="fas fa-ticket" aria-hidden="true"></i> Get tickets
+            </a>
+            @endif
+          @else
           <a href="{{ $sidebarRegHref }}" class="btn btn-primary w-full justify-center mt-5"{!! $sidebarRegTarget !!}>
             @if($isOpen)
             <i class="fas {{ $registerIcon }}" aria-hidden="true"></i> {{ $registerLabel }}
@@ -498,6 +532,7 @@ if (is_string($brochureRaw) && $brochureRaw !== '') {
             <i class="fas fa-envelope" aria-hidden="true"></i> Register Interest
             @endif
           </a>
+          @endif
           <p class="text-xs text-center mt-2 leading-relaxed" style="color:#9ca3af">
             Questions? <a href="{{ url('/contact') }}" style="color:var(--green)">Contact us</a>
           </p>

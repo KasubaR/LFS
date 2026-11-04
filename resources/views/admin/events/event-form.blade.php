@@ -264,13 +264,16 @@ if (! function_exists('toDateTimeLocal')) {
       <label class="form-label">Registration</label>
       <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-top:0.4rem;">
         @foreach(['open' => 'Open to all', 'members' => 'Members only', 'paid' => 'Paid tickets', 'none' => 'No registration'] as $val => $lbl)
-        <label style="display:flex; align-items:center; gap:0.45rem; cursor:pointer; font-size:0.9rem; color:var(--off-white);">
+        <label id="reg_{{ $val }}_option" style="display:flex; align-items:center; gap:0.45rem; cursor:pointer; font-size:0.9rem; color:var(--off-white);">
           <input type="radio" name="registrationType" value="{{ $val }}" id="reg_{{ $val }}"
                  {{ $regType === $val ? 'checked' : '' }}>
           {{ $lbl }}
         </label>
         @endforeach
       </div>
+      <small id="reg_paid_hint" style="display:block; margin-top:0.35rem; color:var(--text-dim); font-size:0.8rem;">
+        "Paid tickets" is an optional extra for Social events only. Every other event keeps the normal registration options above.
+      </small>
     </div>
 
     <!-- Ticketing — shown only when registration type is 'paid' -->
@@ -362,7 +365,25 @@ if (! function_exists('toDateTimeLocal')) {
       const regOpen = document.getElementById('registrationOpen');
       const regClose = document.getElementById('registrationClose');
       const ticketing = document.getElementById('ticketing_wrap');
+      const category  = document.getElementById('category');
+      const paidOption = document.getElementById('reg_paid_option');
+      const paidHint   = document.getElementById('reg_paid_hint');
+      const ticketable = @json(\App\Enums\EventCategory::TICKETABLE);
+
+      // Paid tickets are only offered for ticketable (Social) categories.
+      // If the category changes away from one, fall back to open registration.
+      function syncPaidOption() {
+        const allowed = !category || ticketable.indexOf(category.value) !== -1;
+        if (paidOption) paidOption.style.display = allowed ? 'flex' : 'none';
+        if (paidHint) paidHint.style.display = allowed ? 'none' : 'block';
+        const paid = document.getElementById('reg_paid');
+        if (!allowed && paid && paid.checked) {
+          document.getElementById('reg_open').checked = true;
+        }
+      }
+
       function toggle() {
+        syncPaidOption();
         const none = document.getElementById('reg_none').checked;
         const paid = document.getElementById('reg_paid').checked;
         // Disabled fields are skipped by browser validation and by the POST.
@@ -377,6 +398,7 @@ if (! function_exists('toDateTimeLocal')) {
         if (regClose) regClose.disabled = none;
       }
       radios.forEach(r => r.addEventListener('change', toggle));
+      if (category) category.addEventListener('change', toggle);
       toggle();
     }());
     </script>

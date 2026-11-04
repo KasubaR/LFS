@@ -5,6 +5,17 @@ Status: **plan only, nothing implemented.**
 Goal: let LFS sell paid tickets for events on this site. First use case is the
 end-of-year party: **K550 for members, K650 for non-members**.
 
+## Scope: an option for Social events, not a replacement
+
+Ticketing does **not** replace the existing event registration. It is one extra
+registration type ("Paid tickets") that an admin can choose for **Social**
+events only (`EventCategory::TICKETABLE`). Every other event, and any Social
+event that doesn't want tickets, keeps the current options: open, members only,
+no registration, and the external registration link. Enforced in
+`EventService` (a paid event must be in a ticketable category) and in the admin
+form (the option only appears for Social). Extending it to another category
+later is a one-line change to `EventCategory::TICKETABLE`.
+
 ## Requirements (confirmed)
 
 - Members pay K550, non-members pay K650.
@@ -825,7 +836,7 @@ revival path).
 |---|---|---|---|
 | 1 | Unlimited capacity | No capacity restriction | `ticket_capacity` null skips the capacity check only; all other checks still apply |
 | 2 | 100 capacity, 100 sold | Sales close automatically | `check()` returns `sold_out`; no manual step; cancellations reopen it |
-| 3 | Capacity reduced below sold | Reject | Admin form refuses a value below paid plus live pending plus review-held tickets, and says the minimum |
+| 3 | Capacity reduced below sold | Reject | Admin form refuses a value below paid plus live pending tickets (orders in payment review hold no capacity), and says the minimum |
 | 4 | Two buyers, last tickets | Only one reservation wins | Row lock; the second sees `only_n_left` or `sold_out` |
 | 5 | Pending orders expire | Capacity returns | Expired orders stop counting immediately via `expires_at` |
 | 6 | Admin closes sales | No new orders | `ticket_sales_open = false`; existing pending orders may still complete |
@@ -980,7 +991,10 @@ scope.
   deadline, event over, cancelled).
 - Concurrent last-ticket purchase (real parallel requests against the database)
   never oversells; a "sold out" client message is irrelevant to the outcome.
-- Capacity cannot be reduced below paid plus pending plus review-held tickets.
+- Capacity cannot be reduced below paid plus live pending tickets. Orders in
+  `payment_review_required` hold no capacity (their tickets are usually already
+  sold to someone else); "fulfil" re-checks capacity at resolution time. They
+  do keep the member discount reserved until resolved.
 - Cancelling an event blocks sales, cancels pending orders, builds the refund
   queue for paid ones, and blocks event deletion until refunded.
 - Postponing keeps tickets valid; weekly recurrence is rejected for paid events.
