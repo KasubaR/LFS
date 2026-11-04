@@ -32,6 +32,11 @@ class Event extends Model
         'feature_on_home',
         'brochure_pdf',
         'created_by',
+        'ticket_price_member',
+        'ticket_price_non_member',
+        'ticket_capacity',
+        'ticket_sales_open',
+        'ticket_status',
     ];
 
     protected function casts(): array
@@ -41,7 +46,21 @@ class Event extends Model
             'registration_open' => 'datetime',
             'registration_close' => 'datetime',
             'feature_on_home' => 'boolean',
+            'ticket_price_member' => 'decimal:2',
+            'ticket_price_non_member' => 'decimal:2',
+            'ticket_capacity' => 'integer',
+            'ticket_sales_open' => 'boolean',
         ];
+    }
+
+    public function ticketOrders(): HasMany
+    {
+        return $this->hasMany(EventTicketOrder::class);
+    }
+
+    public function tickets(): HasMany
+    {
+        return $this->hasMany(EventTicket::class);
     }
 
     public function distanceRoutes(): HasMany

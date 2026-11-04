@@ -238,6 +238,13 @@ class EventController extends Controller
             'bannerImage' => $this->resolveUploadedBanner($body['bannerImage'] ?? null),
             'brochurePdf' => $this->resolveEventBrochureFromRequest($existing),
             'featureOnHome' => isset($body['featureOnHome']) && (string) ($body['featureOnHome'] ?? '') === '1',
+            // Ticketing (only meaningful when registrationType is 'paid';
+            // EventService validates and nulls these for other types).
+            'ticketPriceMember' => $body['ticketPriceMember'] ?? null,
+            'ticketPriceNonMember' => $body['ticketPriceNonMember'] ?? null,
+            'ticketCapacity' => $body['ticketCapacity'] ?? null,
+            'ticketSalesOpen' => (string) ($body['ticketSalesOpen'] ?? '') === '1',
+            'ticketStatus' => $body['ticketStatus'] ?? 'scheduled',
         ];
     }
 

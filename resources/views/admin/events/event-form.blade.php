@@ -263,7 +263,7 @@ if (! function_exists('toDateTimeLocal')) {
     <div class="form-group" style="margin-bottom:1.25rem;">
       <label class="form-label">Registration</label>
       <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-top:0.4rem;">
-        @foreach(['open' => 'Open to all', 'members' => 'Members only', 'none' => 'No registration'] as $val => $lbl)
+        @foreach(['open' => 'Open to all', 'members' => 'Members only', 'paid' => 'Paid tickets', 'none' => 'No registration'] as $val => $lbl)
         <label style="display:flex; align-items:center; gap:0.45rem; cursor:pointer; font-size:0.9rem; color:var(--off-white);">
           <input type="radio" name="registrationType" value="{{ $val }}" id="reg_{{ $val }}"
                  {{ $regType === $val ? 'checked' : '' }}>
@@ -272,6 +272,60 @@ if (! function_exists('toDateTimeLocal')) {
         @endforeach
       </div>
     </div>
+
+    <!-- Ticketing — shown only when registration type is 'paid' -->
+    @php
+      $tkMember   = $ev['ticketPriceMember'] ?? null;
+      $tkNon      = $ev['ticketPriceNonMember'] ?? null;
+      $tkCap      = $ev['ticketCapacity'] ?? null;
+      $tkOpen     = $ev['ticketSalesOpen'] ?? true;
+      $tkStatus   = $ev['ticketStatus'] ?? 'scheduled';
+      $tkInputCss = 'width:100%; padding:0.6rem 0.85rem; background:var(--black-soft); border:1px solid var(--border-mid); border-radius:8px; color:var(--off-white); font-family:var(--font-body); font-size:0.9rem;';
+    @endphp
+    <fieldset id="ticketing_wrap" style="border:1px solid var(--border-mid); border-radius:10px; padding:1rem 1.1rem; margin-bottom:1.25rem;">
+      <legend class="form-label" style="padding:0 0.4rem;">Ticketing</legend>
+
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:1rem;">
+        <div class="form-group">
+          <label class="form-label" for="ticketPriceMember">Member price (K)</label>
+          <input type="number" min="0.01" step="0.01" id="ticketPriceMember" name="ticketPriceMember"
+                 value="{{ $tkMember !== null ? number_format((float) $tkMember, 2, '.', '') : '' }}"
+                 placeholder="e.g. 550" style="{{ $tkInputCss }}" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="ticketPriceNonMember">Non-member price (K)</label>
+          <input type="number" min="0.01" step="0.01" id="ticketPriceNonMember" name="ticketPriceNonMember"
+                 value="{{ $tkNon !== null ? number_format((float) $tkNon, 2, '.', '') : '' }}"
+                 placeholder="e.g. 650" style="{{ $tkInputCss }}" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="ticketCapacity">Capacity</label>
+          <input type="number" min="1" step="1" id="ticketCapacity" name="ticketCapacity"
+                 value="{{ $tkCap ?? '' }}" placeholder="Leave empty for unlimited" style="{{ $tkInputCss }}" />
+        </div>
+      </div>
+
+      <div style="display:flex; gap:1.5rem; flex-wrap:wrap; align-items:center; margin-top:0.9rem;">
+        <label style="display:flex; align-items:center; gap:0.45rem; cursor:pointer; font-size:0.9rem; color:var(--off-white);">
+          <input type="checkbox" name="ticketSalesOpen" value="1" {{ $tkOpen ? 'checked' : '' }}>
+          Ticket sales open
+        </label>
+        <label style="display:flex; align-items:center; gap:0.45rem; font-size:0.9rem; color:var(--off-white);">
+          Status
+          <select name="ticketStatus" class="admin-select">
+            @foreach(['scheduled' => 'Scheduled', 'postponed' => 'Postponed', 'cancelled' => 'Cancelled'] as $sv => $sl)
+              <option value="{{ $sv }}" {{ $tkStatus === $sv ? 'selected' : '' }}>{{ $sl }}</option>
+            @endforeach
+          </select>
+        </label>
+      </div>
+
+      <small style="display:block; margin-top:0.6rem; color:var(--text-dim); font-size:0.8rem;">
+        The member price applies to one ticket per active member, per event (their own).
+        Every other ticket is the non-member price. Paid events must be one-off, and
+        capacity cannot be set below tickets already sold or reserved.
+      </small>
+    </fieldset>
 
     <!-- External registration link -->
     <div class="form-group" style="margin-bottom:1.25rem;">
@@ -307,8 +361,15 @@ if (! function_exists('toDateTimeLocal')) {
       const wrap    = document.getElementById('reg_dates_wrap');
       const regOpen = document.getElementById('registrationOpen');
       const regClose = document.getElementById('registrationClose');
+      const ticketing = document.getElementById('ticketing_wrap');
       function toggle() {
         const none = document.getElementById('reg_none').checked;
+        const paid = document.getElementById('reg_paid').checked;
+        // Disabled fields are skipped by browser validation and by the POST.
+        if (ticketing) {
+          ticketing.style.display = paid ? '' : 'none';
+          ticketing.querySelectorAll('input, select').forEach(function (el) { el.disabled = !paid; });
+        }
         wrap.style.display = none ? 'none' : '';
         // Hidden inputs can still fail constraint validation; the browser then cannot
         // focus them ("not focusable"). Disabled fields are skipped by validation and POST.

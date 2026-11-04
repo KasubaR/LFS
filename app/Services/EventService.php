@@ -5,9 +5,11 @@ namespace App\Services;
 use App\Exceptions\CodeException;
 use App\Models\Event;
 use App\Models\EventDistanceRoute;
+use App\Models\EventTicketOrder;
 use App\Support\Uuid;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Throwable;
 
@@ -20,6 +22,17 @@ class EventService
     public const INVALID_BANNER_URL_CODE = 'INVALID_BANNER_URL';
 
     public const FEATURE_ON_HOME_NO_BANNER_CODE = 'FEATURE_ON_HOME_NO_BANNER';
+
+    public const TICKETING_INVALID_CODE = 'TICKETING_INVALID';
+
+    public const CAPACITY_BELOW_SOLD_CODE = 'CAPACITY_BELOW_SOLD';
+
+    public const TICKET_ORDERS_EXIST_CODE = 'TICKET_ORDERS_EXIST';
+
+    public const REGISTRATION_TYPE_PAID = 'paid';
+
+    /** @var list<string> */
+    public const TICKET_STATUSES = ['scheduled', 'postponed', 'cancelled'];
 
     /**
      * Must match the directory Admin\EventController uploads distance-route
@@ -241,6 +254,7 @@ class EventService
         );
         $this->validateBannerUrl($data['bannerImage'] ?? null);
         $this->validateBrochureUrl($data['brochurePdf'] ?? null);
+        $ticketing = $this->normaliseTicketing($data);
 
         $slug = ($data['slug'] ?? '') !== ''
             ? trim((string) $data['slug'])
@@ -263,8 +277,8 @@ class EventService
 
         $id = Uuid::v4();
 
-        DB::transaction(function () use ($data, $id, $slug, $wantsHomeHero): void {
-            Event::query()->create([
+        DB::transaction(function () use ($data, $id, $slug, $wantsHomeHero, $ticketing): void {
+            Event::query()->create(array_merge($ticketing, [
                 'id' => $id,
                 'title' => $data['title'],
                 'slug' => $slug,
@@ -283,7 +297,7 @@ class EventService
                 'brochure_pdf' => $this->sanitiseBrochureUrl($data['brochurePdf'] ?? null),
                 'created_by' => $data['createdBy'] ?? null,
                 'feature_on_home' => $wantsHomeHero,
-            ]);
+            ]));
         });
 
         return $this->getEventById($id) ?? [];
@@ -312,6 +326,12 @@ class EventService
             if ($existing !== null && $existing['id'] !== $id) {
                 throw $this->codeException('This slug is already in use. Choose another.', self::SLUG_TAKEN_CODE);
             }
+        }
+
+        $ticketing = [];
+        if (array_key_exists('registrationType', $data)) {
+            $ticketing = $this->normaliseTicketing($data);
+            $this->guardTicketingChange($id, $data, $ticketing);
         }
 
         $map = [
@@ -347,6 +367,8 @@ class EventService
                 $updates[$snake] = $data[$camel];
             }
         }
+
+        $updates = array_merge($updates, $ticketing);
 
         if ($updates === []) {
             return $this->getEventById($id);
@@ -394,6 +416,11 @@ class EventService
             'bannerImage' => $this->sanitiseBannerUrl($event->banner_image),
             'brochurePdf' => $this->sanitiseBrochureUrl($event->brochure_pdf),
             'featureOnHome' => (bool) $event->feature_on_home,
+            'ticketPriceMember' => $event->ticket_price_member !== null ? (float) $event->ticket_price_member : null,
+            'ticketPriceNonMember' => $event->ticket_price_non_member !== null ? (float) $event->ticket_price_non_member : null,
+            'ticketCapacity' => $event->ticket_capacity !== null ? (int) $event->ticket_capacity : null,
+            'ticketSalesOpen' => (bool) ($event->ticket_sales_open ?? true),
+            'ticketStatus' => $event->ticket_status ?? 'scheduled',
             'createdBy' => $event->created_by,
             'createdAt' => $this->formatDateTime($event->created_at),
             'updatedAt' => $this->formatDateTime($event->updated_at),
@@ -525,6 +552,173 @@ class EventService
                 'Event brochure must be a site path (starting with /) or an http(s) URL.',
                 self::INVALID_BANNER_URL_CODE
             );
+        }
+    }
+
+    /**
+     * Tickets already committed against an event's capacity: tickets on paid
+     * orders, on pending orders still inside their reservation window, and on
+     * orders held for payment review (money received, not yet resolved).
+     */
+    public function committedTicketCount(string $eventId): int
+    {
+        return (int) EventTicketOrder::query()
+            ->where('event_id', $eventId)
+            ->where(function ($q): void {
+                $q->whereIn('status', [
+                    EventTicketOrder::STATUS_PAID,
+                    EventTicketOrder::STATUS_PAYMENT_REVIEW_REQUIRED,
+                ])->orWhere(function ($q2): void {
+                    $q2->where('status', EventTicketOrder::STATUS_PENDING_PAYMENT)
+                        ->where('expires_at', '>', now());
+                });
+            })
+            ->sum('quantity');
+    }
+
+    /**
+     * Validates and normalises the ticketing fields into events-table columns.
+     *
+     * Prices and capacity are only kept for 'paid' events; any other
+     * registration type stores them as null so stale prices never leak.
+     * 'paid' events must have both prices, member <= non-member, a positive
+     * integer capacity if one is set, and may not recur weekly (one capacity
+     * and ticket set does not make sense across repeating dates).
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function normaliseTicketing(array $data): array
+    {
+        $type = (string) ($data['registrationType'] ?? 'open');
+        $status = (string) ($data['ticketStatus'] ?? 'scheduled');
+        if (! in_array($status, self::TICKET_STATUSES, true)) {
+            throw $this->codeException('Invalid ticket status.', self::TICKETING_INVALID_CODE);
+        }
+
+        if ($type !== self::REGISTRATION_TYPE_PAID) {
+            return [
+                'ticket_price_member' => null,
+                'ticket_price_non_member' => null,
+                'ticket_capacity' => null,
+                'ticket_sales_open' => true,
+                'ticket_status' => 'scheduled',
+            ];
+        }
+
+        if (($data['recurrenceType'] ?? 'none') === 'weekly') {
+            throw $this->codeException(
+                'Ticketed events must be one-off. Weekly recurrence is not supported for paid events.',
+                self::TICKETING_INVALID_CODE
+            );
+        }
+
+        $member = $this->parseMoney($data['ticketPriceMember'] ?? null);
+        $nonMember = $this->parseMoney($data['ticketPriceNonMember'] ?? null);
+        if ($member === null || $nonMember === null) {
+            throw $this->codeException(
+                'Enter both the member price and the non-member price for a paid event.',
+                self::TICKETING_INVALID_CODE
+            );
+        }
+        if ($member > $nonMember) {
+            throw $this->codeException(
+                'The member price cannot be higher than the non-member price.',
+                self::TICKETING_INVALID_CODE
+            );
+        }
+
+        $capacityRaw = $data['ticketCapacity'] ?? null;
+        $capacity = null;
+        if ($capacityRaw !== null && trim((string) $capacityRaw) !== '') {
+            if (! preg_match('/^\d+$/', trim((string) $capacityRaw)) || (int) $capacityRaw < 1) {
+                throw $this->codeException(
+                    'Capacity must be a whole number of 1 or more, or left empty for unlimited.',
+                    self::TICKETING_INVALID_CODE
+                );
+            }
+            $capacity = (int) $capacityRaw;
+        }
+
+        $salesOpen = array_key_exists('ticketSalesOpen', $data)
+            ? filter_var($data['ticketSalesOpen'], FILTER_VALIDATE_BOOLEAN)
+            : true;
+
+        return [
+            'ticket_price_member' => $member,
+            'ticket_price_non_member' => $nonMember,
+            'ticket_capacity' => $capacity,
+            'ticket_sales_open' => $salesOpen,
+            'ticket_status' => $status,
+        ];
+    }
+
+    private function parseMoney(mixed $value): ?float
+    {
+        if ($value === null) {
+            return null;
+        }
+        $string = trim(str_replace(',', '', (string) $value));
+        if ($string === '' || ! preg_match('/^\d+(\.\d{1,2})?$/', $string)) {
+            return null;
+        }
+        $amount = (float) $string;
+
+        return $amount > 0 ? $amount : null;
+    }
+
+    /**
+     * Refuses ticketing changes that would break existing sales:
+     * capacity may not drop below tickets already committed, and a paid event
+     * with live orders cannot be switched to another registration type.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $ticketing  normalised columns
+     */
+    private function guardTicketingChange(string $id, array $data, array $ticketing): void
+    {
+        $existing = Event::query()->find($id);
+        if ($existing === null) {
+            return;
+        }
+
+        $hasOrders = EventTicketOrder::query()
+            ->where('event_id', $id)
+            ->whereIn('status', [
+                EventTicketOrder::STATUS_PAID,
+                EventTicketOrder::STATUS_PAYMENT_REVIEW_REQUIRED,
+                EventTicketOrder::STATUS_PENDING_PAYMENT,
+            ])
+            ->exists();
+
+        $newType = (string) ($data['registrationType'] ?? $existing->registration_type);
+        if ($hasOrders && $existing->registration_type === self::REGISTRATION_TYPE_PAID
+            && $newType !== self::REGISTRATION_TYPE_PAID) {
+            throw $this->codeException(
+                'This event has ticket orders, so it cannot be changed away from paid ticketing. Cancel the orders first.',
+                self::TICKET_ORDERS_EXIST_CODE
+            );
+        }
+
+        $newCapacity = $ticketing['ticket_capacity'] ?? null;
+        if ($newCapacity !== null) {
+            $committed = $this->committedTicketCount($id);
+            if ($newCapacity < $committed) {
+                throw $this->codeException(
+                    "Capacity cannot be lower than the {$committed} ticket(s) already sold or reserved.",
+                    self::CAPACITY_BELOW_SOLD_CODE
+                );
+            }
+        }
+
+        $oldCapacity = $existing->ticket_capacity;
+        if ($oldCapacity !== $newCapacity) {
+            Log::info('[EventService] Ticket capacity changed', [
+                'eventId' => $id,
+                'old' => $oldCapacity,
+                'new' => $newCapacity,
+                'adminId' => session(config('admin.session_user_key')),
+            ]);
         }
     }
 
