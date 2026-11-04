@@ -6,6 +6,7 @@ use App\Exceptions\CodeException;
 use App\Models\Event;
 use App\Models\EventDistanceRoute;
 use App\Models\EventTicketOrder;
+use App\Services\Tickets\TicketAvailability;
 use App\Support\Uuid;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -562,18 +563,8 @@ class EventService
      */
     public function committedTicketCount(string $eventId): int
     {
-        return (int) EventTicketOrder::query()
-            ->where('event_id', $eventId)
-            ->where(function ($q): void {
-                $q->whereIn('status', [
-                    EventTicketOrder::STATUS_PAID,
-                    EventTicketOrder::STATUS_PAYMENT_REVIEW_REQUIRED,
-                ])->orWhere(function ($q2): void {
-                    $q2->where('status', EventTicketOrder::STATUS_PENDING_PAYMENT)
-                        ->where('expires_at', '>', now());
-                });
-            })
-            ->sum('quantity');
+        // Single source of truth for what holds capacity.
+        return app(TicketAvailability::class)->committedTickets($eventId);
     }
 
     /**

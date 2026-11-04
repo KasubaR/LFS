@@ -54,6 +54,29 @@ class MemberVerificationService
     }
 
     /**
+     * Resolves a membership from its number plus the email registered on it
+     * (email is the only accepted proof here — used by event ticketing).
+     *
+     * Returns the membership whether or not it is currently active; the
+     * caller decides what an inactive one is worth. Returns null for an
+     * unknown number AND for a wrong email, so a caller cannot tell which
+     * of the two failed.
+     */
+    public function findVerifiedMembership(string $membershipNumber, string $email): ?Membership
+    {
+        if (trim($email) === '') {
+            return null;
+        }
+
+        $membership = $this->resolveByNumber($membershipNumber);
+        if ($membership === null || $membership->user === null) {
+            return null;
+        }
+
+        return $this->secondFactorMatches($membership, null, $email) ? $membership : null;
+    }
+
+    /**
      * Verify by the public card token (QR scan). No second factor needed — the
      * token is an unguessable UUID.
      *
