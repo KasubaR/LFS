@@ -22,6 +22,10 @@ return [
     // after its reservation expired, if Lenco still reports it non-terminal.
     'poll_give_up_hours' => (int) env('TICKETS_POLL_GIVE_UP_HOURS', 24),
 
+    // Timezone used to DISPLAY moments such as "present at" and "paid at".
+    // Stored times are UTC; event dates are stored as typed and not converted.
+    'display_timezone' => env('TICKETS_DISPLAY_TIMEZONE', 'Africa/Lusaka'),
+
     // Order numbers; the prefix is how shared payment code (webhook, poller)
     // tells a ticket payment from a shop payment.
     'order_prefix' => 'LFSEV-',

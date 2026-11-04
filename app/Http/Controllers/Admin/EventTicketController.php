@@ -9,6 +9,7 @@ use App\Models\EventTicketOrder;
 use App\Services\AdminPermissionService;
 use App\Services\Tickets\TicketAttendanceService;
 use App\Services\Tickets\TicketReportService;
+use App\Support\TicketTime;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -242,6 +243,6 @@ class EventTicketController extends Controller
 
     private function clock(?string $iso): string
     {
-        return $iso === null ? 'an earlier time' : \Illuminate\Support\Carbon::parse($iso)->format('H:i');
+        return $iso === null ? 'an earlier time' : TicketTime::local(\Illuminate\Support\Carbon::parse($iso));
     }
 }

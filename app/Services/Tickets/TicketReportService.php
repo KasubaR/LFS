@@ -5,6 +5,7 @@ namespace App\Services\Tickets;
 use App\Models\Event;
 use App\Models\EventTicket;
 use App\Models\EventTicketOrder;
+use App\Support\TicketTime;
 use Illuminate\Support\Collection;
 
 /**
@@ -103,8 +104,8 @@ class TicketReportService
                         $t->is_member_discount ? 'Yes' : 'No',
                         (string) $t->membership_number,
                         $t->checked_in_at ? 'Yes' : 'No',
-                        $t->checked_in_at?->format('Y-m-d H:i') ?? '',
-                        $order->paid_at?->format('Y-m-d H:i') ?? '',
+                        TicketTime::local($t->checked_in_at, 'Y-m-d H:i'),
+                        TicketTime::local($order->paid_at, 'Y-m-d H:i'),
                     ]);
                 }
             });

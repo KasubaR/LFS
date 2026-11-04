@@ -549,6 +549,42 @@ class EventTicketAdminPagesTest extends TestCase
         $this->assertFalse($byName->has('Unpaid One'));
     }
 
+    public function test_times_are_shown_in_lusaka_time_not_utc(): void
+    {
+        // 12:30 UTC is 14:30 in Lusaka (UTC+2). Stored moments are UTC.
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-12-04 12:30:00', 'UTC'));
+        $event = $this->makePaidEvent();
+        $o = $this->orderWith($event, ['Ann Banda'], EventTicketOrder::STATUS_PAID, ['paid_at' => now()]);
+        $o->tickets[0]->forceFill(['checked_in_at' => now()])->save();
+        $admin = $this->officer();
+
+        // "Already marked present at ..." message
+        $this->actingAsAdmin($admin)
+            ->postJson('/admin/events/'.$event->id.'/tickets/'.$o->tickets[0]->id.'/present')
+            ->assertStatus(409)
+            ->assertJsonPath('message', 'Already marked present at 14:30.');
+
+        // CSV "Present at" / "Paid at"
+        $rows = $this->csv($this->actingAsAdmin($admin)->get('/admin/events/'.$event->id.'/tickets/export'));
+        $this->assertSame('2026-12-04 14:30', $rows[1][13]);
+        $this->assertSame('2026-12-04 14:30', $rows[1][14]);
+
+        // Ticket list tooltip
+        $this->actingAsAdmin($admin)->get('/admin/events/'.$event->id.'/tickets')->assertSee('Present at 14:30');
+
+        $this->assertSame('14:30', \App\Support\TicketTime::local(now()));
+        $this->assertSame('', \App\Support\TicketTime::local(null));
+    }
+
+    public function test_event_dates_are_not_shifted_by_the_display_timezone(): void
+    {
+        $event = $this->makePaidEvent(['title' => 'Party', 'event_date' => '2026-12-04 18:00:00']);
+
+        $this->actingAsAdmin($this->officer())
+            ->get('/admin/events/'.$event->id.'/attendance')
+            ->assertSee('Friday, 4 December 2026 at 18:00');
+    }
+
     public function test_export_can_include_every_status(): void
     {
         $event = $this->makePaidEvent();

@@ -133,7 +133,7 @@ $th = 'padding:0.75rem; font-size:0.75rem; text-transform:uppercase; color:var(-
         <tr style="border-bottom:1px solid var(--border-subtle); vertical-align:top;">
           <td style="padding:0.75rem;">
             <span style="font-family:monospace;">{{ $o->order_number }}</span><br>
-            <small style="color:var(--text-dim);">{{ $o->created_at?->format('j M, H:i') }}</small>
+            <small style="color:var(--text-dim);">{{ \App\Support\TicketTime::local($o->created_at, 'j M, H:i') }}</small>
           </td>
           <td style="padding:0.75rem;">
             {{ $o->buyer_name }}<br>
@@ -145,7 +145,7 @@ $th = 'padding:0.75rem; font-size:0.75rem; text-transform:uppercase; color:var(-
               <div style="margin-bottom:0.25rem;">
                 @if($o->status === 'paid')
                   <i class="fas {{ $t->checked_in_at ? 'fa-circle-check' : 'fa-circle' }}" style="color:{{ $t->checked_in_at ? '#16a34a' : '#6b7280' }};" aria-hidden="true"
-                     title="{{ $t->checked_in_at ? 'Present at '.$t->checked_in_at->format('H:i') : 'Not yet present' }}"></i>
+                     title="{{ $t->checked_in_at ? 'Present at '.\App\Support\TicketTime::local($t->checked_in_at) : 'Not yet present' }}"></i>
                 @endif
                 {{ $t->attendee_name }}
                 @if($t->is_member_discount)<span style="color:#16a34a; font-size:0.75rem;"> · member {{ $t->membership_number }}</span>@endif
