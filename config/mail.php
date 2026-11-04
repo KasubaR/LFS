@@ -116,4 +116,18 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Public contact details shown in every email footer
+    |--------------------------------------------------------------------------
+    |
+    | Kept separate from the "From" address on purpose: the sender is often a
+    | no-reply or test mailbox, while this is where people should write to.
+    |
+    */
+
+    'contact_address' => env('MAIL_CONTACT_ADDRESS', 'support@lfszambia.run'),
+
+    'contact_whatsapp' => env('MAIL_CONTACT_WHATSAPP', '260767023948'),
+
 ];

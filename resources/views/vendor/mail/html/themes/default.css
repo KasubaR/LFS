@@ -1,0 +1,344 @@
+/*
+ * LFS — Lusaka Fitness Squad email theme.
+ *
+ * Mirrors the website's tokens (public/css/main.css):
+ *   black #0f0f0f · flag green #198a4e · flag red #c0392b · eagle orange #e07b39
+ *   off-white #f5f2ec · Bebas Neue (display) · DM Sans (body)
+ *
+ * Email clients ignore most modern CSS, so keep this simple: solid colours,
+ * system-font fallbacks, no variables. Laravel inlines these rules into the
+ * HTML before sending. Web fonts load in Apple Mail / iOS Mail; Gmail and
+ * Outlook fall back to Impact / Arial.
+ */
+
+/* Base */
+
+body,
+body *:not(html):not(style):not(br):not(tr):not(code) {
+    box-sizing: border-box;
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif,
+        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+    position: relative;
+}
+
+body {
+    -webkit-text-size-adjust: none;
+    background-color: #f5f2ec;
+    color: #3a3a3a;
+    height: 100%;
+    line-height: 1.4;
+    margin: 0;
+    padding: 0;
+    width: 100% !important;
+}
+
+p,
+ul,
+ol,
+blockquote {
+    line-height: 1.4;
+    text-align: start;
+}
+
+a {
+    color: #198a4e;
+}
+
+a img {
+    border: none;
+}
+
+strong {
+    color: #0f0f0f;
+}
+
+/* Typography */
+
+h1 {
+    color: #0f0f0f;
+    font-family: 'Bebas Neue', Impact, 'Arial Narrow Bold', 'Arial Narrow', Arial, sans-serif;
+    font-size: 30px;
+    font-weight: normal;
+    letter-spacing: 0.04em;
+    line-height: 1.15em;
+    margin-top: 0;
+    margin-bottom: 16px;
+    text-align: start;
+}
+
+h2 {
+    color: #0f0f0f;
+    font-family: 'Bebas Neue', Impact, 'Arial Narrow Bold', 'Arial Narrow', Arial, sans-serif;
+    font-size: 22px;
+    font-weight: normal;
+    letter-spacing: 0.04em;
+    margin-top: 0;
+    text-align: start;
+}
+
+h3 {
+    color: #0f0f0f;
+    font-size: 14px;
+    font-weight: bold;
+    margin-top: 0;
+    text-align: left;
+}
+
+p {
+    font-size: 16px;
+    line-height: 1.55em;
+    margin-top: 0;
+    text-align: left;
+}
+
+p.sub {
+    font-size: 12px;
+}
+
+img {
+    max-width: 100%;
+}
+
+/* Layout */
+
+.wrapper {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    background-color: #f5f2ec;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+.content {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+/* Header: black band with the LFS logo, then the flag stripe */
+
+.header {
+    background-color: #0f0f0f;
+    padding: 22px 0;
+    text-align: center;
+}
+
+.header a {
+    color: #ffffff;
+    font-family: 'Bebas Neue', Impact, 'Arial Narrow Bold', Arial, sans-serif;
+    font-size: 26px;
+    letter-spacing: 0.06em;
+    font-weight: normal;
+    text-decoration: none;
+}
+
+/* Logo */
+
+.logo {
+    height: auto;
+    margin: 0;
+    max-height: 70px;
+    width: 210px;
+}
+
+/* Flag stripe under the header: green / red / orange (black is invisible on black) */
+
+.stripe td {
+    font-size: 1px;
+    height: 4px;
+    line-height: 4px;
+}
+
+.stripe-green { background-color: #198a4e; }
+.stripe-red { background-color: #c0392b; }
+.stripe-orange { background-color: #e07b39; }
+
+/* Body */
+
+.body {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    background-color: #f5f2ec;
+    border-bottom: 1px solid #f5f2ec;
+    border-top: 1px solid #f5f2ec;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+.inner-body {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 570px;
+    background-color: #ffffff;
+    border-color: #e7e2d6;
+    border-radius: 8px;
+    border-width: 1px;
+    box-shadow: 0 1px 4px 0 rgba(15, 15, 15, 0.08);
+    margin: 28px auto;
+    padding: 0;
+    width: 570px;
+}
+
+.inner-body a {
+    word-break: break-all;
+}
+
+/* Subcopy */
+
+.subcopy {
+    border-top: 1px solid #e7e2d6;
+    margin-top: 25px;
+    padding-top: 25px;
+}
+
+.subcopy p {
+    font-size: 14px;
+}
+
+/* Footer */
+
+.footer {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 570px;
+    margin: 0 auto;
+    padding: 0;
+    text-align: center;
+    width: 570px;
+}
+
+.footer p {
+    color: #6b6b6b;
+    font-size: 12px;
+    line-height: 1.6em;
+    text-align: center;
+}
+
+.footer a {
+    color: #198a4e;
+    text-decoration: none;
+}
+
+.footer-brand {
+    color: #0f0f0f;
+    font-family: 'Bebas Neue', Impact, 'Arial Narrow Bold', Arial, sans-serif;
+    font-size: 20px;
+    letter-spacing: 0.06em;
+}
+
+.footer-links a {
+    font-size: 13px;
+    font-weight: bold;
+}
+
+/* Tables */
+
+.table table {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    margin: 30px auto;
+    width: 100%;
+}
+
+.table th {
+    border-bottom: 1px solid #e7e2d6;
+    margin: 0;
+    padding-bottom: 8px;
+}
+
+.table td {
+    color: #3a3a3a;
+    font-size: 15px;
+    line-height: 18px;
+    margin: 0;
+    padding: 10px 0;
+}
+
+.content-cell {
+    max-width: 100vw;
+    padding: 32px;
+}
+
+/* Buttons: LFS green by default */
+
+.action {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    margin: 30px auto;
+    padding: 0;
+    text-align: center;
+    width: 100%;
+    float: unset;
+}
+
+.button {
+    -webkit-text-size-adjust: none;
+    border-radius: 6px;
+    color: #fff;
+    display: inline-block;
+    font-weight: bold;
+    letter-spacing: 0.02em;
+    overflow: hidden;
+    text-decoration: none;
+}
+
+.button-blue,
+.button-primary,
+.button-green,
+.button-success {
+    background-color: #198a4e;
+    border-bottom: 10px solid #198a4e;
+    border-left: 22px solid #198a4e;
+    border-right: 22px solid #198a4e;
+    border-top: 10px solid #198a4e;
+}
+
+.button-red,
+.button-error {
+    background-color: #c0392b;
+    border-bottom: 10px solid #c0392b;
+    border-left: 22px solid #c0392b;
+    border-right: 22px solid #c0392b;
+    border-top: 10px solid #c0392b;
+}
+
+/* Panels */
+
+.panel {
+    border-left: #198a4e solid 4px;
+    margin: 21px 0;
+}
+
+.panel-content {
+    background-color: #f5f2ec;
+    color: #3a3a3a;
+    padding: 16px;
+}
+
+.panel-content p {
+    color: #3a3a3a;
+}
+
+.panel-item {
+    padding: 0;
+}
+
+.panel-item p:last-of-type {
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+/* Utilities */
+
+.break-all {
+    word-break: break-all;
+}
