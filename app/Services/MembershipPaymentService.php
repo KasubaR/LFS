@@ -4,7 +4,9 @@ namespace App\Services;
 
 use App\Enums\MembershipPaymentStatus;
 use App\Models\MembershipPayment;
+use App\Support\PaymentAmount;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class MembershipPaymentService
 {
@@ -147,6 +149,60 @@ class MembershipPaymentService
                 'pendingChargeAmount' => null,
             ],
         ];
+    }
+
+    /**
+     * Guards a just-confirmed charge against a wrong amount or currency.
+     *
+     * Returns true when the confirmation must NOT be credited: the paid amount
+     * differs from the charge we requested (pending_charge_amount), or an
+     * earlier confirmation was already flagged. The payment is left untouched
+     * apart from a `metadata.amountMismatch` note, so no membership is
+     * activated and the member is not told the payment failed — an admin
+     * reconciles it by hand. A flagged payment is skipped by every later
+     * webhook, verify and poller pass instead of being re-logged.
+     *
+     * @param  array<string, mixed>  $payment  payment array from findById/findByReference
+     * @param  array<string, mixed>  $result  normalised Lenco result or parsed webhook (needs amount, currency)
+     * @param  array<string, mixed>  $extra  gateway fields to keep (lencoStatus, webhookPayload, ...)
+     */
+    public function holdsForAmountMismatch(array $payment, array $result, array $extra = []): bool
+    {
+        if (isset($payment['metadata']['amountMismatch'])) {
+            return true;
+        }
+
+        if ($payment['pendingChargeAmount'] === null) {
+            return false;
+        }
+
+        $mismatch = PaymentAmount::mismatch(
+            (float) $payment['pendingChargeAmount'],
+            $result,
+            (string) ($payment['currency'] ?? 'ZMW'),
+        );
+
+        if ($mismatch === null) {
+            return false;
+        }
+
+        Log::critical('[MembershipPaymentService] Paid amount does not match the requested charge; holding for review', [
+            'paymentId' => $payment['id'],
+            'membershipId' => $payment['membershipId'] ?? null,
+            'expected' => $mismatch['expected'],
+            'received' => $mismatch['received'],
+            'currency' => $mismatch['currency'],
+        ]);
+
+        $metadata = is_array($payment['metadata'] ?? null) ? $payment['metadata'] : [];
+        $metadata['amountMismatch'] = $mismatch + ['flaggedAt' => now()->toIso8601String()];
+
+        $this->recordGatewayInitiation((int) $payment['id'], array_merge($extra, [
+            'lencoStatus' => $result['status'] ?? null,
+            'metadata' => $metadata,
+        ]));
+
+        return true;
     }
 
     /**

@@ -11,6 +11,7 @@
       'completed' => 'Completed',
       'cancelled' => 'Cancelled',
       'payment_failed' => 'Payment failed',
+      'payment_review' => 'Payment under review',
   ];
 @endphp
 

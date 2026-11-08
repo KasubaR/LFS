@@ -10,6 +10,7 @@
       'completed' => 'Completed',
       'cancelled' => 'Cancelled',
       'payment_failed' => 'Payment failed',
+      'payment_review' => 'Payment under review',
   ];
   $badge = match ($order['status']) {
       'paid', 'completed', 'shipped', 'processing' => 'active',

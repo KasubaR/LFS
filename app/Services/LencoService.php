@@ -17,15 +17,12 @@ class LencoService
 
     private string $apiKey;
 
-    private string $webhookSecret;
-
     private string $baseUrl;
 
     public function __construct()
     {
         $this->baseUrl = rtrim((string) config('services.lenco.base_url'), '/');
         $this->apiKey = (string) config('services.lenco.api_secret_key', '');
-        $this->webhookSecret = (string) config('services.lenco.webhook_secret', '');
     }
 
     public function isConfigured(): bool
@@ -78,7 +75,9 @@ class LencoService
 
             return $this->normalise($collection);
         } catch (LencoApiException $e) {
-            if ($e->getHttpStatus() === 404 || stripos($e->getMessage(), 'not found') !== false) {
+            // Only a real 404 means "Lenco has no such collection". Matching on the
+            // message text would hide genuine errors that happen to contain those words.
+            if ($e->getHttpStatus() === 404) {
                 return ['status' => 'pending', 'internalStatus' => 'pending', 'found' => false];
             }
 
@@ -87,26 +86,27 @@ class LencoService
     }
 
     /**
+     * Verifies a Lenco webhook (https://lenco-api.readme.io/v2.0/reference/webhooks).
+     *
+     * Lenco signs the raw request body with HMAC-SHA512 and sends it in the
+     * X-Lenco-Signature header. The signing key (the "webhook hash key") is the
+     * SHA-256 hash of the API secret key. Fails closed: with no API key
+     * configured, or no signature, nothing is accepted — in every environment.
+     *
      * @param  array<string, mixed>  $headers
      */
     public function verifyWebhookSignature(string $rawBody, array $headers): bool
     {
-        if ($this->webhookSecret === '') {
-            Log::warning('[LencoService] LENCO_WEBHOOK_SECRET not set — skipping signature check');
+        if ($this->apiKey === '') {
+            Log::error('[LencoService] LENCO_API_SECRET_KEY not set — rejecting webhook');
 
-            return config('app.env') !== 'production';
+            return false;
         }
 
         $signature = '';
-        $candidates = ['x-lenco-signature', 'x-signature', 'signature', 'authorization'];
-        $normalised = [];
         foreach ($headers as $key => $value) {
-            $normalised[strtolower((string) $key)] = is_array($value) ? ($value[0] ?? '') : $value;
-        }
-
-        foreach ($candidates as $name) {
-            if (! empty($normalised[$name])) {
-                $signature = (string) $normalised[$name];
+            if (strtolower((string) $key) === 'x-lenco-signature') {
+                $signature = trim((string) (is_array($value) ? ($value[0] ?? '') : $value));
                 break;
             }
         }
@@ -115,13 +115,44 @@ class LencoService
             return false;
         }
 
-        $expected = hash_hmac('sha256', $rawBody, $this->webhookSecret);
-        $received = ltrim(preg_replace('/^sha256=/i', '', trim($signature)) ?? '', '');
+        $hashKey = hash('sha256', $this->apiKey);
+        $expected = hash_hmac('sha512', $rawBody, $hashKey);
 
-        $a = str_pad($received, strlen($expected), '0');
-        $b = str_pad($expected, strlen($a), '0');
+        return hash_equals($expected, strtolower($signature));
+    }
 
-        return hash_equals($b, $a) && strlen($received) === strlen($expected);
+    /**
+     * Turns a Lenco/PHP failure into text that is safe to show a customer.
+     * Raw provider or exception messages are never returned.
+     */
+    public function customerMessage(\Throwable $e): string
+    {
+        $generic = 'We could not start your payment right now. Please try again in a moment.';
+
+        if (! $e instanceof LencoApiException) {
+            return $generic;
+        }
+
+        $status = $e->getHttpStatus();
+        $text = strtolower($e->getMessage());
+
+        if (str_contains($text, 'phone') || str_contains($text, 'msisdn') || str_contains($text, 'operator')) {
+            return 'Please check your mobile money number and network, then try again.';
+        }
+        if (str_contains($text, 'insufficient')) {
+            return 'Your mobile money account has insufficient funds for this payment.';
+        }
+        if (str_contains($text, 'duplicate') || str_contains($text, 'already')) {
+            return 'This payment was already submitted. Please wait a minute and check your phone.';
+        }
+        if ($status === 429 || $status >= 500 || $e->isRetryable()) {
+            return 'The payment provider is busy right now. Please try again in a few minutes.';
+        }
+        if ($status === 400 || $status === 422) {
+            return 'The payment details were not accepted. Please check them and try again.';
+        }
+
+        return $generic;
     }
 
     /**
@@ -204,10 +235,6 @@ class LencoService
             throw new LencoApiException('Invalid JSON response from Lenco', $httpCode, false);
         }
 
-        if (isset($decoded['status']) && $decoded['status'] === false) {
-            throw new LencoApiException($decoded['message'] ?? 'Lenco API error', $httpCode, false, $decoded);
-        }
-
         if ($httpCode >= 400) {
             $retryable = $httpCode >= 500 || in_array($httpCode, [408, 429], true);
             if ($retryable && $attempt < self::MAX_RETRIES) {
@@ -222,6 +249,13 @@ class LencoService
                 $retryable,
                 $decoded
             );
+        }
+
+        // Lenco also answers HTTP 200 with {"status": false, ...} for rejected requests.
+        // Checked AFTER the HTTP code so a 429/5xx whose body carries status:false is
+        // still retried instead of being treated as a final refusal.
+        if (isset($decoded['status']) && $decoded['status'] === false) {
+            throw new LencoApiException($decoded['message'] ?? 'Lenco API error', $httpCode, false, $decoded);
         }
 
         return $decoded;
@@ -253,7 +287,8 @@ class LencoService
 
     private function retryDelay(int $attempt): int
     {
-        $base = (int) min(1000 * (2 ** $attempt), 10000);
+        $unit = max(1, (int) config('services.lenco.retry_base_ms', 1000));
+        $base = (int) min($unit * (2 ** $attempt), $unit * 10);
         $jitter = (int) ($base * 0.3 * (mt_rand() / mt_getrandmax()));
 
         return $base + $jitter;

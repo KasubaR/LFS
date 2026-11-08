@@ -24,6 +24,23 @@ class TicketPaymentHooksTest extends TestCase
     {
         parent::setUp();
         $this->seedMembershipBasics();
+        config(['services.lenco.api_secret_key' => 'test-api-secret-not-real']);
+    }
+
+    /**
+     * Posts a webhook signed the way Lenco signs it (HMAC-SHA512 of the raw
+     * body, keyed by the SHA-256 of the API secret key).
+     *
+     * @param  array<string, mixed>  $body
+     */
+    private function postSignedWebhook(array $body): \Illuminate\Testing\TestResponse
+    {
+        $raw = json_encode($body);
+
+        return $this->call('POST', '/shop/checkout/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_LENCO_SIGNATURE' => hash_hmac('sha512', $raw, hash('sha256', 'test-api-secret-not-real')),
+        ], $raw);
     }
 
     /**
@@ -58,7 +75,7 @@ class TicketPaymentHooksTest extends TestCase
     {
         [$order, $payment] = $this->placePending();
 
-        $this->postJson('/shop/checkout/webhook', $this->webhookBody($payment, 'successful'))
+        $this->postSignedWebhook($this->webhookBody($payment, 'successful'))
             ->assertOk()->assertJson(['ok' => true]);
 
         $this->assertSame(EventTicketOrder::STATUS_PAID, $order->fresh()->status);
@@ -72,9 +89,9 @@ class TicketPaymentHooksTest extends TestCase
         [$order, $payment] = $this->placePending();
         $body = $this->webhookBody($payment, 'successful');
 
-        $this->postJson('/shop/checkout/webhook', $body)->assertOk();
+        $this->postSignedWebhook($body)->assertOk();
         $paidAt = $order->fresh()->paid_at;
-        $this->postJson('/shop/checkout/webhook', $body)->assertOk();
+        $this->postSignedWebhook($body)->assertOk();
 
         $this->assertSame(EventTicketOrder::STATUS_PAID, $order->fresh()->status);
         $this->assertEquals($paidAt, $order->fresh()->paid_at);
@@ -84,7 +101,7 @@ class TicketPaymentHooksTest extends TestCase
     {
         [$order, $payment] = $this->placePending();
 
-        $this->postJson('/shop/checkout/webhook', $this->webhookBody($payment, 'failed'))->assertOk();
+        $this->postSignedWebhook($this->webhookBody($payment, 'failed'))->assertOk();
 
         $this->assertSame(EventTicketOrder::STATUS_FAILED, $order->fresh()->status);
         $this->assertSame('failed', $payment->fresh()->status);
@@ -94,7 +111,7 @@ class TicketPaymentHooksTest extends TestCase
     {
         [$order, $payment] = $this->placePending();
 
-        $this->postJson('/shop/checkout/webhook', $this->webhookBody($payment, 'successful', 100.0))->assertOk();
+        $this->postSignedWebhook($this->webhookBody($payment, 'successful', 100.0))->assertOk();
 
         $this->assertSame(EventTicketOrder::STATUS_PAYMENT_REVIEW_REQUIRED, $order->fresh()->status);
         $this->assertSame('amount_mismatch', $order->fresh()->review_reason);
@@ -113,7 +130,7 @@ class TicketPaymentHooksTest extends TestCase
         ]);
         [$order, $payment] = $this->placePending();
 
-        $this->postJson('/shop/checkout/webhook', $this->webhookBody($payment, 'successful'))->assertOk();
+        $this->postSignedWebhook($this->webhookBody($payment, 'successful'))->assertOk();
 
         $this->assertSame('pending_payment', $shop->fresh()->status);
         $this->assertSame(EventTicketOrder::STATUS_PAID, $order->fresh()->status);

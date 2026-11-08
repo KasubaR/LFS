@@ -203,7 +203,7 @@ class MembershipPaymentTest extends TestCase
             'data' => ['reference' => 'LFS-REF-3', 'status' => 'successful'],
         ]);
 
-        $response->assertOk();
+        $response->assertStatus(401);
         $response->assertJson(['ok' => false, 'message' => 'Invalid signature']);
     }
 
@@ -562,7 +562,8 @@ class MembershipPaymentTest extends TestCase
         $membership = $this->createDraftMembership($user);
 
         $this->mock(LencoService::class, function ($mock) {
-            $mock->shouldReceive('generateReference')->andReturnUsing(fn ($seed) => 'LFS-REF-'.substr(md5((string) $seed.microtime()), 0, 8));
+            // Our reference is saved before Lenco is called, so it is the one the later verify/webhook looks up.
+            $mock->shouldReceive('generateReference')->andReturn('LFS-REF-FAIL', 'LFS-REF-RETRY');
             $call = 0;
             $mock->shouldReceive('initiateMobileMoneyPayment')->twice()->andReturnUsing(function () use (&$call) {
                 $call++;

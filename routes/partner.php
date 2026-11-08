@@ -19,7 +19,10 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::middleware(['api.log', 'api.client', 'api.ratelimit'])->group(function (): void {
+// 'throttle:partner-ip' runs before the key is even looked up, so requests with
+// missing or wrong keys are rate-limited too (the per-client limit below only
+// counts requests that authenticated).
+Route::middleware(['throttle:partner-ip', 'api.log', 'api.client', 'api.ratelimit'])->group(function (): void {
 
     Route::prefix('members')->group(function (): void {
 

@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\OrderStatus;
 use App\Models\EventTicketOrder;
 use App\Models\MembershipPayment;
 use App\Models\Payment;
@@ -12,6 +13,7 @@ use App\Services\OrderService;
 use App\Services\PaymentService;
 use App\Services\Tickets\TicketConfirmationService;
 use App\Services\Tickets\TicketPaymentOutcomeService;
+use App\Support\PaymentAmount;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -30,6 +32,11 @@ class PollPendingPaymentsCommand extends Command
     // If Lenco still reports a non-terminal status but the payment's own expiry has
     // long passed, stop waiting on it — treat it as cancelled and release the stock.
     private const EXPIRY_GRACE_MINUTES = 15;
+
+    // Lenco answers "not found" for a charge that never reached it (a request that
+    // failed before sending, or the server dying between saving our reference and
+    // calling Lenco). After this long it will not appear any more, so release it.
+    private const NEVER_SENT_AFTER_MINUTES = 30;
 
     public function handle(
         LencoService $lenco,
@@ -98,7 +105,10 @@ class PollPendingPaymentsCommand extends Command
             $internalStatus = $result['internalStatus'];
 
             if (! in_array($internalStatus, ['completed', 'failed', 'cancelled'], true)) {
-                if (! $this->isExpired($payment)) {
+                $neverSent = ($result['found'] ?? true) === false
+                    && $payment->created_at->lt(now()->subMinutes(self::NEVER_SENT_AFTER_MINUTES));
+
+                if (! $neverSent && ! $this->isExpired($payment)) {
                     continue;
                 }
                 // Lenco is still saying "pending" but this payment blew past its own
@@ -108,8 +118,20 @@ class PollPendingPaymentsCommand extends Command
             }
 
             $extra = ['lencoStatus' => $result['status']];
+            $mismatch = null;
             if ($internalStatus === 'completed') {
                 $extra['completedAt'] = now()->toDateTimeString();
+                $mismatch = PaymentAmount::mismatch((float) $payment->amount, $result, (string) ($payment->currency ?: 'ZMW'));
+                if ($mismatch !== null) {
+                    Log::critical('[PollPendingPaymentsCommand] Paid amount does not match the order; holding for review', [
+                        'orderNumber' => $payment->order_number,
+                        'paymentId' => $payment->id,
+                        'expected' => $mismatch['expected'],
+                        'received' => $mismatch['received'],
+                        'currency' => $mismatch['currency'],
+                    ]);
+                    $extra['failureReason'] = sprintf('amount_mismatch: expected %.2f ZMW, received %.2f %s', $mismatch['expected'], $mismatch['received'], $mismatch['currency']);
+                }
             } elseif ($internalStatus === 'failed') {
                 $extra['failureReason'] = $result['failureReason'] ?? null;
                 $extra['failedAt'] = now()->toDateTimeString();
@@ -120,7 +142,7 @@ class PollPendingPaymentsCommand extends Command
             }
 
             $newOrderStatus = match ($internalStatus) {
-                'completed' => 'paid',
+                'completed' => $mismatch !== null ? OrderStatus::PaymentReview : 'paid',
                 'cancelled' => 'cancelled',
                 default => 'payment_failed',
             };
@@ -259,6 +281,20 @@ class PollPendingPaymentsCommand extends Command
                     continue;
                 }
 
+                if (($result['found'] ?? true) === false
+                    && $payment->updated_at->lt(now()->subMinutes(self::NEVER_SENT_AFTER_MINUTES))) {
+                    // Lenco has no record of this reference: the charge never went out.
+                    // Free the member to start a fresh attempt instead of leaving them
+                    // stuck on "already in progress".
+                    $membershipPayments->recordGatewayInitiation($payment->id, [
+                        'paymentReference' => null,
+                        'pendingChargeAmount' => null,
+                    ]);
+                    $resolved++;
+
+                    continue;
+                }
+
                 if ($result['internalStatus'] !== $payment->lenco_status) {
                     $membershipPayments->recordGatewayInitiation($payment->id, [
                         'lencoStatus' => $result['status'],
@@ -270,6 +306,9 @@ class PollPendingPaymentsCommand extends Command
             }
 
             $paymentArray = $membershipPayments->findById((int) $payment->id);
+            if ($paymentArray !== null && $membershipPayments->holdsForAmountMismatch($paymentArray, $result)) {
+                continue;
+            }
             $resolvedCharge = $paymentArray !== null ? $membershipPayments->resolveConfirmedCharge($paymentArray) : null;
 
             if ($resolvedCharge === null) {

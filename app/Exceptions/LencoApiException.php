@@ -27,6 +27,16 @@ class LencoApiException extends RuntimeException
         return $this->retryable;
     }
 
+    /**
+     * True when the request may have reached Lenco and been charged: network
+     * errors and timeouts (status 0), 5xx, and anything retryable. A 4xx means
+     * Lenco refused it, so nothing was charged.
+     */
+    public function outcomeIsUnknown(): bool
+    {
+        return $this->retryable || $this->httpStatus === 0 || $this->httpStatus >= 500;
+    }
+
     public function getRawResponse(): array
     {
         return $this->rawResponse;

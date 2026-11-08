@@ -34,6 +34,7 @@ class ShopStockIntegrityTest extends TestCase
         $product = $this->makeProduct(5);
 
         $this->mock(LencoService::class, function ($mock) {
+            $mock->shouldReceive('generateReference')->andReturn('LFS-STOCK-REF-1');
             $mock->shouldReceive('initiateMobileMoneyPayment')->once()->andReturn([
                 'transactionId' => 'txn-1',
                 'lencoReference' => 'lenco-ref-1',
@@ -90,6 +91,7 @@ class ShopStockIntegrityTest extends TestCase
         $product = $this->makeProduct(5);
 
         $this->mock(LencoService::class, function ($mock) {
+            $mock->shouldReceive('generateReference')->andReturn('LFS-RESTORE-REF-1');
             $mock->shouldReceive('initiateMobileMoneyPayment')->once()->andReturn([
                 'transactionId' => 'txn-1',
                 'lencoReference' => 'lenco-ref-1',

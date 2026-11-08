@@ -75,7 +75,9 @@ Route::prefix('shop')->group(function (): void {
         ->middleware('throttle:10,1');
     Route::get('/checkout/verify', [OrderController::class, 'verifyPayment'])
         ->middleware('throttle:30,1');
-    Route::post('/checkout/webhook', [OrderController::class, 'handleWebhook']);
+    // Lenco calls this from a few fixed servers; the cap only stops a flood of forged requests.
+    Route::post('/checkout/webhook', [OrderController::class, 'handleWebhook'])
+        ->middleware('throttle:120,1');
 
     Route::get('/order/{orderNumber}', [OrderController::class, 'orderConfirmation'])
         ->where('orderNumber', '[^/]+');

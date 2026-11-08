@@ -414,7 +414,7 @@ class TicketOrderServiceTest extends TestCase
             $this->fail('expected PAYMENT_FAILED');
         } catch (TicketOrderException $e) {
             $this->assertSame(TicketOrderException::PAYMENT_FAILED, $e->reason);
-            $this->assertSame('Invalid phone number', $e->getMessage());
+            $this->assertSame('Please check your mobile money number and network, then try again.', $e->getMessage());
         }
 
         $order = EventTicketOrder::query()->firstOrFail();

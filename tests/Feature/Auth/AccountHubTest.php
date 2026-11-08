@@ -226,6 +226,7 @@ class AccountHubTest extends TestCase
         $product = $this->createProduct('Tee');
 
         $this->mock(LencoService::class, function ($mock) {
+            $mock->shouldReceive('generateReference')->andReturn('LFS-HUB-REF-1');
             $mock->shouldReceive('initiateMobileMoneyPayment')->once()->andReturn([
                 'transactionId' => 'txn-hub-1',
                 'lencoReference' => 'lenco-hub-1',

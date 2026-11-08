@@ -128,7 +128,9 @@ Route::middleware(['auth', 'verified', 'force.password.change', 'force.profile.c
         ->middleware('throttle:10,1')
         ->name('account.payment.initiate');
 
+    // Each call can hit Lenco's API, so cap it (the checkout page polls every few seconds).
     Route::get('/account/payment/verify', [MembershipPaymentController::class, 'verify'])
+        ->middleware('throttle:30,1')
         ->name('account.payment.verify');
 
     Route::post('/account/renew', [MembershipRenewalController::class, 'store'])
@@ -141,4 +143,5 @@ Route::middleware(['auth', 'verified', 'force.password.change', 'force.profile.c
 });
 
 Route::post('/account/payment/webhook', [MembershipPaymentController::class, 'webhook'])
+    ->middleware('throttle:120,1')
     ->name('account.payment.webhook');

@@ -37,9 +37,10 @@ return [
 
     'lenco' => [
         'api_secret_key' => env('LENCO_API_SECRET_KEY', ''),
-        'webhook_secret' => env('LENCO_WEBHOOK_SECRET', ''),
         // Production: https://api.lenco.co/access/v2 — Sandbox: https://sandbox.lenco.co/access/v2
         'base_url' => env('LENCO_BASE_URL', 'https://api.lenco.co/access/v2'),
+        // Base delay (ms) for retry backoff: 1s, 2s, 4s... capped at 10x. Tests lower it.
+        'retry_base_ms' => (int) env('LENCO_RETRY_BASE_MS', 1000),
     ],
 
 ];

@@ -306,7 +306,7 @@ class TicketPurchaseFlowTest extends TestCase
         $this->postJson($this->url($this->makePaidEvent(), '/order'), $this->payload())
             ->assertStatus(502)
             ->assertJsonPath('reason', 'payment_failed')
-            ->assertJsonPath('message', 'Invalid phone number');
+            ->assertJsonPath('message', 'Please check your mobile money number and network, then try again.');
 
         $this->assertSame(EventTicketOrder::STATUS_FAILED, EventTicketOrder::query()->firstOrFail()->status);
     }

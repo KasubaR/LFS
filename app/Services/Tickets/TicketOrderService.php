@@ -289,7 +289,7 @@ class TicketOrderService
         $this->outcome->applyInitiationFailure($payment, $e->getMessage());
 
         throw new TicketOrderException(
-            $e->getMessage() !== '' ? $e->getMessage() : 'Could not connect to the payment provider. Please try again.',
+            $this->lenco->customerMessage($e),
             TicketOrderException::PAYMENT_FAILED,
             order: $order->fresh(),
         );

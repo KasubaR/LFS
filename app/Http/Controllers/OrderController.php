@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\OrderStatus;
 use App\Exceptions\InsufficientStockException;
+use App\Exceptions\LencoApiException;
 use App\Http\Controllers\Concerns\RespondsWithJson;
 use App\Http\Requests\PlaceOrderRequest;
 use App\Services\LencoService;
@@ -10,6 +12,7 @@ use App\Services\OrderService;
 use App\Models\Payment;
 use App\Services\PaymentService;
 use App\Services\Tickets\TicketPaymentOutcomeService;
+use App\Support\PaymentAmount;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
@@ -104,69 +107,105 @@ class OrderController extends Controller
             'country' => 'ZM',
         ];
 
+        // Write-ahead: the payment row carries OUR reference before Lenco is
+        // called. If anything after the charge goes wrong (lost response, crash,
+        // failed save) the webhook, verify endpoint and poller can still find the
+        // payment by reference and settle it.
+        $reference = $this->lenco->generateReference($orderNumber);
+
         try {
-            $lencoResult = $this->lenco->initiateMobileMoneyPayment($orderData, $customerPhone, $provider);
+            $paymentId = $this->payments->create([
+                'orderNumber' => $orderNumber,
+                'paymentMethod' => 'mobile_money',
+                'amount' => $subtotal,
+                'currency' => 'ZMW',
+                'status' => 'pending',
+                'customerInfo' => $customerInfo,
+                'transactionId' => $reference,
+                'lencoProvider' => $provider,
+                'metadata' => [
+                    'provider' => $provider,
+                    'customerPhone' => $customerPhone,
+                ],
+            ]);
         } catch (Throwable $e) {
-            Log::error('[OrderController] Lenco initiation failed: '.$e->getMessage());
+            // Nothing has been charged yet, so this is a clean failure.
+            Log::error('[OrderController] Failed to save payment record before charging: '.$e->getMessage(), [
+                'orderNumber' => $orderNumber,
+            ]);
             $this->orders->updateStatus($orderId, 'payment_failed');
             $this->orders->restoreStockForOrder($orderNumber);
 
-            return $this->jsonError(
-                $e->getMessage() ?: 'Could not connect to payment provider. Please try again.',
-                502
-            );
+            return $this->jsonError('Could not create your order. Please try again.', 500);
         }
 
-        $paymentData = [
-            'orderNumber' => $orderNumber,
-            'paymentMethod' => 'mobile_money',
-            'amount' => $subtotal,
-            'currency' => $lencoResult['currency'] ?? 'ZMW',
-            'status' => $lencoResult['internalStatus'],
-            'customerInfo' => $customerInfo,
-            'lencoTransactionId' => $lencoResult['transactionId'],
-            'lencoReference' => $lencoResult['lencoReference'],
-            'lencoProvider' => $provider,
-            'lencoStatus' => $lencoResult['status'],
-            'lencoResponse' => $lencoResult['rawResponse'] ?? [],
-            'transactionId' => $lencoResult['reference'],
-            'paymentInstructions' => $lencoResult['paymentInstructions'],
-            'expiresAt' => $lencoResult['expiresAt'],
-            'metadata' => [
-                'provider' => $provider,
-                'customerPhone' => $customerPhone,
-            ],
-        ];
-
         try {
-            $this->payments->create($paymentData);
+            $lencoResult = $this->lenco->initiateMobileMoneyPayment($orderData, $customerPhone, $provider, $reference);
         } catch (Throwable $e) {
-            Log::error('[OrderController] Failed to save payment record, retrying once: '.$e->getMessage(), [
+            Log::error('[OrderController] Lenco initiation failed: '.$e->getMessage(), [
                 'orderNumber' => $orderNumber,
             ]);
 
-            try {
-                $this->payments->create($paymentData);
-            } catch (Throwable $e2) {
-                // The Lenco payment is already live but we have no payment row to reconcile
-                // it against later — webhook/verify/poller all look up payments by
-                // transaction id and will find nothing. Fail the order instead of silently
-                // returning ok:true, and flag it loudly for manual reconciliation.
-                Log::critical('[OrderController] Payment record could not be saved after retry; order left unreconciled', [
-                    'orderNumber' => $orderNumber,
-                    'lencoTransactionId' => $lencoResult['transactionId'] ?? null,
-                    'error' => $e2->getMessage(),
-                ]);
-
-                $this->orders->updateStatus($orderId, 'payment_failed');
-                $this->orders->restoreStockForOrder($orderNumber);
+            if ($e instanceof LencoApiException && $e->outcomeIsUnknown()) {
+                // The request may have reached Lenco and a prompt may be on the
+                // customer's phone. Keep the order, its stock and the pending
+                // payment: the webhook or poller finds it by reference and settles
+                // or expires it. Releasing stock here could sell it twice.
+                session(['cart' => []]);
 
                 return $this->jsonError(
-                    'We could not finish setting up your order. If money was deducted, it was not confirmed — '
-                    .'please contact support with order number '.$orderNumber.' before trying again.',
-                    500
+                    'We could not confirm your payment request. Please check your phone and wait a few minutes before trying again, so you are not charged twice.',
+                    502
                 );
             }
+
+            // Lenco refused it (or it never left this server): nothing was charged.
+            $this->payments->updateStatus($paymentId, 'failed', [
+                'failureReason' => 'initiation_failed',
+                'failedAt' => now()->toDateTimeString(),
+            ]);
+            $this->orders->updateStatus($orderId, 'payment_failed');
+            $this->orders->restoreStockForOrder($orderNumber);
+
+            return $this->jsonError($this->lenco->customerMessage($e), 502);
+        }
+
+        try {
+            $this->payments->recordGatewayInitiation($paymentId, [
+                'lencoTransactionId' => $lencoResult['transactionId'],
+                'lencoReference' => $lencoResult['lencoReference'],
+                'lencoProvider' => $provider,
+                'lencoStatus' => $lencoResult['status'],
+                'lencoResponse' => $lencoResult['rawResponse'] ?? [],
+                'paymentInstructions' => $lencoResult['paymentInstructions'],
+                'expiresAt' => $lencoResult['expiresAt'],
+            ]);
+        } catch (Throwable $e) {
+            // Not fatal: the payment row already exists under our reference, so the
+            // webhook, verify endpoint and poller can all still settle it.
+            Log::error('[OrderController] Could not save Lenco details; payment is still reconcilable by reference', [
+                'orderNumber' => $orderNumber,
+                'reference' => $reference,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // Lenco can answer the initiation with an immediate decline.
+        if (in_array($lencoResult['internalStatus'], ['failed', 'cancelled'], true)) {
+            $this->payments->updateStatus($paymentId, $lencoResult['internalStatus'], [
+                'lencoStatus' => $lencoResult['status'],
+                'failureReason' => $lencoResult['failureReason'] ?? null,
+                'failedAt' => now()->toDateTimeString(),
+            ]);
+            $this->orders->updateStatus(
+                $orderId,
+                $lencoResult['internalStatus'] === 'cancelled' ? 'cancelled' : 'payment_failed'
+            );
+            $this->orders->restoreStockForOrder($orderNumber);
+
+            return $this->jsonError($this->lenco->customerMessage(
+                new LencoApiException($lencoResult['failureReason'] ?? 'declined', 422)
+            ), 502);
         }
 
         session(['cart' => []]);
@@ -175,7 +214,7 @@ class OrderController extends Controller
             'ok' => true,
             'orderNumber' => $orderNumber,
             'transactionId' => $lencoResult['transactionId'],
-            'reference' => $lencoResult['reference'],
+            'reference' => $reference,
             'lencoStatus' => $lencoResult['status'],
             'paymentInstructions' => $lencoResult['paymentInstructions'],
             'paymentUrl' => $lencoResult['paymentUrl'],
@@ -226,14 +265,19 @@ class OrderController extends Controller
 
             if ($result['status'] !== ($payment['lencoStatus'] ?? '')) {
                 $extra = ['lencoStatus' => $result['status']];
+                $mismatch = null;
                 if ($result['internalStatus'] === 'completed') {
                     $extra['completedAt'] = now()->toDateTimeString();
+                    $mismatch = $this->amountMismatch($payment, $result);
+                    if ($mismatch !== null) {
+                        $extra['failureReason'] = $this->mismatchReason($mismatch);
+                    }
                 }
 
                 $updated = $this->payments->updateStatus($payment['id'], $result['internalStatus'], $extra);
 
                 if ($updated && $result['internalStatus'] === 'completed') {
-                    $this->orders->updateStatus($orderNumber, 'paid', byOrderNumber: true);
+                    $this->orders->updateStatus($orderNumber, $mismatch !== null ? OrderStatus::PaymentReview : 'paid', byOrderNumber: true);
                 } elseif ($updated && in_array($result['internalStatus'], ['failed', 'cancelled'], true)) {
                     $this->orders->updateStatus(
                         $orderNumber,
@@ -263,18 +307,18 @@ class OrderController extends Controller
     {
         $rawBody = $request->getContent();
         if ($rawBody === '') {
-            return $this->jsonResponse(['ok' => false, 'message' => 'Empty body']);
+            return $this->jsonError('Empty body', 400);
         }
 
         if (! $this->lenco->verifyWebhookSignature($rawBody, $request->headers->all())) {
             Log::error('[OrderController] Webhook signature failed');
 
-            return $this->jsonResponse(['ok' => false, 'message' => 'Invalid signature']);
+            return $this->jsonError('Invalid signature', 401);
         }
 
         $rawPayload = json_decode($rawBody, true);
         if (! is_array($rawPayload)) {
-            return $this->jsonResponse(['ok' => false, 'message' => 'Invalid JSON']);
+            return $this->jsonError('Invalid JSON', 400);
         }
 
         try {
@@ -282,7 +326,7 @@ class OrderController extends Controller
         } catch (Throwable $e) {
             Log::error('[OrderController] Webhook processing error: '.$e->getMessage());
 
-            return $this->jsonResponse(['ok' => false, 'message' => 'Internal error']);
+            return $this->jsonError('Internal error', 500);
         }
 
         return $this->jsonResponse(['ok' => true]);
@@ -369,8 +413,13 @@ class OrderController extends Controller
             'webhookReceivedAt' => now()->toDateTimeString(),
         ];
 
+        $mismatch = null;
         if ($internalStatus === 'completed') {
             $extra['completedAt'] = $data['completedAt'] ?? now()->toDateTimeString();
+            $mismatch = $this->amountMismatch($payment, $data);
+            if ($mismatch !== null) {
+                $extra['failureReason'] = $this->mismatchReason($mismatch);
+            }
         }
         if ($internalStatus === 'failed') {
             $extra['failureReason'] = $data['failureReason'] ?? null;
@@ -384,7 +433,7 @@ class OrderController extends Controller
         }
 
         if ($internalStatus === 'completed') {
-            $this->orders->updateStatus($orderNumber, 'paid', byOrderNumber: true);
+            $this->orders->updateStatus($orderNumber, $mismatch !== null ? OrderStatus::PaymentReview : 'paid', byOrderNumber: true);
         } elseif (in_array($internalStatus, ['failed', 'cancelled'], true)) {
             $this->orders->updateStatus(
                 $orderNumber,
@@ -461,6 +510,36 @@ class OrderController extends Controller
             'orderStatus' => $order?->fresh()?->status,
             'orderNumber' => $orderNumber,
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payment  payment array from PaymentService
+     * @param  array<string, mixed>  $result  normalised Lenco result or parsed webhook (needs amount, currency)
+     * @return array{expected: float, received: float, currency: string}|null
+     */
+    private function amountMismatch(array $payment, array $result): ?array
+    {
+        $mismatch = PaymentAmount::mismatch((float) $payment['amount'], $result, (string) ($payment['currency'] ?? 'ZMW'));
+
+        if ($mismatch !== null) {
+            Log::critical('[OrderController] Paid amount does not match the order; holding for review', [
+                'orderNumber' => $payment['orderNumber'] ?? null,
+                'paymentId' => $payment['id'] ?? null,
+                'expected' => $mismatch['expected'],
+                'received' => $mismatch['received'],
+                'currency' => $mismatch['currency'],
+            ]);
+        }
+
+        return $mismatch;
+    }
+
+    /**
+     * @param  array{expected: float, received: float, currency: string}  $mismatch
+     */
+    private function mismatchReason(array $mismatch): string
+    {
+        return sprintf('amount_mismatch: expected %.2f ZMW, received %.2f %s', $mismatch['expected'], $mismatch['received'], $mismatch['currency']);
     }
 
     private function generateOrderNumber(): string

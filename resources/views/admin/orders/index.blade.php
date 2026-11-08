@@ -19,6 +19,7 @@ $statusLabels = [
     'collected'       => 'Collected',
     'cancelled'       => 'Cancelled',
     'payment_failed'  => 'Payment Failed',
+    'payment_review'  => 'Payment Needs Review',
 ];
 $statusBadges = [
     'pending_payment' => 'orange',
@@ -28,6 +29,7 @@ $statusBadges = [
     'collected'       => 'green',
     'cancelled'       => 'red',
     'payment_failed'  => 'red',
+    'payment_review'  => 'red',
 ];
 $allStatuses = \App\Enums\OrderStatus::ALL;
 @endphp

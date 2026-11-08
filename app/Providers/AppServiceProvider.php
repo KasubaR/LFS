@@ -50,6 +50,14 @@ class AppServiceProvider extends ServiceProvider
 
         Password::defaults(fn () => Password::min(8)->mixedCase()->numbers()->symbols());
 
+        // Partner API: per source IP, whatever key (if any) is presented. Generous
+        // enough for a busy event site behind one IP; the per-client cap is tighter.
+        RateLimiter::for('partner-ip', fn (Request $request) => Limit::perMinute(600)
+            ->by('partner-ip:'.$request->ip())
+            ->response(fn (Request $request, array $headers) => response()->json([
+                'error' => ['code' => 'rate_limited', 'message' => 'Too many requests from this IP address.'],
+            ], 429, $headers)));
+
         RateLimiter::for('admin', function (Request $request) {
             $sessionId = $request->session()->getId();
 

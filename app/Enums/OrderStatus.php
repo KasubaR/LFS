@@ -18,6 +18,9 @@ class OrderStatus
 
     public const PaymentFailed = 'payment_failed';
 
+    /** Money arrived but not for the order total - needs a human to look. */
+    public const PaymentReview = 'payment_review';
+
     /** @var list<string> */
     public const ALL = [
         self::PendingPayment,
@@ -27,5 +30,6 @@ class OrderStatus
         self::Collected,
         self::Cancelled,
         self::PaymentFailed,
+        self::PaymentReview,
     ];
 }

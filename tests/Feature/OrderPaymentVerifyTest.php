@@ -55,6 +55,7 @@ class OrderPaymentVerifyTest extends TestCase
     public function test_verify_succeeds_for_the_session_that_placed_the_order(): void
     {
         $this->mock(LencoService::class, function ($mock) {
+            $mock->shouldReceive('generateReference')->andReturn('LFS-OWN-REF-1');
             $mock->shouldReceive('initiateMobileMoneyPayment')->once()->andReturn([
                 'transactionId' => 'txn-1',
                 'lencoReference' => 'lenco-ref-1',

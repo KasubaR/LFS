@@ -58,6 +58,17 @@ return Application::configure(basePath: dirname(__DIR__))
             'membership.active' => EnsureActiveMembership::class,
         ]);
 
+        // Behind a load balancer or reverse proxy, $request->ip() is the proxy's address
+        // unless its X-Forwarded-For header is trusted. That breaks per-IP rate limits and
+        // the partner API IP allow-list. Opt in with TRUSTED_PROXIES="*" (or a comma
+        // separated list of proxy IPs/CIDRs). Unset = forwarded headers are ignored.
+        $trustedProxies = env('TRUSTED_PROXIES');
+        if (is_string($trustedProxies) && trim($trustedProxies) !== '') {
+            $middleware->trustProxies(
+                at: trim($trustedProxies) === '*' ? '*' : array_map('trim', explode(',', $trustedProxies)),
+            );
+        }
+
         $middleware->redirectGuestsTo('/login');
         $middleware->redirectUsersTo('/account');
 
