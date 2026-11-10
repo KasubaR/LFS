@@ -211,14 +211,15 @@ class MembershipNoInstalmentsAfterAprilTest extends TestCase
 
     public function test_an_expired_member_renewing_in_may_or_june_gets_no_amount_choices(): void
     {
-        foreach (['2026-05-20 10:00:00', '2026-06-30 12:00:00'] as $at) {
+        foreach (['2026-05-20 10:00:00', '2026-06-30 12:00:00'] as $i => $at) {
             Carbon::setTestNow($at);
             Membership::query()->delete();
 
             $user = User::factory()->create();
             $plan = MembershipPlan::query()->where('billing_cycle', BillingCycle::Annual)->firstOrFail();
             Membership::query()->create([
-                'id' => (string) Str::uuid(), 'user_id' => $user->id, 'membership_number' => 'LFS-000321',
+                // Each person needs their own number now that a number belongs to one person.
+                'id' => (string) Str::uuid(), 'user_id' => $user->id, 'membership_number' => 'LFS-00032'.$i,
                 'status' => MembershipStatus::Expired, 'current_plan_id' => $plan->id, 'approval_status' => 'approved',
                 'start_date' => '2025-01-10', 'expiry_date' => '2025-12-31',
             ]);

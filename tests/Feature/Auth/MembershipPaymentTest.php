@@ -27,14 +27,14 @@ class MembershipPaymentTest extends TestCase
         $this->seed(MembershipPlanSeeder::class);
     }
 
-    private function createDraftMembership(User $user): Membership
+    private function createDraftMembership(User $user, string $number = 'LFS-000001'): Membership
     {
         $plan = MembershipPlan::query()->first();
 
         return Membership::query()->create([
             'id' => (string) Str::uuid(),
             'user_id' => $user->id,
-            'membership_number' => 'LFS-000001',
+            'membership_number' => $number,
             'status' => MembershipStatus::Draft,
             'current_plan_id' => $plan->id,
             'approval_status' => 'pending',
@@ -141,7 +141,8 @@ class MembershipPaymentTest extends TestCase
         ])->assertOk();
 
         $intruder = User::factory()->create();
-        $this->createDraftMembership($intruder);
+        // A different person must hold a different membership number.
+        $this->createDraftMembership($intruder, 'LFS-000002');
 
         $response = $this->actingAs($intruder)->getJson('/account/payment/verify?reference=LFS-REF-1');
 

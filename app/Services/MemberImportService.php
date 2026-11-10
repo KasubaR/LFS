@@ -311,6 +311,13 @@ class MemberImportService
             return ['status' => 'skipped', 'message' => $row['email'].': membership number '.$membershipNumber.' already exists'];
         }
 
+        // Also catches look-alikes the exact match above misses (LFS14149 vs
+        // LFS-14149 vs "lfs 14149"): logins treat those as the same number, so
+        // importing one would let two people share it.
+        if ($membershipNumber !== '' && app(MembershipNumberRegistry::class)->ownerOf($membershipNumber) !== null) {
+            return ['status' => 'skipped', 'message' => $row['email'].': membership number '.$membershipNumber.' already belongs to another member'];
+        }
+
         $rawTShirtSize = trim((string) ($row['tShirtSize'] ?? ''));
         $tShirtSize = TShirtSize::normalize($rawTShirtSize);
         if ($tShirtSize === null && $rawTShirtSize !== '') {

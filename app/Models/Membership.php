@@ -9,6 +9,28 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Membership extends Model
 {
+    /**
+     * Whatever way a membership row gets a number (signup, import, renewal, a
+     * script), it must not be a number another person already holds. A renewal
+     * carries the same person's number forward, which the registry allows.
+     * (Query-builder updates skip model events; MembershipService claims
+     * explicitly where it sets a number that way.)
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (Membership $membership): void {
+            $number = $membership->membership_number;
+            if ($number === null || trim((string) $number) === '') {
+                return;
+            }
+            if ($membership->exists && ! $membership->isDirty('membership_number')) {
+                return;
+            }
+
+            app(\App\Services\MembershipNumberRegistry::class)->claim((string) $number, (int) $membership->user_id);
+        });
+    }
+
     protected $table = 'memberships';
 
     protected $keyType = 'string';

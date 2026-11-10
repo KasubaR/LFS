@@ -32,7 +32,7 @@ class AccountHubTest extends TestCase
         $this->seed(MembershipPlanSeeder::class);
     }
 
-    private function member(): User
+    private function member(string $number = 'LFS-HUB-001'): User
     {
         $user = User::factory()->create([
             'phone' => '+260971111111',
@@ -48,7 +48,7 @@ class AccountHubTest extends TestCase
         Membership::query()->create([
             'id' => (string) Str::uuid(),
             'user_id' => $user->id,
-            'membership_number' => 'LFS-HUB-001',
+            'membership_number' => $number,
             'status' => MembershipStatus::Active,
             'current_plan_id' => $plan->id,
             'approval_status' => 'approved',
@@ -580,7 +580,8 @@ class AccountHubTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $intruder = $this->member();
+        // A different person holds a different membership number.
+        $intruder = $this->member('LFS-HUB-003');
 
         $this->actingAs($intruder)
             ->get("/account/payments/{$paidPayment->id}/receipt")

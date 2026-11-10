@@ -8,6 +8,7 @@ use App\Enums\MembershipHistoryEvent;
 use App\Enums\MembershipPaymentStatus;
 use App\Enums\MembershipStatus;
 use App\Exceptions\CodeException;
+use App\Exceptions\DuplicateMembershipNumberException;
 use App\Models\Membership;
 use App\Models\MembershipHistory;
 use App\Models\MembershipPayment;
@@ -696,7 +697,38 @@ class MembershipService
         return Carbon::createFromFormat('Y-m-d', "{$year}-{$monthDay}")->startOfDay();
     }
 
-    public function generateMembershipNumber(): string
+    /**
+     * Next sequential number (LFS-000123).
+     *
+     * Pass $forUserId to also RESERVE it for that person in the same step. The
+     * reservation is what stops two people ever holding the same number: a
+     * candidate already held by someone (e.g. a legacy import whose digits
+     * happen to match) is skipped and the next one is tried.
+     */
+    public function generateMembershipNumber(?int $forUserId = null): string
+    {
+        if ($forUserId === null) {
+            return $this->nextSequentialNumber();
+        }
+
+        $registry = app(MembershipNumberRegistry::class);
+
+        for ($attempt = 0; $attempt < 100; $attempt++) {
+            $candidate = $this->nextSequentialNumber();
+
+            try {
+                $registry->claim($candidate, $forUserId);
+
+                return $candidate;
+            } catch (DuplicateMembershipNumberException) {
+                continue; // held by someone else: skip it, never hand it out twice
+            }
+        }
+
+        throw new CodeException('Could not allocate a free membership number.', 'MEMBERSHIP_NUMBER_EXHAUSTED');
+    }
+
+    private function nextSequentialNumber(): string
     {
         $prefix = config('membership.membership_number_prefix', 'LFS');
 
@@ -867,7 +899,9 @@ class MembershipService
         // startRenewal); only a genuinely new membership needs one allocated,
         // and only now that payment has actually been confirmed.
         if ($membership->membership_number === null) {
-            $extra['membership_number'] = $this->generateMembershipNumber();
+            // Reserved for this member in the same step (transition() writes via the
+            // query builder, which would skip the model-level guard).
+            $extra['membership_number'] = $this->generateMembershipNumber((int) $membership->user_id);
         }
 
         if ($membership->public_token === null) {
