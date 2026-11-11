@@ -82,7 +82,7 @@ class MembershipLifecycleTest extends TestCase
         );
 
         $this->assertSame(MembershipStatus::Active, $active['status']);
-        $this->assertStringStartsWith('LFS-', $active['membershipNumber']);
+        $this->assertMatchesRegularExpression('/^\d{6}$/', $active['membershipNumber']);
         $this->assertSame(ApprovalStatus::Approved, $active['approvalStatus']);
         $this->assertSame('system:lenco', $active['approvedBy']);
         $this->assertSame('2026-01-15', $active['startDate']);
@@ -146,7 +146,7 @@ class MembershipLifecycleTest extends TestCase
 
         $firstMembershipId = $created['membershipId'];
         $membershipNumber = $activated['membershipNumber'];
-        $this->assertStringStartsWith('LFS-', $membershipNumber);
+        $this->assertMatchesRegularExpression('/^\d{6}$/', $membershipNumber);
 
         $this->membershipService->expire($firstMembershipId);
 

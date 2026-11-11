@@ -235,26 +235,26 @@ class MembershipNumberUniquenessTest extends TestCase
         $second = $service->generateMembershipNumber($b->id);
 
         $yy = now()->format('y');
-        $this->assertSame("LFS-{$yy}0001", $first);
-        $this->assertSame("LFS-{$yy}0002", $second);
+        $this->assertSame("{$yy}0001", $first);
+        $this->assertSame("{$yy}0002", $second);
         $this->assertSame($a->id, $this->registry->ownerOf($first));
         $this->assertSame($b->id, $this->registry->ownerOf($second));
     }
 
     public function test_a_generated_number_that_an_import_already_holds_is_skipped(): void
     {
-        // A legacy import 'LFS<yy>0001' looks exactly like the first new member of the year (LFS-<yy>0001).
+        // The first new member of the year is <yy>0001, which an import may already hold.
         $yy = now()->format('y');
         $legacy = User::factory()->create();
-        $this->membershipFor($legacy, "LFS{$yy}0001");
-        DB::table('membership_number_counters')->updateOrInsert(['prefix' => "LFS-{$yy}"], ['next_value' => 1]);
+        $this->membershipFor($legacy, "{$yy}0001");
+        DB::table('membership_number_counters')->updateOrInsert(['prefix' => "{$yy}"], ['next_value' => 1]);
 
         $newcomer = User::factory()->create();
         $number = app(MembershipService::class)->generateMembershipNumber($newcomer->id);
 
-        $this->assertSame("LFS-{$yy}0002", $number, 'the first number is held by the legacy member, so it is skipped');
-        $this->assertSame($legacy->id, $this->registry->ownerOf("LFS-{$yy}0001"));
-        $this->assertSame($newcomer->id, $this->registry->ownerOf("LFS-{$yy}0002"));
+        $this->assertSame("{$yy}0002", $number, 'the first number is held by the legacy member, so it is skipped');
+        $this->assertSame($legacy->id, $this->registry->ownerOf("{$yy}0001"));
+        $this->assertSame($newcomer->id, $this->registry->ownerOf("{$yy}0002"));
     }
 
     public function test_first_payment_gives_each_new_member_their_own_number(): void

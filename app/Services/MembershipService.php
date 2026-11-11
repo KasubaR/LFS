@@ -729,14 +729,13 @@ class MembershipService
     }
 
     /**
-     * New website signups get LFS-<YY><NNNN>, e.g. LFS-260002: the two-digit
+     * New website signups get <YY><NNNN>, digits only, e.g. 260002: the two-digit
      * current year followed by a four-digit sequence that restarts each year.
      * (Legacy imports keep their LFS<ref> numbers.)
      */
     private function nextSequentialNumber(): string
     {
-        $base = config('membership.membership_number_prefix', 'LFS');
-        $prefix = $base.'-'.now()->format('y');
+        $prefix = now()->format('y');
 
         // Counter row + lockForUpdate serializes allocation inside the caller's
         // transaction (renewals reuse numbers and cannot use a UNIQUE column).
