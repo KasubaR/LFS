@@ -728,9 +728,15 @@ class MembershipService
         throw new CodeException('Could not allocate a free membership number.', 'MEMBERSHIP_NUMBER_EXHAUSTED');
     }
 
+    /**
+     * New website signups get LFS-<YY><NNNN>, e.g. LFS-260002: the two-digit
+     * current year followed by a four-digit sequence that restarts each year.
+     * (Legacy imports keep their LFS<ref> numbers.)
+     */
     private function nextSequentialNumber(): string
     {
-        $prefix = config('membership.membership_number_prefix', 'LFS');
+        $base = config('membership.membership_number_prefix', 'LFS');
+        $prefix = $base.'-'.now()->format('y');
 
         // Counter row + lockForUpdate serializes allocation inside the caller's
         // transaction (renewals reuse numbers and cannot use a UNIQUE column).
@@ -741,13 +747,13 @@ class MembershipService
 
         if ($counter === null) {
             $latest = Membership::query()
-                ->where('membership_number', 'like', $prefix.'-%')
+                ->where('membership_number', 'like', $prefix.'____')
                 ->orderByDesc('membership_number')
                 ->value('membership_number');
 
             $sequence = 1;
-            if ($latest && preg_match('/-(\d+)$/', $latest, $matches)) {
-                $sequence = (int) $matches[1] + 1;
+            if ($latest) {
+                $sequence = (int) substr($latest, strlen($prefix)) + 1;
             }
 
             DB::table('membership_number_counters')->insert([
@@ -755,7 +761,7 @@ class MembershipService
                 'next_value' => $sequence + 1,
             ]);
 
-            return sprintf('%s-%06d', $prefix, $sequence);
+            return sprintf('%s%04d', $prefix, $sequence);
         }
 
         $sequence = (int) $counter->next_value;
@@ -764,7 +770,7 @@ class MembershipService
             ->where('prefix', $prefix)
             ->update(['next_value' => $sequence + 1]);
 
-        return sprintf('%s-%06d', $prefix, $sequence);
+        return sprintf('%s%04d', $prefix, $sequence);
     }
 
     public function adminDisplayStatus(string $status): string

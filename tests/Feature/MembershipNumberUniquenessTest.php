@@ -234,25 +234,27 @@ class MembershipNumberUniquenessTest extends TestCase
         $first = $service->generateMembershipNumber($a->id);
         $second = $service->generateMembershipNumber($b->id);
 
-        $this->assertSame('LFS-000001', $first);
-        $this->assertSame('LFS-000002', $second);
+        $yy = now()->format('y');
+        $this->assertSame("LFS-{$yy}0001", $first);
+        $this->assertSame("LFS-{$yy}0002", $second);
         $this->assertSame($a->id, $this->registry->ownerOf($first));
         $this->assertSame($b->id, $this->registry->ownerOf($second));
     }
 
     public function test_a_generated_number_that_an_import_already_holds_is_skipped(): void
     {
-        // A legacy import 'LFS014149' looks exactly like new member 14149 (LFS-014149).
+        // A legacy import 'LFS<yy>0001' looks exactly like the first new member of the year (LFS-<yy>0001).
+        $yy = now()->format('y');
         $legacy = User::factory()->create();
-        $this->membershipFor($legacy, 'LFS014149');
-        DB::table('membership_number_counters')->updateOrInsert(['prefix' => 'LFS'], ['next_value' => 14149]);
+        $this->membershipFor($legacy, "LFS{$yy}0001");
+        DB::table('membership_number_counters')->updateOrInsert(['prefix' => "LFS-{$yy}"], ['next_value' => 1]);
 
         $newcomer = User::factory()->create();
         $number = app(MembershipService::class)->generateMembershipNumber($newcomer->id);
 
-        $this->assertSame('LFS-014150', $number, 'LFS-014149 is held by the legacy member, so it is skipped');
-        $this->assertSame($legacy->id, $this->registry->ownerOf('LFS-014149'));
-        $this->assertSame($newcomer->id, $this->registry->ownerOf('LFS-014150'));
+        $this->assertSame("LFS-{$yy}0002", $number, 'the first number is held by the legacy member, so it is skipped');
+        $this->assertSame($legacy->id, $this->registry->ownerOf("LFS-{$yy}0001"));
+        $this->assertSame($newcomer->id, $this->registry->ownerOf("LFS-{$yy}0002"));
     }
 
     public function test_first_payment_gives_each_new_member_their_own_number(): void
