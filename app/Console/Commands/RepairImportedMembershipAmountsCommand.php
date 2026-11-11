@@ -136,7 +136,14 @@ class RepairImportedMembershipAmountsCommand extends Command
                 continue;
             }
 
-            $dates = $membershipService->computePeriodDates($startDate, $newDurationMonths);
+            // Every member runs to the end of the membership year (31 Dec), and
+            // anyone who paid in late 2025 is covered for 2026.
+            $yearEnd = Carbon::create(max((int) $startDate->year, 2026), 12, 31)->toDateString();
+            $dates = [
+                'startDate' => $startDate->toDateString(),
+                'expiryDate' => $yearEnd,
+                'renewalDueDate' => $yearEnd,
+            ];
 
             $amountChanged = abs($newAmount - $currentAmount) > 0.001 || abs($newAmountPaid - (float) $payment->amount_paid) > 0.001 || $newStatus !== $payment->status;
             $expiryChanged = $dates['expiryDate'] !== $membership->expiry_date?->toDateString();
