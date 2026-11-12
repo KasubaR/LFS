@@ -101,7 +101,7 @@ class AccountController extends Controller
             'activeTab' => 'dashboard',
             'membership' => $cardData['membership'] ?? $membership,
             'canContinuePayment' => $canContinuePayment,
-            'canRenew' => $membership !== null && $membership->status === MembershipStatus::Expired,
+            'canRenew' => $membership !== null && ($membership->status === MembershipStatus::Expired || $this->membershipService->isEligibleForEarlyRenewal($membership)),
             'hasPaidMembership' => $hasPaidMembership,
             'chargeAmountNow' => $chargeAmountNow,
             'withinGrace' => $withinGrace,

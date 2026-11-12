@@ -36,6 +36,7 @@ class MembershipService
         private readonly MembershipPaymentService $paymentService,
         private readonly MembershipPlanService $planService,
         private readonly PromotionService $promotionService,
+        private readonly MembershipYearService $yearService,
     ) {}
 
     /**
@@ -427,7 +428,7 @@ class MembershipService
         $plan = $this->findPlanOrFail($planId);
         $latest = $this->findLatestMembershipForUser($userId);
 
-        if (! $latest || $latest->status !== MembershipStatus::Expired) {
+        if (! $latest || ! ($latest->status === MembershipStatus::Expired || $this->isEligibleForEarlyRenewal($latest))) {
             throw new CodeException('No expired membership to renew.', 'NO_EXPIRED_MEMBERSHIP');
         }
 
@@ -462,16 +463,16 @@ class MembershipService
                 $membershipId,
                 $userId,
                 MembershipHistoryEvent::Renewed,
-                MembershipStatus::Expired,
+                $latest->status,
                 MembershipStatus::PendingPayment,
                 $plan->id,
                 'member',
                 null,
-                ['previousMembershipId' => $latest->id],
+                ['previousMembershipId' => $latest->id, 'early' => $latest->status === MembershipStatus::Active],
                 false
             );
 
-            $pricing = $this->annualPricingFor(now());
+            $pricing = $this->annualPricingFor(now(), true);
 
             $paymentId = $this->paymentService->create($membershipId, (int) $plan->id, [
                 'amount' => $pricing['amount'],
@@ -489,6 +490,35 @@ class MembershipService
                 $this->toMembership($membership->fresh(['user', 'plan']), $paymentId)
             );
         });
+    }
+
+    /**
+     * Next year's registrations are open and this member's current membership
+     * is Active, fully paid, and only runs to the end of the current year, so
+     * they may renew now for the following year. Suspended members and anyone
+     * with a balance still owing must clear it first.
+     */
+    public function isEligibleForEarlyRenewal(Membership $latest): bool
+    {
+        if ($latest->status !== MembershipStatus::Active || ! $this->yearService->isNextYearOpen()) {
+            return false;
+        }
+
+        $targetYear = $this->yearService->yearFor(now());
+        if ($latest->expiry_date === null || (int) $latest->expiry_date->year >= $targetYear) {
+            return false;
+        }
+
+        $payment = $this->paymentService->findLatestForMembership($latest->id);
+
+        return ! $payment || $payment['status'] === MembershipPaymentStatus::Paid;
+    }
+
+    public function canRenewEarly(int $userId): bool
+    {
+        $latest = $this->findLatestMembershipForUser($userId);
+
+        return $latest !== null && $this->isEligibleForEarlyRenewal($latest);
     }
 
     public function expire(string $membershipId, ?string $notes = null): array
@@ -575,12 +605,17 @@ class MembershipService
      */
     public function computeMembershipYearDates(Carbon $registeredAt): array
     {
-        $year = (int) $registeredAt->year;
+        // Normally the year of $registeredAt; once next year's registrations
+        // are open it is the following year (starting 1 Jan, not today).
+        $year = $this->yearService->yearFor($registeredAt);
         $expiryDate = Carbon::create($year, 12, 31);
         $graceEnd = $this->monthDayDate($year, config('membership.membership_year.grace_period_end_month_day', '04-30'));
+        $startDate = (int) $registeredAt->year === $year
+            ? $registeredAt->toDateString()
+            : Carbon::create($year, 1, 1)->toDateString();
 
         return [
-            'startDate' => $registeredAt->toDateString(),
+            'startDate' => $startDate,
             'expiryDate' => $expiryDate->toDateString(),
             'renewalDueDate' => $expiryDate->toDateString(),
             // Compared by date only — a time-of-day comparison would wrongly
@@ -597,6 +632,11 @@ class MembershipService
      */
     private function annualFeeDue(Carbon $registeredAt): float
     {
+        // Paying early for next year: the full fee, never the late-joiner rate.
+        if ($this->yearService->yearFor($registeredAt) > (int) $registeredAt->year) {
+            return (float) $this->findAnnualPlanOrFail()->price;
+        }
+
         $cutoff = $this->monthDayDate((int) $registeredAt->year, config('membership.late_joiner.cutoff_month_day', '07-01'));
 
         if ($registeredAt->gte($cutoff)) {
@@ -613,12 +653,17 @@ class MembershipService
      *
      * @return array{amount: float, promotionId: ?int, discountAmount: float}
      */
-    private function annualPricingFor(Carbon $registeredAt): array
+    private function annualPricingFor(Carbon $registeredAt, bool $isRenewal = false): array
     {
         $annualPlan = $this->findAnnualPlanOrFail();
         $baseFee = $this->annualFeeDue($registeredAt);
 
-        return $this->promotionService->priceForPlan($annualPlan, $baseFee);
+        return $this->promotionService->priceForPlan(
+            $annualPlan,
+            $baseFee,
+            $this->yearService->yearFor($registeredAt),
+            $isRenewal
+        );
     }
 
     /**
@@ -630,7 +675,7 @@ class MembershipService
     public function isWithinGraceWindow(?Carbon $at = null): bool
     {
         $at ??= now();
-        $graceEnd = $this->monthDayDate((int) $at->year, config('membership.membership_year.grace_period_end_month_day', '04-30'));
+        $graceEnd = $this->monthDayDate($this->yearService->yearFor($at), config('membership.membership_year.grace_period_end_month_day', '04-30'));
 
         return $at->toDateString() <= $graceEnd->toDateString();
     }
@@ -646,13 +691,14 @@ class MembershipService
     public function resolveDisplayMembership(int $userId): ?Membership
     {
         $priority = [
+            // A renewal being paid for (early renewal) outranks the still-Active row it replaces.
+            MembershipStatus::PendingPayment => -1,
             MembershipStatus::Active => 0,
             // Suspended still needs the member's attention (pay the full
             // balance to reinstate — see EnsureBalancePaid) and is the
             // current-cycle record, so it outranks an older Expired/Cancelled
             // membership from a prior cycle just like Active does.
             MembershipStatus::Suspended => 1,
-            MembershipStatus::PendingPayment => 2,
             MembershipStatus::Draft => 3,
             MembershipStatus::Expired => 4,
             MembershipStatus::Cancelled => 5,
@@ -735,7 +781,7 @@ class MembershipService
      */
     private function nextSequentialNumber(): string
     {
-        $prefix = now()->format('y');
+        $prefix = substr((string) $this->yearService->yearFor(now()), -2);
 
         // Counter row + lockForUpdate serializes allocation inside the caller's
         // transaction (renewals reuse numbers and cannot use a UNIQUE column).

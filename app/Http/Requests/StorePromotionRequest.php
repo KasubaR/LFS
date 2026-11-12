@@ -21,6 +21,8 @@ class StorePromotionRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:150'],
             'plan_id' => ['nullable', 'integer', 'exists:membership_plans,id'],
+            'membership_year' => ['required', 'integer', 'between:2024,2100'],
+            'applies_to' => ['nullable', Rule::in(['all', 'renewals', 'new'])],
             'discount_type' => ['required', Rule::in(PromotionDiscountType::ALL)],
             'discount_value' => [
                 'required',

@@ -33,6 +33,8 @@ class PromotionCrudTest extends TestCase
         return array_merge([
             'name' => 'Early Bird Annual',
             'plan_id' => $plan->id,
+            'membership_year' => now()->year,
+            'applies_to' => 'all',
             'discount_type' => 'percentage',
             'discount_value' => 10,
             'starts_at' => now()->toDateString(),

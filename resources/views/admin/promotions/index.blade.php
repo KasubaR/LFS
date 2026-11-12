@@ -20,6 +20,9 @@ $statusColor = fn (string $s) => match ($s) {
 
 <div class="admin-page-header admin-page-header--row">
   <h2 class="admin-page-header__heading">Promotions</h2>
+  <a href="/admin/promotions/membership-year" class="admin-btn">
+    <i class="fas fa-calendar" aria-hidden="true"></i> Next-year registration
+  </a>
   <a href="/admin/promotions/create" class="admin-btn admin-btn--primary">
     <i class="fas fa-plus" aria-hidden="true"></i> Add Promotion
   </a>
@@ -35,7 +38,8 @@ $statusColor = fn (string $s) => match ($s) {
           <th>Name</th>
           <th>Plan</th>
           <th>Discount</th>
-          <th>Window</th>
+          <th>Period</th>
+          <th>Membership year</th>
           <th>Status</th>
           <th></th>
         </tr>
@@ -48,6 +52,7 @@ $statusColor = fn (string $s) => match ($s) {
           <td>{{ $p['planName'] ?? 'All plans' }}</td>
           <td>{{ $p['discountType'] === 'percentage' ? rtrim(rtrim(number_format($p['discountValue'], 2), '0'), '.') . '%' : 'K' . number_format($p['discountValue'], 2) }}</td>
           <td>{{ $p['startsAt'] }} &ndash; {{ $p['endsAt'] }}</td>
+          <td>{{ $p['membershipYear'] ?? 'Any' }}</td>
           <td>
             <span style="display:inline-block; padding:0.2rem 0.6rem; background:{{ $color['bg'] }}; color:{{ $color['color'] }}; border:1px solid {{ $color['border'] }}; border-radius:20px; font-size:0.75rem; font-weight:600; white-space:nowrap;">
               {{ $statusLabel($p['status']) }}

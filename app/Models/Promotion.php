@@ -13,6 +13,8 @@ class Promotion extends Model
     protected $fillable = [
         'name',
         'plan_id',
+        'membership_year',
+        'applies_to',
         'discount_type',
         'discount_value',
         'starts_at',
@@ -26,6 +28,7 @@ class Promotion extends Model
     {
         return [
             'plan_id' => 'integer',
+            'membership_year' => 'integer',
             'discount_value' => 'decimal:2',
             'starts_at' => 'date',
             'ends_at' => 'date',

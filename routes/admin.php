@@ -234,6 +234,8 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
     // ── Promotions ───────────────────────────────────────────────────────────────────
     Route::prefix('promotions')->middleware('admin.can:promotions,read')->group(function (): void {
         Route::get('/', [PromotionController::class, 'index']);
+        Route::get('membership-year', [PromotionController::class, 'membershipYear']);
+        Route::post('membership-year', [PromotionController::class, 'saveMembershipYear']);
         Route::get('create', [PromotionController::class, 'create']);
         Route::post('create', [PromotionController::class, 'store']);
         Route::get('{id}/edit', [PromotionController::class, 'edit'])->where('id', '[0-9]+');

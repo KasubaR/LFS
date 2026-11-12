@@ -4,7 +4,7 @@
 @php
 $promotion   = $promotion   ?? [
     'name' => '', 'planId' => null, 'discountType' => 'percentage', 'discountValue' => '',
-    'startsAt' => '', 'endsAt' => '', 'isActive' => true, 'notes' => '',
+    'membershipYear' => null, 'appliesTo' => 'all', 'startsAt' => '', 'endsAt' => '', 'isActive' => true, 'notes' => '',
 ];
 $plans       = $plans       ?? [];
 $discountTypes = $discountTypes ?? ['percentage', 'fixed'];
@@ -51,6 +51,28 @@ $formAction  = $isEdit ? '/admin/promotions/' . (int)$promotion['id'] . '/edit' 
         @endforeach
       </select>
       @error('plan_id')
+      <p class="form-group__error" role="alert">{{ $message }}</p>
+      @enderror
+    </div>
+
+    <div class="form-group{{ $errors->has('membership_year') ? ' form-group--error' : '' }}">
+      <label for="membership_year" class="admin-label">Membership year it applies to</label>
+      <input type="number" id="membership_year" name="membership_year" class="admin-input" min="2024" max="2100" required
+             value="{{ old('membership_year', $promotion['membershipYear'] ?? (now()->year + (now()->month >= 7 ? 1 : 0))) }}">
+      <p class="admin-hint">The promotion period above is when members must pay. This is the membership year the discount is for, e.g. an early-bird running Nov&ndash;Dec 2026 for the 2027 year.</p>
+      @error('membership_year')
+      <p class="form-group__error" role="alert">{{ $message }}</p>
+      @enderror
+    </div>
+
+    <div class="form-group{{ $errors->has('applies_to') ? ' form-group--error' : '' }}">
+      <label for="applies_to" class="admin-label">Applies to</label>
+      <select id="applies_to" name="applies_to" class="admin-input">
+        @foreach(['all' => 'Everyone', 'renewals' => 'Renewals only', 'new' => 'New members only'] as $value => $label)
+          <option value="{{ $value }}" {{ old('applies_to', $promotion['appliesTo'] ?? 'all') === $value ? 'selected' : '' }}>{{ $label }}</option>
+        @endforeach
+      </select>
+      @error('applies_to')
       <p class="form-group__error" role="alert">{{ $message }}</p>
       @enderror
     </div>

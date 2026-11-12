@@ -69,12 +69,21 @@ class PromotionService
      * plan_id). A plan-specific promotion wins over a sitewide one when both
      * are active at once.
      */
-    public function findActiveForPlan(int $planId): ?Promotion
+    public function findActiveForPlan(int $planId, ?int $membershipYear = null, bool $isRenewal = false): ?Promotion
     {
         $today = Carbon::today()->toDateString();
 
         return Promotion::query()
             ->where('is_active', true)
+            // A promotion tied to a membership year only discounts that year.
+            ->where(function ($q) use ($membershipYear) {
+                $q->whereNull('membership_year');
+                if ($membershipYear !== null) {
+                    $q->orWhere('membership_year', $membershipYear);
+                }
+            })
+            // 'all' applies to everyone; otherwise match renewals / new members.
+            ->whereIn('applies_to', ['all', $isRenewal ? 'renewals' : 'new'])
             ->where('starts_at', '<=', $today)
             ->where('ends_at', '>=', $today)
             ->where(function ($q) use ($planId) {
@@ -97,10 +106,10 @@ class PromotionService
      *                                 promotion still composes on top of it.
      * @return array{amount: float, promotionId: ?int, discountAmount: float}
      */
-    public function priceForPlan(MembershipPlan $plan, ?float $basePrice = null): array
+    public function priceForPlan(MembershipPlan $plan, ?float $basePrice = null, ?int $membershipYear = null, bool $isRenewal = false): array
     {
         $price = $basePrice ?? (float) $plan->price;
-        $promotion = $this->findActiveForPlan((int) $plan->id);
+        $promotion = $this->findActiveForPlan((int) $plan->id, $membershipYear, $isRenewal);
 
         if (! $promotion) {
             return ['amount' => $price, 'promotionId' => null, 'discountAmount' => 0.0];
@@ -130,6 +139,8 @@ class PromotionService
         return [
             'name' => $data['name'],
             'plan_id' => $data['planId'] ?? null,
+            'membership_year' => $data['membershipYear'] ?? null,
+            'applies_to' => $data['appliesTo'] ?? 'all',
             'discount_type' => $data['discountType'] ?? PromotionDiscountType::Percentage,
             'discount_value' => $data['discountValue'],
             'starts_at' => $data['startsAt'],
@@ -157,6 +168,8 @@ class PromotionService
             'name' => $promotion->name,
             'planId' => $promotion->plan_id,
             'planName' => $promotion->plan?->name,
+            'membershipYear' => $promotion->membership_year,
+            'appliesTo' => $promotion->applies_to ?? 'all',
             'discountType' => $promotion->discount_type,
             'discountValue' => (float) $promotion->discount_value,
             'startsAt' => $promotion->starts_at?->toDateString(),

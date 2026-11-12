@@ -7,9 +7,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StorePromotionRequest;
 use App\Services\AdminPermissionService;
 use App\Services\MembershipPlanService;
+use App\Services\MembershipYearService;
 use App\Services\PromotionService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 class PromotionController extends Controller
 {
@@ -17,6 +19,7 @@ class PromotionController extends Controller
         private readonly PromotionService $promotionService,
         private readonly MembershipPlanService $planService,
         private readonly AdminPermissionService $permissions,
+        private readonly MembershipYearService $yearService,
     ) {}
 
     public function index(): View
@@ -29,6 +32,41 @@ class PromotionController extends Controller
                 ['label' => 'Admin', 'url' => '/admin'],
                 ['label' => 'Promotions'],
             ],
+        ]);
+    }
+
+    public function membershipYear(): View
+    {
+        $opensOn = $this->yearService->opensOn();
+
+        return view('admin.promotions.membership-year', [
+            'pageTitle' => 'Next-year registration',
+            'activePage' => 'promotions',
+            'opensOn' => $opensOn?->toDateString(),
+            'targetYear' => $opensOn ? $opensOn->year + 1 : now()->year + 1,
+            'isOpenNow' => $this->yearService->isNextYearOpen(),
+            'breadcrumbs' => [
+                ['label' => 'Admin', 'url' => '/admin'],
+                ['label' => 'Promotions', 'url' => '/admin/promotions'],
+                ['label' => 'Next-year registration'],
+            ],
+        ]);
+    }
+
+    public function saveMembershipYear(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'next_year_opens_on' => ['nullable', 'date', 'after_or_equal:'.now()->year.'-07-01', 'before_or_equal:'.now()->year.'-12-31'],
+        ], [
+            'next_year_opens_on.after_or_equal' => 'Choose a date between 1 July and 31 December of this year.',
+            'next_year_opens_on.before_or_equal' => 'Choose a date between 1 July and 31 December of this year.',
+        ]);
+
+        $date = $validated['next_year_opens_on'] ?? null;
+        $this->yearService->setOpensOn($date ?: null, $this->permissions->currentAdmin($request)?->id);
+
+        return redirect('/admin/promotions/membership-year')->with('flash', [
+            'success' => $date ? 'Next-year registration opens on '.$date.'.' : 'Next-year registration will open on 1 January.',
         ]);
     }
 
@@ -105,6 +143,8 @@ class PromotionController extends Controller
         return [
             'name' => $validated['name'],
             'planId' => $validated['plan_id'] ?? null,
+            'membershipYear' => $validated['membership_year'] ?? null,
+            'appliesTo' => $validated['applies_to'] ?? 'all',
             'discountType' => $validated['discount_type'],
             'discountValue' => $validated['discount_value'],
             'startsAt' => $validated['starts_at'],
