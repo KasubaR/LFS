@@ -40,6 +40,7 @@ class EventTicketController extends Controller
     public function __construct(
         private readonly TicketAttendanceService $attendance,
         private readonly TicketReportService $reports,
+        private readonly \App\Services\Tickets\TicketConfirmationService $confirmations,
         private readonly AdminPermissionService $permissions,
     ) {}
 
@@ -91,6 +92,35 @@ class EventTicketController extends Controller
             'statusFilters' => self::STATUS_FILTERS,
             'filterStatus' => $status,
             'filterQuery' => $search,
+        ]);
+    }
+
+    /**
+     * Re-sends the confirmation email for one paid order, to the address already
+     * on the order. Never changes the order.
+     */
+    public function resendConfirmation(Request $request, string $id, string $orderId): RedirectResponse
+    {
+        $event = $this->paidEvent($id);
+        if ($event === null) {
+            return redirect('/admin/events/list');
+        }
+
+        $order = EventTicketOrder::query()->where('event_id', $event->id)->find($orderId);
+        $back = redirect('/admin/events/'.$event->id.'/tickets'.($request->input('back') ? '?'.ltrim((string) $request->input('back'), '?') : ''));
+
+        if ($order === null) {
+            return $back->with('flash', ['error' => 'Order not found.']);
+        }
+
+        if ($this->confirmations->resend($order)) {
+            return $back->with('flash', ['success' => 'Confirmation email re-sent to '.$order->buyer_email.' (order '.$order->order_number.').']);
+        }
+
+        return $back->with('flash', [
+            'error' => $order->status !== EventTicketOrder::STATUS_PAID
+                ? 'Order '.$order->order_number.' is not paid, so no confirmation was sent.'
+                : 'The email could not be sent. Check the mail settings and try again.',
         ]);
     }
 

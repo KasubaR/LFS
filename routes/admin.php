@@ -69,6 +69,7 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
         Route::get('{id}/tickets/export', [EventTicketController::class, 'export'])->where('id', '[^/]+');
         Route::get('{id}/attendance', [EventTicketController::class, 'attendancePage'])->where('id', '[^/]+');
         Route::get('{id}/attendance/search', [EventTicketController::class, 'search'])->where('id', '[^/]+');
+        Route::post('{id}/tickets/orders/{orderId}/resend', [EventTicketController::class, 'resendConfirmation'])->where(['id' => '[^/]+', 'orderId' => '[^/]+']);
         Route::post('{id}/tickets/{ticketId}/present', [EventTicketController::class, 'present'])->where(['id' => '[^/]+', 'ticketId' => '[^/]+']);
         Route::post('{id}/tickets/{ticketId}/undo-present', [EventTicketController::class, 'undo'])->where(['id' => '[^/]+', 'ticketId' => '[^/]+']);
 

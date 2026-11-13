@@ -158,6 +158,17 @@ $th = 'padding:0.75rem; font-size:0.75rem; text-transform:uppercase; color:var(-
           <td style="padding:0.75rem;">
             <span style="display:inline-block; padding:0.15rem 0.6rem; border-radius:999px; font-size:0.75rem; font-weight:600; background:{{ $color }}22; color:{{ $color }};">{{ $label }}</span>
             @if($o->status === 'payment_review_required')<br><small style="color:var(--text-dim);">{{ $reasonLabel($o->review_reason) }}</small>@endif
+            @if($o->status === 'paid')
+              <form method="POST" action="/admin/events/{{ $event->id }}/tickets/orders/{{ $o->id }}/resend"
+                    style="margin-top:0.5rem;"
+                    onsubmit="return confirm('Re-send the confirmation email to {{ addslashes($o->buyer_email) }}?')">
+                @csrf
+                <input type="hidden" name="back" value="{{ request()->getQueryString() }}">
+                <button type="submit" class="admin-btn admin-btn--ghost admin-btn--sm">
+                  <i class="fas fa-envelope" aria-hidden="true"></i> Resend email
+                </button>
+              </form>
+            @endif
           </td>
         </tr>
       @endforeach
