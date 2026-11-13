@@ -52,7 +52,6 @@ class ElectionHttpFlowTest extends TestCase
             'description' => 'Test election created over HTTP.',
             'scheduled_open_at' => now()->addDays(5)->format('Y-m-d\TH:i'),
             'scheduled_close_at' => now()->addDays(6)->format('Y-m-d\TH:i'),
-            'quorum_percent' => 50,
         ]);
 
         $election = Election::query()->where('title', 'Annual General Meeting 2026')->firstOrFail();
@@ -64,11 +63,9 @@ class ElectionHttpFlowTest extends TestCase
             'description' => 'Updated description.',
             'scheduled_open_at' => now()->addDays(5)->format('Y-m-d\TH:i'),
             'scheduled_close_at' => now()->addDays(6)->format('Y-m-d\TH:i'),
-            'quorum_percent' => 60,
         ]);
         $update->assertRedirect();
         $this->assertSame('Annual General Meeting 2026 (Updated)', $election->fresh()->title);
-        $this->assertSame(60, $election->fresh()->quorum_percent);
 
         $position = $this->actingAsAdmin($ec)->post("/admin/elections/{$election->id}/positions", [
             'title' => 'Chairperson',
@@ -114,7 +111,6 @@ class ElectionHttpFlowTest extends TestCase
             'status' => ElectionStatus::Draft,
             'scheduled_open_at' => now(),
             'scheduled_close_at' => now()->addHour(),
-            'quorum_percent' => 50,
         ]);
 
         ElectionVoter::query()->create([

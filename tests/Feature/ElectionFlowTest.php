@@ -246,9 +246,8 @@ class ElectionFlowTest extends TestCase
         app(ElectionProxyService::class)->revoke($election->fresh(), $proxy, $admin);
     }
 
-    public function test_quorum_snapshot_counts_attendance_and_proxies_not_live_membership_status(): void
+    public function test_attendance_snapshot_counts_attendance_and_proxies_not_live_membership_status(): void
     {
-        $admin = $this->makeEcAdmin();
         $election = $this->makeElection();
 
         $attendee = User::factory()->create();
@@ -282,20 +281,10 @@ class ElectionFlowTest extends TestCase
         $this->assertSame(2, $snapshot['good_standing']);
         $this->assertSame(1, $snapshot['attending']);
         $this->assertSame(0, $snapshot['represented_by_proxy']);
-        $this->assertSame(1, $snapshot['counted_for_quorum']);
-        $this->assertSame(1, $snapshot['quorum_required']); // ceil(2 * 50%)
-        $this->assertTrue($snapshot['quorum_met']);
-        $this->assertNull($snapshot['quorum_confirmed_at']);
 
-        $confirmed = $quorum->confirmQuorum($meeting->fresh(), $admin);
-        $this->assertNotNull($confirmed->quorum_confirmed_at);
-
-        // Re-confirming after quorum is already confirmed is fine (idempotent
-        // outcome); what matters is the timestamp and audit trail exist.
-        $this->assertDatabaseHas('election_audit_logs', [
-            'election_id' => $election->id,
-            'action' => ElectionAuditAction::QuorumConfirmed,
-        ]);
+        // There is no quorum requirement any more: the snapshot only
+        // summarises turnout.
+        $this->assertSame(['good_standing', 'attending', 'represented_by_proxy'], array_keys($snapshot));
     }
 
     public function test_checkin_records_attendance_only_and_requires_matched_roll_membership(): void
@@ -558,7 +547,6 @@ class ElectionFlowTest extends TestCase
             'id' => Uuid::v4(),
             'title' => 'Test',
             'type' => MeetingType::Egm,
-            'quorum_percent' => 50,
         ]);
 
         return Election::query()->create([
@@ -569,7 +557,6 @@ class ElectionFlowTest extends TestCase
             'status' => ElectionStatus::Draft,
             'scheduled_open_at' => now(),
             'scheduled_close_at' => now()->addHour(),
-            'quorum_percent' => 50,
         ]);
     }
 

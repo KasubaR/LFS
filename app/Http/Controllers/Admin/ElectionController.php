@@ -45,7 +45,7 @@ class ElectionController extends Controller
         private readonly ElectionBallotLockService $ballotLock,
         private readonly ElectionProxyService $proxies,
         private readonly ElectionLifecycleService $lifecycle,
-        private readonly MeetingQuorumService $quorum,
+        private readonly MeetingQuorumService $attendance,
         private readonly ElectionTallyService $tally,
         private readonly AdminPermissionService $permissions,
         private readonly ContactMessageService $messages,
@@ -86,7 +86,6 @@ class ElectionController extends Controller
             'description' => ['nullable', 'string'],
             'scheduled_open_at' => ['nullable', 'date'],
             'scheduled_close_at' => ['nullable', 'date', 'after:scheduled_open_at'],
-            'quorum_percent' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
         $election = $this->elections->create($data, $admin);
@@ -107,7 +106,7 @@ class ElectionController extends Controller
             'complaints',
         ])->findOrFail($id);
 
-        $quorum = $election->meeting ? $this->quorum->snapshot($election->meeting) : null;
+        $attendance = $election->meeting ? $this->attendance->snapshot($election->meeting) : null;
         $tally = null;
         if ($election->isClosedOrLater()) {
             $tally = $this->tally->tally($election);
@@ -123,7 +122,7 @@ class ElectionController extends Controller
             'pageTitle' => $election->title,
             'activePage' => 'elections',
             'election' => $election,
-            'quorum' => $quorum,
+            'attendance' => $attendance,
             'tally' => $tally,
             'turnout' => $turnout,
             'canWrite' => $this->canWrite(),
@@ -144,7 +143,6 @@ class ElectionController extends Controller
             'description' => ['nullable', 'string'],
             'scheduled_open_at' => ['nullable', 'date'],
             'scheduled_close_at' => ['nullable', 'date'],
-            'quorum_percent' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
         $this->elections->update($election, $data, $admin);
@@ -427,20 +425,6 @@ class ElectionController extends Controller
         $this->lifecycle->permanentLock(Election::query()->findOrFail($id), $admin);
 
         return back()->with('flash', ['success' => 'Election permanently locked.']);
-    }
-
-    public function confirmQuorum(string $id): RedirectResponse
-    {
-        $admin = $this->assertWrite();
-        $election = Election::query()->findOrFail($id);
-
-        if (! $election->meeting) {
-            abort(404, 'This election has no associated meeting.');
-        }
-
-        $this->quorum->confirmQuorum($election->meeting, $admin);
-
-        return back()->with('flash', ['success' => 'Quorum confirmed.']);
     }
 
     public function certificate(string $id)

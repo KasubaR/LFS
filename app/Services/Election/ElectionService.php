@@ -26,7 +26,6 @@ class ElectionService
      */
     public function create(array $data, AdminUser $admin): Election
     {
-        $quorumPercent = (int) ($data['quorum_percent'] ?? config('elections.quorum_percent_default', 50));
         $type = (string) ($data['type'] ?? ElectionType::ByElection);
 
         // Every election is conducted during a meeting; a by-election is
@@ -38,7 +37,6 @@ class ElectionService
             'type' => $type === ElectionType::Agm ? MeetingType::Agm : MeetingType::Egm,
             'description' => $data['description'] ?? null,
             'scheduled_starts_at' => $data['scheduled_open_at'] ?? null,
-            'quorum_percent' => $quorumPercent,
         ]);
 
         $election = Election::query()->create([
@@ -50,7 +48,6 @@ class ElectionService
             'description' => $data['description'] ?? null,
             'scheduled_open_at' => $data['scheduled_open_at'] ?? null,
             'scheduled_close_at' => $data['scheduled_close_at'] ?? null,
-            'quorum_percent' => $quorumPercent,
         ]);
 
         $this->audit->record(
@@ -81,7 +78,6 @@ class ElectionService
             'description' => array_key_exists('description', $data) ? $data['description'] : $election->description,
             'scheduled_open_at' => array_key_exists('scheduled_open_at', $data) ? $data['scheduled_open_at'] : $election->scheduled_open_at,
             'scheduled_close_at' => array_key_exists('scheduled_close_at', $data) ? $data['scheduled_close_at'] : $election->scheduled_close_at,
-            'quorum_percent' => isset($data['quorum_percent']) ? (int) $data['quorum_percent'] : $election->quorum_percent,
         ])->save();
 
         if ($election->status === ElectionStatus::BallotApproved && $election->scheduled_open_at) {
@@ -96,7 +92,6 @@ class ElectionService
             'type' => $type === ElectionType::Agm ? MeetingType::Agm : MeetingType::Egm,
             'description' => $election->description,
             'scheduled_starts_at' => $election->scheduled_open_at,
-            'quorum_percent' => $election->quorum_percent,
         ]);
 
         $this->audit->record(

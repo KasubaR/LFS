@@ -126,7 +126,7 @@ class ElectionRollImportTest extends TestCase
         return Election::query()->create([
             'id' => Uuid::v4(), 'title' => 'Roll Import Test', 'type' => ElectionType::Egm,
             'status' => ElectionStatus::Draft, 'scheduled_open_at' => now(),
-            'scheduled_close_at' => now()->addHour(), 'quorum_percent' => 50,
+            'scheduled_close_at' => now()->addHour(),
         ]);
     }
 }

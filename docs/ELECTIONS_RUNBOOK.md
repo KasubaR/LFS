@@ -47,7 +47,7 @@ Before go-live, run once in staging and record the result:
 - [ ] Member election list and ballot on phone viewport
 - [ ] Member check-in + cast + confirmation on desktop
 - [ ] Admin roll upload, lock, proxy, open/close on desktop
-- [ ] Admin turnout / quorum readable on tablet width
+- [ ] Admin turnout / attendance readable on tablet width
 
 ## Test election
 

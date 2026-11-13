@@ -99,23 +99,6 @@ $breadcrumbs = [
       @enderror
     </div>
 
-    <div class="form-group{{ $errors->has('quorum_percent') ? ' form-group--error' : '' }}">
-      <label for="quorum_percent" class="admin-label">Quorum %</label>
-      <input
-        type="number"
-        id="quorum_percent"
-        name="quorum_percent"
-        min="1"
-        max="100"
-        value="{{ old('quorum_percent', 50) }}"
-        class="admin-input"
-      >
-      <p class="form-group__hint">Default is 50% of members on the locked voters’ roll.</p>
-      @error('quorum_percent')
-        <p class="form-group__error" role="alert">{{ $message }}</p>
-      @enderror
-    </div>
-
     <div class="admin-form-actions">
       <button type="submit" class="admin-btn admin-btn--primary">
         <i class="fas fa-plus" aria-hidden="true"></i>

@@ -6,7 +6,6 @@ use App\Enums\ElectionAuditAction;
 use App\Enums\ElectionProxyStatus;
 use App\Enums\ElectionVoterMatchStatus;
 use App\Enums\MeetingStatus;
-use App\Models\AdminUser;
 use App\Models\ElectionProxy;
 use App\Models\ElectionVoter;
 use App\Models\Meeting;
@@ -18,7 +17,8 @@ use App\Support\Uuid;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Quorum & attendance for a Meeting (developer brief §8). Attendance is
+ * Attendance for a Meeting (developer brief §8). There is no quorum
+ * requirement; this only records check-ins and summarises turnout. Attendance is
  * meeting-scoped, but "good standing" and "represented by proxy" are still
  * governed by the voters' roll of the meeting's linked election — the roll
  * remains the Electoral Commission's source of truth for who is eligible,
@@ -36,12 +36,7 @@ class MeetingQuorumService
      * @return array{
      *   good_standing: int,
      *   attending: int,
-     *   represented_by_proxy: int,
-     *   quorum_percent: int,
-     *   quorum_required: int,
-     *   quorum_met: bool,
-     *   quorum_confirmed_at: ?string,
-     *   counted_for_quorum: int
+     *   represented_by_proxy: int
      * }
      */
     public function snapshot(Meeting $meeting): array
@@ -55,46 +50,16 @@ class MeetingQuorumService
                 'good_standing' => 0,
                 'attending' => $meeting->attendances()->count(),
                 'represented_by_proxy' => 0,
-                'quorum_percent' => (int) $meeting->quorum_percent,
-                'quorum_required' => 0,
-                'quorum_met' => false,
-                'quorum_confirmed_at' => $meeting->quorum_confirmed_at?->toIso8601String(),
-                'counted_for_quorum' => 0,
             ];
         }
 
-        $goodStanding = $this->roll->goodStandingCount($election);
-        $attending = $meeting->attendances()->count();
-        $proxies = ElectionProxy::query()
-            ->where('election_id', $election->id)
-            ->where('status', ElectionProxyStatus::Approved)
-            ->count();
-
-        $percent = (int) $meeting->quorum_percent;
-        $required = (int) ceil($goodStanding * ($percent / 100));
-
-        // A member counts toward quorum if they're checked in to the
-        // meeting themselves, or if they're represented by an approved
-        // proxy (their proxy holder effectively stands in for them).
-        $counted = ElectionVoter::query()
-            ->where('election_id', $election->id)
-            ->whereNull('excluded_at')
-            ->where('match_status', ElectionVoterMatchStatus::Matched)
-            ->where(function ($q) use ($meeting) {
-                $q->whereIn('user_id', $meeting->attendances()->select('user_id'))
-                    ->orWhere('represented_by_proxy', true);
-            })
-            ->count();
-
         return [
-            'good_standing' => $goodStanding,
-            'attending' => $attending,
-            'represented_by_proxy' => $proxies,
-            'quorum_percent' => $percent,
-            'quorum_required' => $required,
-            'quorum_met' => $counted >= $required && $required > 0,
-            'quorum_confirmed_at' => $meeting->quorum_confirmed_at?->toIso8601String(),
-            'counted_for_quorum' => $counted,
+            'good_standing' => $this->roll->goodStandingCount($election),
+            'attending' => $meeting->attendances()->count(),
+            'represented_by_proxy' => ElectionProxy::query()
+                ->where('election_id', $election->id)
+                ->where('status', ElectionProxyStatus::Approved)
+                ->count(),
         ];
     }
 
@@ -155,25 +120,5 @@ class MeetingQuorumService
         );
 
         return $attendance;
-    }
-
-    public function confirmQuorum(Meeting $meeting, AdminUser $admin): Meeting
-    {
-        $snap = $this->snapshot($meeting);
-        if (! $snap['quorum_met']) {
-            throw ValidationException::withMessages(['quorum' => 'Quorum has not been achieved.']);
-        }
-
-        $meeting->update(['quorum_confirmed_at' => now()]);
-
-        $this->audit->record(
-            $meeting->primaryElection()?->id,
-            ElectionAuditAction::QuorumConfirmed,
-            'admin',
-            (string) $admin->id,
-            array_merge($snap, ['meeting_id' => $meeting->id]),
-        );
-
-        return $meeting->fresh();
     }
 }

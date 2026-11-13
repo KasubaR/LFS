@@ -58,7 +58,6 @@ class ElectionTestSeeder extends Seeder
             'type' => MeetingType::Egm,
             'description' => 'Seeded test meeting for EC UAT.',
             'scheduled_starts_at' => now()->addDays(3),
-            'quorum_percent' => 50,
         ]);
 
         $election = Election::query()->create([
@@ -70,7 +69,6 @@ class ElectionTestSeeder extends Seeder
             'description' => 'Seeded test election for EC UAT.',
             'scheduled_open_at' => now()->addDays(3),
             'scheduled_close_at' => now()->addDays(3)->addHours(4),
-            'quorum_percent' => 50,
         ]);
 
         $position = ElectionPosition::query()->create([

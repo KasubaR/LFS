@@ -287,7 +287,6 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
         Route::post('{id}/close', [ElectionController::class, 'close'])->where('id', $uuid);
         Route::post('{id}/certify', [ElectionController::class, 'certify'])->where('id', $uuid);
         Route::post('{id}/lock', [ElectionController::class, 'permanentLock'])->where('id', $uuid);
-        Route::post('{id}/quorum/confirm', [ElectionController::class, 'confirmQuorum'])->where('id', $uuid);
         Route::get('{id}/certificate', [ElectionController::class, 'certificate'])->where('id', $uuid);
         Route::get('{id}/participation', [ElectionController::class, 'participation'])->where('id', $uuid);
         Route::post('{id}/complaints', [ElectionController::class, 'storeComplaint'])->where('id', $uuid);

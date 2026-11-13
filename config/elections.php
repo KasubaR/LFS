@@ -22,8 +22,6 @@ return [
 
     'max_proxies_per_holder' => 5,
 
-    'quorum_percent_default' => 50,
-
     'certifications_required' => 2,
 
     'roll_template_headers' => [

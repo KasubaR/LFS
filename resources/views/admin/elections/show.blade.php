@@ -132,39 +132,24 @@
   @endif
 </div>
 
-{{-- Quorum --}}
+{{-- Attendance --}}
 <div class="admin-card">
-  <p class="admin-card__title">Quorum</p>
-  @if($quorum)
+  <p class="admin-card__title">Attendance</p>
+  @if($attendance)
   <div class="election-stats">
     <div class="election-stat">
       <span class="election-stat__label">Good standing</span>
-      <span class="election-stat__value">{{ $quorum['good_standing'] }}</span>
+      <span class="election-stat__value">{{ $attendance['good_standing'] }}</span>
     </div>
     <div class="election-stat">
       <span class="election-stat__label">Attending</span>
-      <span class="election-stat__value">{{ $quorum['attending'] }}</span>
+      <span class="election-stat__value">{{ $attendance['attending'] }}</span>
     </div>
     <div class="election-stat">
       <span class="election-stat__label">By proxy</span>
-      <span class="election-stat__value">{{ $quorum['represented_by_proxy'] }}</span>
-    </div>
-    <div class="election-stat">
-      <span class="election-stat__label">Counted / required</span>
-      <span class="election-stat__value">{{ $quorum['counted_for_quorum'] }} / {{ $quorum['quorum_required'] }}</span>
+      <span class="election-stat__value">{{ $attendance['represented_by_proxy'] }}</span>
     </div>
   </div>
-  <p class="election-hint">
-    Quorum {{ $quorum['quorum_percent'] }}% —
-    <strong>{{ $quorum['quorum_met'] ? 'met' : 'not met' }}</strong>
-    · Confirmed: {{ $quorum['quorum_confirmed_at'] ?? '—' }}
-  </p>
-  @if($canWrite && $quorum['quorum_met'] && !$election->meeting->quorum_confirmed_at)
-    <form method="post" action="{{ url('/admin/elections/'.$election->id.'/quorum/confirm') }}">
-      @csrf
-      <button class="admin-btn admin-btn--primary" type="submit">Confirm quorum</button>
-    </form>
-  @endif
   @else
     <p class="dashboard-empty">This election has no associated meeting.</p>
   @endif
@@ -242,10 +227,6 @@
       <div class="form-group">
         <label class="admin-label" for="settings_close">Scheduled close</label>
         <input id="settings_close" class="admin-input" type="datetime-local" name="scheduled_close_at" value="{{ old('scheduled_close_at', optional($election->scheduled_close_at)->format('Y-m-d\\TH:i')) }}">
-      </div>
-      <div class="form-group">
-        <label class="admin-label" for="settings_quorum">Quorum %</label>
-        <input id="settings_quorum" class="admin-input" type="number" name="quorum_percent" min="1" max="100" value="{{ old('quorum_percent', $election->quorum_percent) }}">
       </div>
     </div>
 
