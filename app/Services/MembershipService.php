@@ -629,6 +629,11 @@ class MembershipService
         // Late joiners owe the reduced fee, everyone else the full annual price.
         $registeredAt = Carbon::parse($membership->joined_at ?? $membership->start_date ?? now());
         $feeDue = $this->annualFeeDue($registeredAt);
+        // Paid in advance (e.g. December 2025) for a membership year that starts later:
+        // the late-joiner rate never applies, the full annual fee does.
+        if ($membership->expiry_date !== null && (int) $membership->expiry_date->year > (int) $registeredAt->year) {
+            $feeDue = (float) $this->findAnnualPlanOrFail()->price;
+        }
         $paid = (float) $payment->amount_paid;
         if ($paid >= $feeDue) {
             return null;
