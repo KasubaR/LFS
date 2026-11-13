@@ -204,7 +204,7 @@
             <span class="dashboard-contact-item__icon" aria-hidden="true"><i class="fas fa-envelope"></i></span>
             <div>
               <div class="dashboard-contact-item__label">Email</div>
-              <a href="mailto:info@lfszambia.run" class="dashboard-contact-item__value">info@lfszambia.run</a>
+              <a href="mailto:hi@lfszambia.run" class="dashboard-contact-item__value">hi@lfszambia.run</a>
             </div>
           </li>
           <li class="dashboard-contact-item">

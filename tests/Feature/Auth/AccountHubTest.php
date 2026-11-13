@@ -97,7 +97,7 @@ class AccountHubTest extends TestCase
         $dashboard->assertSee('page-breadcrumb', false);
         $dashboard->assertDontSee('class="lfs-nav"', false);
         $dashboard->assertSee('Contact LFS', false);
-        $dashboard->assertSee('info@lfszambia.run', false);
+        $dashboard->assertSee('hi@lfszambia.run', false);
         $dashboard->assertSee('+260 767 023 948', false);
         $dashboard->assertSee('Dashboard', false);
         $dashboard->assertSee('Orders', false);

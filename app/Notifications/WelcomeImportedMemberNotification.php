@@ -35,6 +35,6 @@ class WelcomeImportedMemberNotification extends Notification implements ShouldQu
                 .'permanent password.')
             ->action('Sign in to LFS', url('/login'))
             ->line('If the temporary password has expired or you need help, use "Forgot password" on the sign-in '
-                .'page or contact us at info@lfszambia.run.');
+                .'page or contact us at hi@lfszambia.run.');
     }
 }

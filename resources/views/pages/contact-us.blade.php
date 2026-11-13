@@ -93,7 +93,7 @@
         <div class="contact-row__icon"><i class="fas fa-envelope" aria-hidden="true"></i></div>
         <div>
           <div class="contact-row__label">Email</div>
-          <div class="contact-row__value"><a href="mailto:info@lfszambia.run">info@lfszambia.run</a></div>
+          <div class="contact-row__value"><a href="mailto:hi@lfszambia.run">hi@lfszambia.run</a></div>
         </div>
       </div>
       <div class="contact-row">

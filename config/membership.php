@@ -27,6 +27,6 @@ return [
         'name' => 'Lusaka Fitness Squad',
         'address' => 'CV-6 COMESA Village, Great East Road, Lusaka, Zambia',
         'phone' => '+260 966 755 326',
-        'email' => 'info@lfszambia.run',
+        'email' => 'hi@lfszambia.run',
     ],
 ];

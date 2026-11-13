@@ -63,8 +63,8 @@
     <div class="lfs-footer__col">
       <h4>Contact</h4>
       <div class="lfs-footer__contact-snap">
-        <a href="mailto:info@lfszambia.run" class="lfs-footer__contact-link">
-          <i class="fas fa-envelope" aria-hidden="true"></i> info@lfszambia.run
+        <a href="mailto:hi@lfszambia.run" class="lfs-footer__contact-link">
+          <i class="fas fa-envelope" aria-hidden="true"></i> hi@lfszambia.run
         </a>
         <a href="{{ url('/contact') }}" class="lfs-footer__contact-link">
           <i class="fas fa-phone-volume" aria-hidden="true"></i> Contact Us
@@ -81,7 +81,7 @@
   <div class="lfs-footer__bottom">
     <span>&copy; {{ date('Y') }} Lusaka Fitness Squad. All rights reserved.</span>
     <span>
-      <a href="mailto:info@lfszambia.run">info@lfszambia.run</a>
+      <a href="mailto:hi@lfszambia.run">hi@lfszambia.run</a>
       &nbsp;·&nbsp;
       <a href="https://www.lfszambia.run" target="_blank" rel="noopener">www.lfszambia.run</a>
     </span>

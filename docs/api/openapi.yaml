@@ -29,7 +29,7 @@ info:
 
   contact:
     name: Lusaka Fitness Squad
-    email: info@lfszambia.run
+    email: hi@lfszambia.run
 
 servers:
   - url: https://lfszambia.run/api/v1

@@ -365,7 +365,7 @@ LFS logs every request against your key: path, time, IP, and outcome.
 
 - Machine-readable spec: [`openapi.yaml`](openapi.yaml)
 - Design rationale: [`PARTNER_API_PLAN.md`](PARTNER_API_PLAN.md)
-- Contact: info@lfszambia.run
+- Contact: hi@lfszambia.run
 
 ### Changelog
 
