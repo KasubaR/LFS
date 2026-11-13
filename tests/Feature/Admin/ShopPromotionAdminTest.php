@@ -168,6 +168,44 @@ class ShopPromotionAdminTest extends TestCase
         $this->assertNull($order->shop_promotion_id);
     }
 
+    public function test_read_only_auditor_can_view_but_not_change_shop_promotions(): void
+    {
+        $promo = ShopPromotion::query()->create([
+            'name' => 'Existing', 'code' => 'KEEP', 'discount_type' => 'percentage', 'discount_value' => 10,
+            'starts_at' => now()->toDateString(), 'ends_at' => now()->addWeek()->toDateString(),
+        ]);
+        $auditor = $this->makeAdminUser(['role' => \App\Enums\AdminRole::ReadOnlyAuditor]);
+
+        $this->actingAsAdmin($auditor)->get('/admin/shop-promotions')->assertOk();
+        $this->actingAsAdmin($auditor)->post('/admin/shop-promotions/create', $this->payload())->assertForbidden();
+        $this->actingAsAdmin($auditor)->post("/admin/shop-promotions/{$promo->id}/edit", $this->payload(['name' => 'Hacked']))->assertForbidden();
+        $this->actingAsAdmin($auditor)->post("/admin/shop-promotions/{$promo->id}/delete")->assertForbidden();
+
+        $this->assertDatabaseCount('shop_promotions', 1);
+        $this->assertSame('Existing', $promo->fresh()->name);
+    }
+
+    public function test_roles_without_promotions_access_are_denied(): void
+    {
+        $finance = $this->makeAdminUser(['role' => \App\Enums\AdminRole::Finance]);
+
+        $this->actingAsAdmin($finance)->get('/admin/shop-promotions')->assertForbidden();
+        $this->actingAsAdmin($finance)->post('/admin/shop-promotions/create', $this->payload())->assertForbidden();
+        $this->assertDatabaseCount('shop_promotions', 0);
+    }
+
+    public function test_html_in_a_promotion_name_is_escaped_on_the_index(): void
+    {
+        ShopPromotion::query()->create([
+            'name' => '<script>alert(1)</script>', 'code' => 'XSS1', 'discount_type' => 'percentage', 'discount_value' => 10,
+            'starts_at' => now()->toDateString(), 'ends_at' => now()->addWeek()->toDateString(),
+        ]);
+
+        $this->actingAsAdmin()->get('/admin/shop-promotions')
+            ->assertOk()
+            ->assertDontSee('<script>alert(1)</script>', false);
+    }
+
     // ── In-person sales ──────────────────────────────────────────────────────
 
     private function salePayload(Product $product, array $overrides = []): array

@@ -487,4 +487,110 @@ class ShopPromotionTest extends TestCase
 
         $this->assertLessThanOrEqual(1, $salesQueries);
     }
+
+    public function test_fixed_code_line_discounts_always_sum_to_the_cart_discount(): void
+    {
+        $this->makePromo(['code' => 'FIX7', 'discount_type' => 'fixed', 'discount_value' => 7]);
+        $product = $this->makeProduct('jerseys', 10.01);
+
+        foreach ([[1, 1, 1], [2, 3, 1], [5, 1, 7]] as $qtys) {
+            $result = $this->service()->priceCart(array_map(
+                fn (int $q): array => ['productId' => $product->id, 'qty' => $q],
+                $qtys,
+            ), 'FIX7');
+
+            $this->assertSame(7.0, $result['discount']);
+            $this->assertEqualsWithDelta(7.0, array_sum(array_column($result['lines'], 'discount')), 0.0001);
+            $this->assertEqualsWithDelta($result['subtotal'] - 7.0, $result['total'], 0.0001);
+        }
+    }
+
+    public function test_charged_line_total_stays_within_rounding_of_the_displayed_unit_price(): void
+    {
+        $this->makePromo(['code' => null, 'name' => 'Sale', 'discount_value' => 15]);
+
+        foreach ([10.05, 3.33, 19.99, 7.77, 99.95] as $price) {
+            $product = $this->makeProduct('jerseys', $price);
+            $unit = $this->service()->saleFor('jerseys', $price)['price'];
+
+            foreach ([1, 2, 3, 7, 11] as $qty) {
+                $charged = $this->service()->priceCart([['productId' => $product->id, 'qty' => $qty]])['total'];
+                // The per-unit price is rounded to the ngwee, so it can drift by half a ngwee per unit.
+                $this->assertEqualsWithDelta($unit * $qty, $charged, $qty * 0.005 + 0.0001);
+            }
+        }
+    }
+
+    public function test_members_only_sale_shows_on_the_product_page_only_to_active_members(): void
+    {
+        $this->makePromo(['code' => null, 'name' => 'Members sale', 'discount_value' => 20, 'members_only' => true]);
+        $product = $this->makeProduct('jerseys', 200);
+        $member = $this->makeActiveMember();
+
+        $this->get('/shop/product/'.$product->slug)->assertOk()->assertDontSee('K 160.00');
+        $this->actingAs($member)->get('/shop/product/'.$product->slug)->assertOk()->assertSee('K 160.00');
+    }
+
+    public function test_promo_box_shows_only_when_a_code_exists_or_is_applied(): void
+    {
+        $product = $this->makeProduct('jerseys', 100);
+        $cart = [[
+            'key' => $product->id.'::M', 'productId' => $product->id, 'slug' => $product->slug, 'name' => 'T',
+            'price' => 100.0, 'image' => '', 'size' => 'M', 'qty' => 1,
+        ]];
+
+        $this->withSession(['cart' => $cart])->get('/shop/cart')->assertOk()->assertDontSee('data-promo-box', false);
+
+        $this->makePromo(['code' => null, 'name' => 'Sale only', 'discount_value' => 10]);
+        $this->withSession(['cart' => $cart])->get('/shop/cart')->assertDontSee('data-promo-box', false);
+
+        $this->makePromo();
+        $this->withSession(['cart' => $cart])->get('/shop/cart')->assertSee('data-promo-box', false);
+    }
+
+    public function test_a_tampered_cart_price_cannot_lower_the_charge(): void
+    {
+        $this->makePromo();
+        $product = $this->makeProduct('jerseys', 100);
+        $this->mockLenco();
+
+        $this->withSession([
+            'cart' => [['price' => 1, 'qty' => 2, 'productId' => $product->id, 'size' => 'M']],
+            'cart_promo_code' => 'SAVE10',
+        ])->postJson('/shop/checkout/place-order', $this->orderBody())->assertOk();
+
+        $this->assertSame(180.0, (float) Order::query()->firstOrFail()->total);
+        $this->assertSame(180.0, (float) Payment::query()->firstOrFail()->amount);
+    }
+
+    public function test_a_placed_order_clears_the_promo_code_from_the_session(): void
+    {
+        $this->makePromo();
+        $product = $this->makeProduct('jerseys', 100);
+        $this->mockLenco();
+
+        $this->withSession([
+            'cart' => [['price' => 100, 'qty' => 1, 'productId' => $product->id, 'size' => 'M']],
+            'cart_promo_code' => 'SAVE10',
+        ])->postJson('/shop/checkout/place-order', $this->orderBody())
+            ->assertOk()
+            ->assertSessionMissing('cart_promo_code');
+    }
+
+    public function test_orders_without_a_promotion_default_to_no_discount_and_still_render(): void
+    {
+        $order = Order::query()->create([
+            'order_number' => 'LFS-OLD-1', 'customer_name' => 'Old', 'customer_email' => 'old@example.com',
+            'customer_phone' => '', 'notes' => '', 'subtotal' => 50, 'total' => 50, 'status' => 'paid',
+        ])->fresh();
+
+        $this->assertSame(0.0, (float) $order->discount_amount);
+        $this->assertNull($order->promo_code);
+        $this->assertNull($order->shop_promotion_id);
+
+        $this->withSession(['order_access.LFS-OLD-1' => true])
+            ->get('/shop/order/LFS-OLD-1')
+            ->assertOk()
+            ->assertDontSee('Discount');
+    }
 }
