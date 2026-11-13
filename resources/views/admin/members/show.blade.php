@@ -129,6 +129,12 @@ $cancellableStatuses = ['draft', 'pending_payment', 'active', 'suspended', 'expi
                     <span class="status-pill status-pill--{{ ($paymentBadge)($m['latestPayment']['status']) }}">
                       {{ ucfirst(str_replace('_', ' ', $m['latestPayment']['status'])) }}
                     </span>
+                    <div style="font-size:0.78rem; color:var(--text-dim); margin-top:0.25rem;">
+                      Paid K{{ number_format($m['latestPayment']['amountPaid'], 2) }} of K{{ number_format($m['latestPayment']['amount'], 2) }}
+                      @if($m['latestPayment']['status'] === 'partially_paid')
+                        <br><strong style="color:#e88;">Balance K{{ number_format($m['latestPayment']['amount'] - $m['latestPayment']['amountPaid'], 2) }}</strong>
+                      @endif
+                    </div>
                   @else
                     —
                   @endif

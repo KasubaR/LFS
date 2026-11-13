@@ -315,9 +315,9 @@ class MemberImportService
                     ->where('status', MembershipStatus::Active)
                     ->first();
                 if ($membership !== null) {
-                    $this->membershipService->expire($membership->id, 'Balance not paid (import '.$batch->id.')');
+                    $this->membershipService->suspendForUnpaidBalance($membership->id, 'system:import', 'Balance not paid (import '.$batch->id.')');
 
-                    return ['status' => 'imported', 'warning' => $row['email'].': existing member '.$membership->membership_number.' marked expired'];
+                    return ['status' => 'imported', 'warning' => $row['email'].': existing member '.$membership->membership_number.' suspended (balance unpaid)'];
                 }
             }
 
@@ -414,7 +414,7 @@ class MemberImportService
             ]);
 
             if (! empty($row['expired'])) {
-                $this->membershipService->expire($membership['membershipId'], 'Balance not paid (import '.$batch->id.')');
+                $this->membershipService->suspendForUnpaidBalance($membership['membershipId'], 'system:import', 'Balance not paid (import '.$batch->id.')');
             }
 
             return $user;

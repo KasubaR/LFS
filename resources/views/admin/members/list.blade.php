@@ -59,6 +59,7 @@ $filterStatus = $filterStatus ?? '';
           <th style="padding:0.75rem; font-size:0.75rem; text-transform:uppercase; color:var(--text-dim);">Phone</th>
           <th style="padding:0.75rem; font-size:0.75rem; text-transform:uppercase; color:var(--text-dim);">Satellite</th>
           <th style="padding:0.75rem; font-size:0.75rem; text-transform:uppercase; color:var(--text-dim);">Status</th>
+          <th style="padding:0.75rem; font-size:0.75rem; text-transform:uppercase; color:var(--text-dim);">Balance</th>
           <th style="padding:0.75rem; font-size:0.75rem; text-transform:uppercase; color:var(--text-dim);">Joined</th>
           <th style="padding:0.75rem; font-size:0.75rem; text-transform:uppercase; color:var(--text-dim);">Actions</th>
         </tr>
@@ -87,6 +88,9 @@ $filterStatus = $filterStatus ?? '';
               <span style="display:inline-block; padding:0.2rem 0.6rem; background:{{ $statusColor['bg'] }}; color:{{ $statusColor['color'] }}; border:1px solid {{ $statusColor['border'] }}; border-radius:20px; font-size:0.75rem; font-weight:600; white-space:nowrap; text-transform:capitalize;">
                 {{ $m['status'] ?? 'unknown' }}
               </span>
+            </td>
+            <td style="padding:0.75rem; font-size:0.88rem; white-space:nowrap; color:{{ ($m['balance'] ?? 0) > 0 ? '#e88' : 'var(--text-dim)' }};">
+              {{ ($m['balance'] ?? 0) > 0 ? 'K'.number_format($m['balance'], 2).' owing' : '—' }}
             </td>
             <td style="padding:0.75rem; color:var(--text-dim); font-size:0.88rem;">
               {{ !empty($m['createdAt']) ? date('j M Y', strtotime($m['createdAt'])) : '—' }}

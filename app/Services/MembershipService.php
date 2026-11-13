@@ -598,6 +598,86 @@ class MembershipService
         return $this->toMembership($membership->fresh(['user', 'plan']));
     }
 
+    /**
+     * A member who paid only part of their fee and never cleared the balance.
+     * Mirrors what the website does for an unpaid instalment: the payment becomes
+     * PartiallyPaid against the full fee and the membership is Suspended, so
+     * paying the balance on /account/balance reinstates it (no fresh full-price
+     * renewal, nothing already paid is lost).
+     *
+     * Accepts Active or Expired memberships. Returns null if nothing is owed.
+     *
+     * @return array{membershipId: string, feeDue: float, paid: float, balance: float}|null
+     */
+    public function suspendForUnpaidBalance(string $membershipId, string $actor, ?string $notes = null): ?array
+    {
+        $membership = $this->findMembershipOrFail($membershipId);
+        $fromStatus = $membership->status;
+
+        if (! in_array($fromStatus, [MembershipStatus::Active, MembershipStatus::Expired], true)) {
+            throw new CodeException("Cannot suspend a {$fromStatus} membership for an unpaid balance.", self::INVALID_TRANSITION_CODE);
+        }
+
+        $payment = MembershipPayment::query()
+            ->where('membership_id', $membership->id)
+            ->orderByDesc('id')
+            ->first();
+        if (! $payment) {
+            return null;
+        }
+
+        // Late joiners owe the reduced fee, everyone else the full annual price.
+        $registeredAt = Carbon::parse($membership->joined_at ?? $membership->start_date ?? now());
+        $feeDue = $this->annualFeeDue($registeredAt);
+        $paid = (float) $payment->amount_paid;
+        if ($paid >= $feeDue) {
+            return null;
+        }
+
+        // Instalments only exist for registrations inside the Jan 1 - Apr 30 window.
+        $year = $this->yearService->yearFor($registeredAt);
+        $graceEnd = $this->monthDayDate($year, config('membership.membership_year.grace_period_end_month_day', '04-30'));
+        $grace = $registeredAt->toDateString() <= $graceEnd->toDateString() ? $graceEnd->toDateString() : null;
+
+        // The chosen plan is the "initial payment" option matching what was paid.
+        $planId = MembershipPlan::query()->where('price', $paid)->value('id') ?? $payment->plan_id;
+
+        DB::transaction(function () use ($membership, $payment, $fromStatus, $feeDue, $paid, $grace, $planId, $actor, $notes): void {
+            $this->clearActiveHistoryFlags((int) $membership->user_id);
+
+            $metadata = is_array($payment->metadata) ? $payment->metadata : [];
+            $metadata['balanceFix'] = ['amountBefore' => (float) $payment->amount, 'feeDue' => $feeDue, 'at' => now()->toDateTimeString()];
+
+            $payment->forceFill([
+                'plan_id' => $planId,
+                'amount' => $feeDue,
+                'status' => MembershipPaymentStatus::PartiallyPaid,
+                'metadata' => $metadata,
+            ])->save();
+
+            Membership::query()->whereKey($membership->id)->update([
+                'status' => MembershipStatus::Suspended,
+                'current_plan_id' => $planId,
+                'grace_period_ends_at' => $grace,
+            ]);
+
+            $this->logHistory(
+                $membership->id,
+                (int) $membership->user_id,
+                MembershipHistoryEvent::Suspended,
+                $fromStatus,
+                MembershipStatus::Suspended,
+                (int) $planId,
+                'system',
+                $actor,
+                ['notes' => $notes ?? 'Balance not paid', 'feeDue' => $feeDue, 'paid' => $paid, 'balance' => round($feeDue - $paid, 2)],
+                false
+            );
+        });
+
+        return ['membershipId' => $membership->id, 'feeDue' => $feeDue, 'paid' => $paid, 'balance' => round($feeDue - $paid, 2)];
+    }
+
     public function cancel(string $membershipId, string $adminId, ?string $reason = null): array
     {
         $membership = $this->findMembershipOrFail($membershipId);
@@ -1255,6 +1335,13 @@ class MembershipService
         $membership = $user->memberships->first();
         $nameParts = explode(' ', $user->name, 2);
 
+        $payment = $membership
+            ? MembershipPayment::query()->where('membership_id', $membership->id)->orderByDesc('id')->first()
+            : null;
+        $balance = $payment && $payment->status === MembershipPaymentStatus::PartiallyPaid
+            ? max(0.0, round((float) $payment->amount - (float) $payment->amount_paid, 2))
+            : 0.0;
+
         return [
             'id' => $user->id,
             'firstName' => $nameParts[0] ?? $user->name,
@@ -1267,6 +1354,7 @@ class MembershipService
                 ? $this->adminDisplayStatus($membership->status)
                 : 'inactive',
             'membershipStatus' => $membership?->status,
+            'balance' => $balance,
             'createdAt' => (string) $user->created_at,
         ];
     }
