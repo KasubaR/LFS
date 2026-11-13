@@ -5,7 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Enums\OfflinePaymentMethod;
 use App\Enums\OrderChannel;
 use App\Exceptions\InsufficientStockException;
+use App\Exceptions\PromoCodeException;
 use App\Http\Controllers\Controller;
+use App\Models\User;
+use App\Services\ShopPromotionService;
 use App\Enums\OrderStatus;
 use App\Models\AdminUser;
 use App\Models\Order;
@@ -35,6 +38,7 @@ class OfflineSaleController extends Controller
         private readonly OrderService $orderService,
         private readonly ShopSettingsService $shopSettings,
         private readonly AdminPermissionService $permissions,
+        private readonly ShopPromotionService $promotions,
     ) {}
 
     public function create(): View
@@ -61,6 +65,8 @@ class OfflineSaleController extends Controller
             'customer_email' => ['nullable', 'string', 'email', 'max:254'],
             'payment_method' => ['required', 'string', 'in:'.implode(',', OfflinePaymentMethod::ALL)],
             'notes' => ['nullable', 'string', 'max:1000'],
+            'promo_code' => ['nullable', 'string', 'max:40'],
+            'member_email' => ['nullable', 'string', 'email', 'max:254'],
             'items' => ['required', 'array', 'min:1', 'max:30'],
             'items.*.product_id' => ['required', 'string', 'exists:products,id'],
             'items.*.size' => ['required', 'string', 'max:20'],
@@ -89,8 +95,20 @@ class OfflineSaleController extends Controller
             'unitPrice' => $i['unit_price'] ?? null,
         ], array_values($data['items']));
 
+        // Optional member lookup: member-only sales and codes need an active member.
+        $member = null;
+        $memberEmail = strtolower(trim((string) ($data['member_email'] ?? '')));
+        if ($memberEmail !== '') {
+            $member = User::query()->where('email', $memberEmail)->first();
+            if ($member === null || ! $this->promotions->isActiveMember($member)) {
+                return back()->withInput()->withErrors(['member_email' => 'No active member found with that email.']);
+            }
+        }
+
         try {
             $result = $this->orderService->createOfflineSale([
+                'promoCode' => $data['promo_code'] ?? null,
+                'member' => $member,
                 'customerName' => $data['customer_name'],
                 'customerPhone' => $data['customer_phone'],
                 'customerEmail' => $data['customer_email'] ?? '',
@@ -100,6 +118,8 @@ class OfflineSaleController extends Controller
             ], (int) $this->permissions->currentAdmin($request)?->id);
         } catch (InsufficientStockException $e) {
             return back()->withInput()->withErrors(['items' => $e->getMessage()]);
+        } catch (PromoCodeException $e) {
+            return back()->withInput()->withErrors(['promo_code' => $e->getMessage()]);
         } catch (Throwable $e) {
             Log::error('[OfflineSaleController] Failed to record sale: '.$e->getMessage());
 
@@ -172,6 +192,7 @@ class OfflineSaleController extends Controller
             'totals' => [
                 'count' => $kept->count(),
                 'total' => (float) $kept->sum('total'),
+                'discount' => (float) $kept->sum('discount_amount'),
                 'voidedCount' => $voided->count(),
                 'voidedTotal' => (float) $voided->sum('total'),
                 'byMethod' => $byMethod,
@@ -201,7 +222,7 @@ class OfflineSaleController extends Controller
             $out = fopen('php://output', 'w');
             fputcsv($out, [
                 'Receipt no.', 'Date (Lusaka)', 'Customer', 'Phone', 'Email', 'Payment method',
-                'Items', 'Total (ZMW)', 'Status', 'Recorded by', 'Voided at (Lusaka)', 'Void reason', 'Voided by',
+                'Items', 'Discount (ZMW)', 'Promo code', 'Total (ZMW)', 'Status', 'Recorded by', 'Voided at (Lusaka)', 'Void reason', 'Voided by',
             ]);
 
             foreach ($sales as $order) {
@@ -217,6 +238,8 @@ class OfflineSaleController extends Controller
                     $order->customer_email,
                     OfflinePaymentMethod::LABELS[$order->payment_method] ?? (string) $order->payment_method,
                     $items,
+                    number_format((float) $order->discount_amount, 2, '.', ''),
+                    (string) $order->promo_code,
                     number_format((float) $order->total, 2, '.', ''),
                     $order->status === OrderStatus::Cancelled ? 'Voided' : 'Completed',
                     (string) ($adminNames[$order->recorded_by] ?? ''),

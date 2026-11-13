@@ -79,8 +79,11 @@
           $itemKey   = $item['key'];
           $itemImage = $item['image'] ?: '/images/products/placeholder.webp';
           $itemSize  = $item['size'];
-          $unitPrice = 'K ' . number_format((float)$item['price'], 0);
-          $lineTotal = 'K ' . number_format((float)$item['price'] * (int)$item['qty'], 0);
+          $money     = fn (float $v): string => 'K ' . number_format($v, fmod($v, 1) == 0 ? 0 : 2);
+          $unitPrice = $money((float)$item['price']);
+          $lineTotal = $money((float)($item['lineNet'] ?? ((float)$item['price'] * (int)$item['qty'])));
+          $wasPrice  = isset($item['listPrice']) && (float)$item['listPrice'] > (float)$item['price']
+                        ? $money((float)$item['listPrice']) : null;
           $itemUrl   = url('/shop/product/'.$itemSlug);
           @endphp
         <article class="cart-item" role="listitem"
@@ -102,7 +105,10 @@
           <div class="cart-item__details">
             <a href="{{ $itemUrl }}" class="cart-item__name">{{ $itemName }}</a>
             <span class="cart-item__meta">Size: <strong>{{ $itemSize }}</strong></span>
-            <span class="cart-item__unit-price">{{ $unitPrice }} each</span>
+            <span class="cart-item__unit-price">
+              @if($wasPrice)<s style="opacity:.6">{{ $wasPrice }}</s> @endif{{ $unitPrice }} each
+              @if(!empty($item['saleName']))<strong style="color:var(--green)"> · {{ $item['saleName'] }}</strong>@endif
+            </span>
           </div>
 
           <!-- Qty stepper -->
@@ -152,11 +158,18 @@
           <strong class="cart-summary__subtotal">{{ $subtotal }}</strong>
         </div>
 
+        <div class="cart-summary__row cart-summary__discount-row" @if(($discount ?? 0) <= 0) hidden @endif>
+          <span class="cart-summary__discount-label" style="color:var(--green)">{{ $discountLabel ?? 'Discount' }}</span>
+          <strong class="cart-summary__discount-val" style="color:var(--green)">&minus; {{ $discountFormatted ?? '' }}</strong>
+        </div>
+
+        @include('partials.promo-box')
+
         <div class="cart-summary__divider" aria-hidden="true"></div>
 
         <div class="cart-summary__row cart-summary__total-row">
           <span class="cart-summary__total-label">Total</span>
-          <strong class="cart-summary__total-amount cart-summary__subtotal">{{ $subtotal }}</strong>
+          <strong class="cart-summary__total-amount cart-summary__total-val">{{ $total ?? $subtotal }}</strong>
         </div>
 
         <p class="cart-summary__note">

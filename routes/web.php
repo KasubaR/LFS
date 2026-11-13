@@ -70,6 +70,9 @@ Route::prefix('shop')->group(function (): void {
     Route::post('/cart/add', [ShopController::class, 'addToCart']);
     Route::post('/cart/update', [ShopController::class, 'updateCart']);
     Route::post('/cart/remove', [ShopController::class, 'removeFromCart']);
+    // Each attempt can probe for a valid code, so cap them.
+    Route::post('/cart/promo', [ShopController::class, 'applyPromo'])->middleware('throttle:10,1');
+    Route::post('/cart/promo/remove', [ShopController::class, 'removePromo']);
 
     Route::post('/checkout/place-order', [OrderController::class, 'placeOrder'])
         ->middleware('throttle:10,1');

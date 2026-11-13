@@ -2,15 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\PromoCodeException;
 use App\Http\Controllers\Concerns\RespondsWithJson;
 use App\Http\Requests\AddToCartRequest;
 use App\Services\ProductCategoryService;
 use App\Services\ProductService;
+use App\Services\ShopPromotionService;
 use App\Services\SizeGuideService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Throwable;
 
 class ShopController extends Controller
@@ -21,6 +24,7 @@ class ShopController extends Controller
         private readonly ProductService $productService,
         private readonly ProductCategoryService $categoryService,
         private readonly SizeGuideService $sizeGuideService,
+        private readonly ShopPromotionService $promotions,
     ) {}
 
     public function index(Request $request): View
@@ -157,28 +161,40 @@ class ShopController extends Controller
     public function cart(): View
     {
         $cart = $this->loadCart();
-        ['itemCount' => $itemCount, 'subtotal' => $subtotal] = $this->cartTotals($cart);
+        ['itemCount' => $itemCount] = $this->cartTotals($cart);
+        $pricing = $this->pricing($cart);
 
         return view('pages.shop-cart', [
             'title' => 'Your Cart — LFS Shop',
             'description' => 'Review your LFS merchandise cart.',
             'bodyClass' => 'page-no-hero',
-            'cart' => $cart,
+            'cart' => $this->pricedCart($cart, $pricing),
             'itemCount' => $itemCount,
             'cartCount' => $itemCount,
-            'subtotal' => $this->formatPrice($subtotal),
+            'subtotal' => $this->formatPrice($pricing['subtotal']),
+            'discount' => $pricing['discount'],
+            'discountFormatted' => $this->formatPrice($pricing['discount']),
+            'discountLabel' => $this->discountLabel($pricing),
+            'total' => $this->formatPrice($pricing['total']),
+            'promoCode' => $pricing['code'],
+            'promoError' => $pricing['promoError'],
+            'showPromoBox' => $pricing['code'] !== null || $this->promotions->hasActiveCodes(),
             'extraStyles' => '<link rel="stylesheet" href="'.asset('css/cart.css').'">',
+            'extraScripts' => '<script src="'.asset('js/promo.js').'"></script>',
         ]);
     }
 
     public function checkout(): View|RedirectResponse
     {
         $cart = $this->loadCart();
-        ['itemCount' => $itemCount, 'subtotal' => $subtotalAmount] = $this->cartTotals($cart);
+        ['itemCount' => $itemCount] = $this->cartTotals($cart);
 
         if ($itemCount === 0) {
             return redirect('/shop/cart');
         }
+
+        $pricing = $this->pricing($cart);
+        $cart = $this->pricedCart($cart, $pricing);
 
         $cartItems = array_map(function (array $item): array {
             $price = (float) ($item['price'] ?? 0);
@@ -192,7 +208,7 @@ class ShopController extends Controller
                 'size' => $item['size'] ?? '',
                 'qty' => $qty,
                 'price' => $price,
-                'subtotal' => $price * $qty,
+                'subtotal' => (float) ($item['lineNet'] ?? $price * $qty),
                 'image' => $image,
             ];
         }, $cart);
@@ -203,12 +219,19 @@ class ShopController extends Controller
             'bodyClass' => 'page-no-hero',
             'cartItems' => $cartItems,
             'cartCount' => $itemCount,
-            'subtotal' => $this->formatPrice($subtotalAmount),
-            'total' => $this->formatPrice($subtotalAmount),
+            'subtotal' => $this->formatPrice($pricing['subtotal']),
+            'discount' => $pricing['discount'],
+            'discountFormatted' => $this->formatPrice($pricing['discount']),
+            'discountLabel' => $this->discountLabel($pricing),
+            'total' => $this->formatPrice($pricing['total']),
+            'promoCode' => $pricing['code'],
+            'promoError' => $pricing['promoError'],
+            'showPromoBox' => $pricing['code'] !== null || $this->promotions->hasActiveCodes(),
             'csrfToken' => csrf_token(),
             'extraStyles' => '<link rel="stylesheet" href="'.asset('css/checkout.css').'">',
             'extraScripts' => '<script src="'.asset('js/checkout.js').'"></script>'
-                .'<script src="'.asset('js/checkout-lenco.js').'"></script>',
+                .'<script src="'.asset('js/checkout-lenco.js').'"></script>'
+                .'<script src="'.asset('js/promo.js').'"></script>',
         ]);
     }
 
@@ -261,7 +284,8 @@ class ShopController extends Controller
                 'productId' => (string) $product['id'],
                 'slug' => $product['slug'],
                 'name' => $product['name'],
-                'price' => (float) $product['price'],
+                // List price: sales and codes are applied server-side at cart/order time.
+                'price' => (float) ($product['listPrice'] ?? $product['price']),
                 'image' => $product['thumbnail'] ?: '/images/products/placeholder.webp',
                 'size' => $size,
                 'qty' => min($qty, $maxQty),
@@ -269,15 +293,9 @@ class ShopController extends Controller
         }
 
         $this->saveCart($cart);
-        ['itemCount' => $itemCount, 'subtotal' => $subtotal] = $this->cartTotals($cart);
 
         if ($this->wantsJson($request)) {
-            return $this->jsonResponse([
-                'ok' => true,
-                'message' => 'Item added to cart.',
-                'itemCount' => $itemCount,
-                'subtotal' => $this->formatPrice($subtotal),
-            ]);
+            return $this->jsonResponse(['ok' => true, 'message' => 'Item added to cart.'] + $this->cartPayload($cart));
         }
 
         return redirect('/shop/cart');
@@ -307,13 +325,7 @@ class ShopController extends Controller
         $this->saveCart($cart);
 
         if ($this->wantsJson($request)) {
-            ['itemCount' => $itemCount, 'subtotal' => $subtotal] = $this->cartTotals($cart);
-
-            return $this->jsonResponse([
-                'ok' => true,
-                'itemCount' => $itemCount,
-                'subtotal' => $this->formatPrice($subtotal),
-            ]);
+            return $this->jsonResponse(['ok' => true] + $this->cartPayload($cart));
         }
 
         return redirect('/shop/cart');
@@ -334,16 +346,140 @@ class ShopController extends Controller
         $this->saveCart($cart);
 
         if ($this->wantsJson($request)) {
-            ['itemCount' => $itemCount, 'subtotal' => $subtotal] = $this->cartTotals($cart);
-
-            return $this->jsonResponse([
-                'ok' => true,
-                'itemCount' => $itemCount,
-                'subtotal' => $this->formatPrice($subtotal),
-            ]);
+            return $this->jsonResponse(['ok' => true] + $this->cartPayload($cart));
         }
 
         return redirect('/shop/cart');
+    }
+
+    public function applyPromo(Request $request): JsonResponse
+    {
+        $request->validate(['code' => ['required', 'string', 'max:40']]);
+        $cart = $this->loadCart();
+        if ($cart === []) {
+            return $this->jsonError('Your cart is empty.', 422);
+        }
+
+        try {
+            $this->promotions->priceCart($this->pricingLines($cart), (string) $request->input('code'), Auth::user());
+        } catch (PromoCodeException $e) {
+            return $this->jsonError($e->getMessage(), 422);
+        }
+
+        session(['cart_promo_code' => strtoupper(trim((string) $request->input('code')))]);
+
+        return $this->jsonResponse(['ok' => true] + $this->cartPayload($cart));
+    }
+
+    public function removePromo(): JsonResponse
+    {
+        session()->forget('cart_promo_code');
+
+        return $this->jsonResponse(['ok' => true] + $this->cartPayload($this->loadCart()));
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $cart
+     * @return list<array{productId: string, qty: int}>
+     */
+    private function pricingLines(array $cart): array
+    {
+        return array_map(fn (array $i): array => [
+            'productId' => (string) ($i['productId'] ?? ''),
+            'qty' => (int) ($i['qty'] ?? 0),
+        ], $cart);
+    }
+
+    /**
+     * Prices the cart with sales and the session's promo code. A code that has
+     * stopped being valid (expired, cart changed, membership lapsed) is dropped
+     * and reported in promoError rather than silently ignored.
+     *
+     * @param  list<array<string, mixed>>  $cart
+     * @return array<string, mixed>
+     */
+    private function pricing(array $cart): array
+    {
+        $lines = $this->pricingLines($cart);
+        $error = null;
+
+        try {
+            $priced = $this->promotions->priceCart($lines, session('cart_promo_code'), Auth::user());
+        } catch (PromoCodeException $e) {
+            session()->forget('cart_promo_code');
+            $error = $e->getMessage();
+            $priced = $this->promotions->priceCart($lines, null, Auth::user());
+        }
+
+        $priced['promoError'] = $error;
+
+        return $priced;
+    }
+
+    /**
+     * Cart items with the effective (post-sale / post-code) prices for display.
+     * The stored list price is kept in listPrice.
+     *
+     * @param  list<array<string, mixed>>  $cart
+     * @param  array<string, mixed>  $pricing
+     * @return list<array<string, mixed>>
+     */
+    private function pricedCart(array $cart, array $pricing): array
+    {
+        foreach ($cart as $i => $item) {
+            $line = $pricing['lines'][$i] ?? null;
+            if ($line === null) {
+                continue;
+            }
+            $cart[$i]['listPrice'] = (float) $item['price'];
+            $cart[$i]['price'] = $line['netUnit'];
+            $cart[$i]['lineNet'] = $line['netTotal'];
+            $cart[$i]['lineDiscount'] = $line['discount'];
+            $cart[$i]['saleName'] = $line['saleName'];
+        }
+
+        return $cart;
+    }
+
+    /**
+     * @param  array<string, mixed>  $pricing
+     */
+    private function discountLabel(array $pricing): string
+    {
+        return $pricing['code'] !== null ? 'Discount ('.$pricing['code'].')' : 'Sale discount';
+    }
+
+    /**
+     * Totals + per-line display values, shared by every cart JSON response.
+     *
+     * @param  list<array<string, mixed>>  $cart
+     * @return array<string, mixed>
+     */
+    private function cartPayload(array $cart): array
+    {
+        $pricing = $this->pricing($cart);
+        $lines = [];
+        foreach ($cart as $i => $item) {
+            $line = $pricing['lines'][$i] ?? null;
+            if ($line !== null) {
+                $lines[$item['key']] = [
+                    'unit' => $this->formatPrice($line['netUnit']),
+                    'total' => $this->formatPrice($line['netTotal']),
+                ];
+            }
+        }
+
+        return [
+            'itemCount' => $this->cartTotals($cart)['itemCount'],
+            'subtotal' => $this->formatPrice($pricing['subtotal']),
+            'discount' => $this->formatPrice($pricing['discount']),
+            'hasDiscount' => $pricing['discount'] > 0,
+            'discountLabel' => $this->discountLabel($pricing),
+            'total' => $this->formatPrice($pricing['total']),
+            'code' => $pricing['code'],
+            'promoError' => $pricing['promoError'],
+            'lines' => $lines,
+        ];
     }
 
     /**

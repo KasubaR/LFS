@@ -531,7 +531,8 @@ $csrfToken  = $csrfToken  ?? '';
                   <div class="checkout-summary__item-name">{{ $name }}</div>
                   <div class="checkout-summary__item-meta">{{ $size ? 'Size: ' . $size . ' · ' : '' }}Qty {{ $qty }}</div>
                 </div>
-                <div class="checkout-summary__item-price">K {{ number_format($price * $qty) }}</div>
+                @php $lineNet = (float)($item['subtotal'] ?? $price * $qty); @endphp
+                <div class="checkout-summary__item-price">K {{ number_format($lineNet, fmod($lineNet, 1) == 0 ? 0 : 2) }}</div>
               </div>
             @endforeach
           </div>
@@ -541,6 +542,11 @@ $csrfToken  = $csrfToken  ?? '';
             <span>Subtotal</span>
             <span class="checkout-summary__subtotal-val">{{ $subtotal }}</span>
           </div>
+          <div class="checkout-summary__row checkout-summary__discount-row" @if(($discount ?? 0) <= 0) hidden @endif>
+            <span style="color:var(--green)">{{ $discountLabel ?? 'Discount' }}</span>
+            <span style="color:var(--green)">&minus; {{ $discountFormatted ?? '' }}</span>
+          </div>
+          @include('partials.promo-box')
           <div class="checkout-summary__row">
             <span>Delivery</span>
             <span style="color:var(--green); font-weight:600;">Free Pickup</span>

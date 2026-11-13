@@ -26,6 +26,9 @@ class Order extends Model
         'voided_at',
         'voided_by',
         'void_reason',
+        'shop_promotion_id',
+        'promo_code',
+        'discount_amount',
     ];
 
     protected function casts(): array
@@ -37,6 +40,7 @@ class Order extends Model
             'recorded_by' => 'integer',
             'voided_at' => 'datetime',
             'voided_by' => 'integer',
+            'discount_amount' => 'decimal:2',
         ];
     }
 

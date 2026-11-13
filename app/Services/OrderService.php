@@ -6,6 +6,7 @@ use App\Enums\OrderChannel;
 use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -14,14 +15,17 @@ class OrderService
 {
     public function __construct(
         private readonly ProductService $productService,
+        private readonly ShopPromotionService $promotions,
     ) {}
 
     /**
      * @param  array<string, mixed>  $data
-     * @return array{id: int, subtotal: float, total: float}
+     * @return array{id: int, subtotal: float, discount: float, total: float}
      *
      * @throws \App\Exceptions\InsufficientStockException if any line item can't be fulfilled;
      *         the whole transaction (order + stock) rolls back in that case.
+     * @throws \App\Exceptions\PromoCodeException if a promo code was supplied but can't be applied;
+     *         likewise rolls everything back.
      */
     public function create(array $data): array
     {
@@ -52,6 +56,17 @@ class OrderService
                 ];
             }
 
+            $priced = $this->promotions->priceCart(
+                array_map(fn (array $l): array => [
+                    'productId' => (string) $l['productId'],
+                    'qty' => $l['qty'],
+                    'unitPrice' => $l['unitPrice'],
+                ], $lines),
+                $data['promoCode'] ?? null,
+                isset($data['userId']) ? User::query()->find($data['userId']) : null,
+            );
+            $subtotal = $priced['subtotal'];
+
             $order = Order::query()->create([
                 'user_id' => $data['userId'] ?? null,
                 'order_number' => $data['orderNumber'],
@@ -60,11 +75,14 @@ class OrderService
                 'customer_phone' => $data['customerPhone'] ?? '',
                 'notes' => $data['notes'] ?? '',
                 'subtotal' => $subtotal,
-                'total' => $subtotal,
+                'total' => $priced['total'],
+                'discount_amount' => $priced['discount'],
+                'shop_promotion_id' => $priced['promotionId'],
+                'promo_code' => $priced['code'],
                 'status' => $data['status'] ?? 'pending_payment',
             ]);
 
-            foreach ($lines as $line) {
+            foreach ($lines as $i => $line) {
                 OrderItem::query()->create([
                     'order_id' => $order->id,
                     'product_id' => $line['productId'],
@@ -73,10 +91,16 @@ class OrderService
                     'qty' => $line['qty'],
                     'unit_price' => $line['unitPrice'],
                     'line_total' => $line['lineTotal'],
+                    'discount_amount' => $priced['lines'][$i]['discount'],
                 ]);
             }
 
-            return ['id' => (int) $order->id, 'subtotal' => $subtotal, 'total' => $subtotal];
+            return [
+                'id' => (int) $order->id,
+                'subtotal' => $subtotal,
+                'discount' => $priced['discount'],
+                'total' => $priced['total'],
+            ];
         });
     }
 
@@ -110,7 +134,8 @@ class OrderService
                     $qty,
                     respectThreshold: false,
                 );
-                $unitPrice = isset($item['unitPrice']) && $item['unitPrice'] !== '' ? (float) $item['unitPrice'] : $dbPrice;
+                $hasOverride = isset($item['unitPrice']) && $item['unitPrice'] !== '';
+                $unitPrice = $hasOverride ? (float) $item['unitPrice'] : $dbPrice;
                 $lineTotal = round($unitPrice * $qty, 2);
                 $total += $lineTotal;
 
@@ -121,8 +146,22 @@ class OrderService
                     'qty' => $qty,
                     'unitPrice' => $unitPrice,
                     'lineTotal' => $lineTotal,
+                    'fixedPrice' => $hasOverride,
                 ];
             }
+
+            // A hand-set unit price is final: no sale or code touches that line.
+            $priced = $this->promotions->priceCart(
+                array_map(fn (array $l): array => [
+                    'productId' => $l['productId'],
+                    'qty' => $l['qty'],
+                    'unitPrice' => $l['unitPrice'],
+                    'fixedPrice' => $l['fixedPrice'],
+                ], $lines),
+                $data['promoCode'] ?? null,
+                $data['member'] ?? null,
+            );
+            $total = $priced['subtotal'];
 
             $order = Order::query()->create([
                 'user_id' => null,
@@ -132,14 +171,17 @@ class OrderService
                 'customer_phone' => $data['customerPhone'],
                 'notes' => $data['notes'] ?? '',
                 'subtotal' => $total,
-                'total' => $total,
+                'total' => $priced['total'],
+                'discount_amount' => $priced['discount'],
+                'shop_promotion_id' => $priced['promotionId'],
+                'promo_code' => $priced['code'],
                 'status' => OrderStatus::Collected,
                 'channel' => OrderChannel::Offline,
                 'payment_method' => $data['paymentMethod'],
                 'recorded_by' => $adminId,
             ]);
 
-            foreach ($lines as $line) {
+            foreach ($lines as $i => $line) {
                 OrderItem::query()->create([
                     'order_id' => $order->id,
                     'product_id' => $line['productId'],
@@ -148,10 +190,11 @@ class OrderService
                     'qty' => $line['qty'],
                     'unit_price' => $line['unitPrice'],
                     'line_total' => $line['lineTotal'],
+                    'discount_amount' => $priced['lines'][$i]['discount'],
                 ]);
             }
 
-            return ['id' => (int) $order->id, 'orderNumber' => $order->order_number, 'total' => $total];
+            return ['id' => (int) $order->id, 'orderNumber' => $order->order_number, 'total' => $priced['total']];
         });
     }
 
@@ -377,6 +420,8 @@ class OrderService
             'customerPhone' => $order->customer_phone,
             'subtotal' => (float) $order->subtotal,
             'total' => (float) $order->total,
+            'discount' => (float) $order->discount_amount,
+            'promoCode' => $order->promo_code,
             'status' => $order->status,
             'channel' => $order->channel ?? OrderChannel::Online,
             'paymentMethod' => $order->payment_method,
@@ -401,6 +446,7 @@ class OrderService
             'qty' => (int) $item->qty,
             'unitPrice' => (float) $item->unit_price,
             'lineTotal' => (float) $item->line_total,
+            'discount' => (float) $item->discount_amount,
             'productId' => $item->product_id,
         ])->all();
 

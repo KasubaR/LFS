@@ -44,7 +44,23 @@ $initialLines = is_array($oldItems) && count($oldItems) > 0
       <button type="button" class="admin-btn admin-btn--ghost admin-btn--sm" id="addLine">
         <i class="fas fa-plus" aria-hidden="true"></i> Add another item
       </button>
-      <p style="margin-top:.75rem;"><strong>Total: <span id="saleTotal">ZMW 0.00</span></strong></p>
+      <p style="margin-top:.75rem;"><strong>Total before sales &amp; codes: <span id="saleTotal">ZMW 0.00</span></strong></p>
+    </div>
+
+    <div class="form-group{{ $errors->has('promo_code') ? ' form-group--error' : '' }}">
+      <label for="promo_code" class="admin-label">Promo code (optional)</label>
+      <input type="text" id="promo_code" name="promo_code" maxlength="40" autocomplete="off"
+             value="{{ old('promo_code') }}" class="admin-input" style="text-transform:uppercase">
+      <p class="admin-hint">Automatic sales apply by themselves; the total shown on the receipt includes them. Lines with a hand-set unit price above are never discounted.</p>
+      @error('promo_code')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
+    </div>
+
+    <div class="form-group{{ $errors->has('member_email') ? ' form-group--error' : '' }}">
+      <label for="member_email" class="admin-label">Member email (optional)</label>
+      <input type="email" id="member_email" name="member_email" maxlength="254" autocomplete="off"
+             value="{{ old('member_email') }}" class="admin-input">
+      <p class="admin-hint">Needed for member-only sales and codes. The customer must have an active membership.</p>
+      @error('member_email')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
     </div>
 
     <div class="form-group{{ $errors->has('customer_name') ? ' form-group--error' : '' }}">

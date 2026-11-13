@@ -83,6 +83,12 @@ $items        = $order['items'] ?? [];
               </div>
             </div>
             @endforeach
+            @if((float)($order['discount'] ?? 0) > 0)
+            <div class="checkout-summary__row" style="margin-top:1rem;">
+              <span>Discount{{ !empty($order['promoCode']) ? ' ('.$order['promoCode'].')' : ' (sale)' }}</span>
+              <span>&minus; K {{ number_format((float)$order['discount'], 2) }}</span>
+            </div>
+            @endif
             <div class="checkout-summary__row checkout-summary__total-row" style="margin-top:1rem;">
               <span class="checkout-summary__total-label">Total</span>
               <span class="checkout-summary__total-amount">{{ $total }}</span>

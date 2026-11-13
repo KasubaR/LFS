@@ -63,6 +63,32 @@ function getCsrfToken() {
   return match ? decodeURIComponent(match[1]) : '';
 }
 
+/**
+ * Paint the server's pricing (subtotal, discount, total and per-line prices,
+ * including any sale or promo code) onto the cart summary.
+ */
+function applyCartTotals(data) {
+  document.querySelectorAll('.cart-summary__subtotal').forEach(el => { el.textContent = data.subtotal; });
+  document.querySelectorAll('.cart-summary__total-val').forEach(el => { el.textContent = data.total; });
+
+  document.querySelectorAll('.cart-summary__discount-row').forEach(row => {
+    row.hidden = !data.hasDiscount;
+    const label = row.querySelector('.cart-summary__discount-label');
+    const val   = row.querySelector('.cart-summary__discount-val');
+    if (label && data.discountLabel) label.textContent = data.discountLabel;
+    if (val) val.textContent = '\u2212 ' + data.discount;
+  });
+
+  Object.entries(data.lines || {}).forEach(([key, line]) => {
+    const row = document.querySelector('.cart-item[data-key="' + key + '"]');
+    const el  = row?.querySelector('.cart-item__line-total');
+    if (el) el.textContent = line.total;
+  });
+
+  // A code that no longer applies (e.g. the cart changed) was dropped by the server.
+  if (data.promoError) window.location.reload();
+}
+
 /** POST JSON to a cart endpoint. Returns parsed response or null on network error. */
 async function cartFetch(url, body) {
   try {
@@ -258,17 +284,9 @@ function initCartPage() {
 
     updateCartBadge(data.itemCount);
 
-    if (qty <= 0) {
-      row?.remove();
-    } else {
-      const unitPrice    = parseFloat(row?.dataset?.price || '0');
-      const lineTotalEl  = row?.querySelector('.cart-item__line-total');
-      if (lineTotalEl) lineTotalEl.textContent = formatKwacha(unitPrice * qty);
-    }
+    if (qty <= 0) row?.remove();
 
-    // Update both subtotal displays (summary + total row reuse same class)
-    const subtotalEls = document.querySelectorAll('.cart-summary__subtotal');
-    subtotalEls.forEach(el => { el.textContent = data.subtotal; });
+    applyCartTotals(data);
 
     if (data.itemCount === 0) showEmptyState();
   });
@@ -299,8 +317,7 @@ function initCartPage() {
     if (data) {
       row?.remove();
       updateCartBadge(data.itemCount);
-      const subtotalEls = document.querySelectorAll('.cart-summary__subtotal');
-      subtotalEls.forEach(el => { el.textContent = data.subtotal; });
+      applyCartTotals(data);
       if (data.itemCount === 0) showEmptyState();
     } else {
       removeBtn.disabled = false;

@@ -100,6 +100,7 @@
       }
       if (!empty($canRead['promotions'])) {
           $navItem('promotions', '/admin/promotions', 'fas fa-tags',                    'Promotions');
+          $navItem('shop-promotions', '/admin/shop-promotions', 'fas fa-percent',       'Shop promotions');
       }
       if (!empty($canRead['events'])) {
           $navItem('events',    '/admin/events',     'fas fa-calendar-days',             'Events');

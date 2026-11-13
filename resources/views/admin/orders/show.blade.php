@@ -78,6 +78,9 @@ $breadcrumbs = [
           <tr><th>Placed</th>    <td>{{ date('d M Y, H:i', strtotime($order['createdAt'])) }}</td></tr>
           <tr><th>Updated</th>   <td>{{ date('d M Y, H:i', strtotime($order['updatedAt'])) }}</td></tr>
           <tr><th>Subtotal</th>  <td>{{ ($formatPrice)($order['subtotal'] ?? 0) }}</td></tr>
+          @if(($order['discount'] ?? 0) > 0)
+          <tr><th>Discount{{ !empty($order['promoCode']) ? ' ('.$order['promoCode'].')' : ' (sale)' }}</th> <td>&minus; {{ ($formatPrice)($order['discount']) }}</td></tr>
+          @endif
           <tr>
             <th>Total</th>
             <td><strong>{{ ($formatPrice)($order['total'] ?? 0) }}</strong></td>
@@ -150,6 +153,12 @@ $breadcrumbs = [
                 <td colspan="4"><strong>Subtotal</strong></td>
                 <td>{{ ($formatPrice)($order['subtotal'] ?? 0) }}</td>
               </tr>
+              @if(($order['discount'] ?? 0) > 0)
+              <tr>
+                <td colspan="4"><strong>Discount{{ !empty($order['promoCode']) ? ' ('.$order['promoCode'].')' : ' (sale)' }}</strong></td>
+                <td>&minus; {{ ($formatPrice)($order['discount']) }}</td>
+              </tr>
+              @endif
               <tr>
                 <td colspan="4"><strong>Total</strong></td>
                 <td><strong>{{ ($formatPrice)($order['total'] ?? 0) }}</strong></td>

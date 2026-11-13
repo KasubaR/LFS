@@ -41,6 +41,13 @@ $sales = $sales ?? collect();
     <p class="stat-card__label">Total taken</p>
     <p class="stat-card__value" style="font-size:1.4rem;">{{ $money($totals['total']) }}</p>
   </article>
+  @if(($totals['discount'] ?? 0) > 0)
+  <article class="stat-card stat-card--orange">
+    <div class="stat-card__icon"><i class="fas fa-tags" aria-hidden="true"></i></div>
+    <p class="stat-card__label">Discounts given</p>
+    <p class="stat-card__value" style="font-size:1.4rem;">{{ $money($totals['discount']) }}</p>
+  </article>
+  @endif
   @foreach($totals['byMethod'] as $row)
   <article class="stat-card stat-card--blue">
     <div class="stat-card__icon"><i class="fas fa-wallet" aria-hidden="true"></i></div>

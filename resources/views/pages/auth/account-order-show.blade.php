@@ -48,6 +48,12 @@
     </div>
 
     <dl class="account-meta-list">
+      @if((float)($order['discount'] ?? 0) > 0)
+      <div class="account-meta-list__row">
+        <dt>Discount{{ !empty($order['promoCode']) ? ' ('.$order['promoCode'].')' : ' (sale)' }}</dt>
+        <dd>&minus;K{{ number_format((float) $order['discount'], 2) }}</dd>
+      </div>
+      @endif
       <div class="account-meta-list__row">
         <dt>Total</dt>
         <dd>K{{ number_format((float) $order['total'], 2) }}</dd>

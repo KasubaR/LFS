@@ -19,6 +19,7 @@ class OrderItem extends Model
         'qty',
         'unit_price',
         'line_total',
+        'discount_amount',
     ];
 
     protected function casts(): array
@@ -28,6 +29,7 @@ class OrderItem extends Model
             'qty' => 'integer',
             'unit_price' => 'decimal:2',
             'line_total' => 'decimal:2',
+            'discount_amount' => 'decimal:2',
         ];
     }
 

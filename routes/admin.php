@@ -20,6 +20,7 @@ use App\Http\Controllers\Admin\ProductCategoryController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProfileController;
 use App\Http\Controllers\Admin\PromotionController;
+use App\Http\Controllers\Admin\ShopPromotionController;
 use App\Http\Controllers\Admin\SizeGuideController;
 use Illuminate\Support\Facades\Route;
 
@@ -243,6 +244,16 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
         Route::get('{id}/edit', [PromotionController::class, 'edit'])->where('id', '[0-9]+');
         Route::post('{id}/edit', [PromotionController::class, 'update'])->where('id', '[0-9]+');
         Route::post('{id}/delete', [PromotionController::class, 'destroy'])->where('id', '[0-9]+');
+    });
+
+    // ── Shop promotions (codes + automatic category sales) ───────────────────────────
+    Route::prefix('shop-promotions')->middleware('admin.can:promotions,read')->group(function (): void {
+        Route::get('/', [ShopPromotionController::class, 'index']);
+        Route::get('create', [ShopPromotionController::class, 'create']);
+        Route::post('create', [ShopPromotionController::class, 'store']);
+        Route::get('{id}/edit', [ShopPromotionController::class, 'edit'])->where('id', '[0-9]+');
+        Route::post('{id}/edit', [ShopPromotionController::class, 'update'])->where('id', '[0-9]+');
+        Route::post('{id}/delete', [ShopPromotionController::class, 'destroy'])->where('id', '[0-9]+');
     });
 
     // ── Orders ───────────────────────────────────────────────────────────────────────

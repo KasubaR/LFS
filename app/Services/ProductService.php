@@ -427,13 +427,31 @@ class ProductService
             $totalStock = (int) array_sum(array_column($sizes, 'stock'));
         }
 
+        // Storefront only: an automatic category sale shows as the price, with the
+        // list price struck through (the same way compare_price already is). The
+        // cart still stores listPrice; checkout re-applies the sale server-side.
+        $listPrice = (float) $product->price;
+        $price = $listPrice;
+        $comparePrice = $product->compare_price !== null ? (float) $product->compare_price : null;
+        $saleName = null;
+        if (! $admin && $product->category) {
+            $sale = app(ShopPromotionService::class)->saleFor((string) $product->category, $listPrice, auth()->user());
+            if ($sale !== null) {
+                $price = $sale['price'];
+                $comparePrice = $listPrice;
+                $saleName = $sale['name'];
+            }
+        }
+
         return [
             '_id' => $product->id,
             'id' => $product->id,
             'name' => $product->name,
             'slug' => $product->slug,
-            'price' => (float) $product->price,
-            'comparePrice' => $product->compare_price !== null ? (float) $product->compare_price : null,
+            'price' => $price,
+            'listPrice' => $listPrice,
+            'saleName' => $saleName,
+            'comparePrice' => $comparePrice,
             'description' => $product->description ?? '',
             'shortDescription' => $product->short_description ?? '',
             'images' => $product->images ?? [],

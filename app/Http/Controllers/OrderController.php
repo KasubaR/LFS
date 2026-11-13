@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\OrderStatus;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\LencoApiException;
+use App\Exceptions\PromoCodeException;
 use App\Http\Controllers\Concerns\RespondsWithJson;
 use App\Http\Requests\PlaceOrderRequest;
 use App\Services\LencoService;
@@ -74,14 +75,23 @@ class OrderController extends Controller
                     'customerPhone' => $customerInfo['phone'] ?? '',
                     'notes' => $customerInfo['notes'] ?? '',
                     'items' => $cart,
+                    'promoCode' => session('cart_promo_code'),
                     'status' => 'pending_payment',
                 ]);
                 $orderId = $result['id'];
-                $subtotal = $result['subtotal'];
+                // Amount due after any sale / promo code (OrderService re-prices and
+                // discounts server-side). This is what Lenco is asked to charge.
+                $subtotal = $result['total'];
                 $orderNumber = $candidateOrderNumber;
                 break;
             } catch (InsufficientStockException $e) {
                 return $this->jsonError($e->getMessage(), 409);
+            } catch (PromoCodeException $e) {
+                // The code stopped being valid since it was applied. Nothing was
+                // created or charged; drop it so the customer can carry on without it.
+                session()->forget('cart_promo_code');
+
+                return $this->jsonError($e->getMessage().' Your promo code was removed; review your total and try again.', 422);
             } catch (QueryException $e) {
                 if ($this->isDuplicateOrderNumber($e) && $attempt < $maxAttempts) {
                     continue;

@@ -56,6 +56,10 @@ $money = fn ($v) => 'ZMW ' . number_format((float) $v, 2);
       @endforeach
     </tbody>
     <tfoot>
+      @if((float) $order->discount_amount > 0)
+        <tr><td colspan="2">Subtotal</td><td>{{ $money($order->subtotal) }}</td></tr>
+        <tr><td colspan="2">Discount{{ $order->promo_code ? ' ('.$order->promo_code.')' : '' }}</td><td>&minus; {{ $money($order->discount_amount) }}</td></tr>
+      @endif
       <tr><th colspan="2">Total</th><th>{{ $money($order->total) }}</th></tr>
     </tfoot>
   </table>
