@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Admin;
 use Illuminate\Http\Response;
 
 use App\Http\Controllers\Controller;
+use App\Services\AdminPermissionService;
 use App\Services\ProductCategoryService;
 use App\Services\ProductService;
+use App\Services\ShopSettingsService;
 use App\Services\SizeGuideService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -24,7 +26,29 @@ class ProductController extends Controller
         private readonly ProductService $productService,
         private readonly ProductCategoryService $categoryService,
         private readonly SizeGuideService $sizeGuideService,
+        private readonly ShopSettingsService $shopSettings,
+        private readonly AdminPermissionService $permissions,
     ) {}
+
+    public function updateShopSettings(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'online_sellout_threshold' => ['required', 'integer', 'min:0', 'max:100000'],
+        ], [
+            'online_sellout_threshold.required' => 'Enter a number (use 0 to sell every unit online).',
+            'online_sellout_threshold.integer' => 'The threshold must be a whole number.',
+            'online_sellout_threshold.min' => 'The threshold cannot be negative.',
+        ]);
+
+        $this->shopSettings->setOnlineSelloutThreshold(
+            (int) $validated['online_sellout_threshold'],
+            $this->permissions->currentAdmin($request)?->id,
+        );
+
+        return redirect('/admin/products')->with('flash', [
+            'success' => 'Online sell-out threshold saved. Sizes with '.(int) $validated['online_sellout_threshold'].' or fewer left now show as sold out online.',
+        ]);
+    }
 
     public function index(Request $request): View
     {
@@ -60,6 +84,7 @@ class ProductController extends Controller
             'pages' => $pages,
             'currentPage' => $page,
             'filters' => ['category' => $category, 'search' => $search],
+            'onlineSelloutThreshold' => $this->shopSettings->onlineSelloutThreshold(),
             'PRODUCT_CATEGORIES' => $this->categoriesWithProducts((string) $category),
             'formatPrice' => fn ($v) => 'ZMW '.number_format((float) $v, 2),
         ]);

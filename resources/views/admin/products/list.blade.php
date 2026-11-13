@@ -31,6 +31,24 @@ $activeCount = count(array_filter($list, fn ($p) => !empty($p['isActive'])));
   </article>
 </section>
 
+<!-- Online sell-out threshold -->
+<form method="post" action="{{ url('/admin/products/settings') }}" class="admin-form-card" style="margin-bottom:1rem;">
+  @csrf
+  <div class="form-group{{ $errors->has('online_sellout_threshold') ? ' form-group--error' : '' }}" style="margin-bottom:.5rem;">
+    <label for="online_sellout_threshold" class="admin-label">Online sell-out threshold (per size)</label>
+    <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+      <input id="online_sellout_threshold" name="online_sellout_threshold" type="number" min="0" step="1"
+             value="{{ old('online_sellout_threshold', $onlineSelloutThreshold ?? 20) }}" class="admin-input" style="max-width:8rem;">
+      <button type="submit" class="admin-btn admin-btn--primary admin-btn--sm">Save</button>
+    </div>
+    <p class="form-group__hint">
+      When a size has this many or fewer left, the website shows it as Sold Out. Those units are kept for offline sales.
+      The Stock column below shows the real stock.
+    </p>
+    @error('online_sellout_threshold')<p class="form-group__error" role="alert">{{ $message }}</p>@enderror
+  </div>
+</form>
+
 <!-- Toolbar -->
 <div class="admin-toolbar">
   <form method="GET" action="{{ url('/admin/products') }}" class="admin-toolbar__filters">

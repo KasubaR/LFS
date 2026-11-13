@@ -145,6 +145,7 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
         Route::get('/', [ProductController::class, 'index']);
         Route::get('create', [ProductController::class, 'create']);
         Route::post('/', [ProductController::class, 'store']);
+        Route::post('settings', [ProductController::class, 'updateShopSettings']);
         Route::get('{id}/edit', [ProductController::class, 'edit'])->where('id', '[^/]+');
         Route::get('{id}/preview', [ProductController::class, 'preview'])->where('id', '[^/]+');
         Route::post('{id}/delete', [ProductController::class, 'destroy'])->where('id', '[^/]+');

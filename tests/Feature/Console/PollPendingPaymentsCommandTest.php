@@ -26,6 +26,8 @@ class PollPendingPaymentsCommandTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // These tests are about stock mechanics, not the online sell-out threshold.
+        app(\App\Services\ShopSettingsService::class)->setOnlineSelloutThreshold(0);
         $this->seed(SatelliteSeeder::class);
         $this->seed(MembershipPlanSeeder::class);
     }

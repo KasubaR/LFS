@@ -24,6 +24,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(LencoService::class);
         $this->app->singleton(\App\Services\MembershipYearService::class);
+        $this->app->singleton(\App\Services\ShopSettingsService::class);
     }
 
     /**

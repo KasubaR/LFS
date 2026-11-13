@@ -9,8 +9,14 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ProductService
 {
+    public function __construct(
+        private readonly ShopSettingsService $shopSettings,
+    ) {}
+
     /**
-     * Look up the current stock for a product/size pair, for cart-time validation.
+     * Look up how many units of a product/size the website may still sell, for
+     * cart-time validation. Stock at or below the admin's online sell-out
+     * threshold is reserved for offline sales and not counted here.
      * Returns null if the product or size no longer exists/is inactive.
      */
     public function getAvailableStock(string $productId, string $size): ?int
@@ -23,7 +29,7 @@ class ProductService
         $sizes = is_array($product->sizes) ? $product->sizes : [];
         foreach ($sizes as $s) {
             if (($s['size'] ?? '') === $size) {
-                return (int) ($s['stock'] ?? 0);
+                return $this->shopSettings->onlineStock((int) ($s['stock'] ?? 0));
             }
         }
 
@@ -38,9 +44,12 @@ class ProductService
      * Returns the product's current DB price so callers price the order line from
      * the authoritative source rather than trusting a client-submitted cart price.
      *
+     * Online orders only get stock above the sell-out threshold; offline sales
+     * pass $respectThreshold = false to take the reserved units as well.
+     *
      * @throws InsufficientStockException if the product/size/quantity can't be fulfilled
      */
-    public function decrementStockForOrder(string $productId, string $size, int $qty): float
+    public function decrementStockForOrder(string $productId, string $size, int $qty, bool $respectThreshold = true): float
     {
         $product = Product::query()->whereKey($productId)->lockForUpdate()->first();
 
@@ -57,14 +66,17 @@ class ProductService
             }
 
             $matched = true;
-            $available = (int) ($s['stock'] ?? 0);
+            $stock = (int) ($s['stock'] ?? 0);
+            $available = $respectThreshold ? $this->shopSettings->onlineStock($stock) : $stock;
             if ($available < $qty) {
                 throw new InsufficientStockException(
-                    "Only {$available} left of \"{$product->name}\" (size {$size})."
+                    $available > 0
+                        ? "Only {$available} left of \"{$product->name}\" (size {$size})."
+                        : "\"{$product->name}\" (size {$size}) is sold out."
                 );
             }
 
-            $s['stock'] = $available - $qty;
+            $s['stock'] = $stock - $qty;
             break;
         }
         unset($s);
@@ -153,7 +165,7 @@ class ProductService
             ->limit($limit)
             ->offset($offset)
             ->get()
-            ->map(fn (Product $product) => $this->toProduct($product))
+            ->map(fn (Product $product) => $this->toProduct($product, $admin))
             ->all();
 
         return [
@@ -188,7 +200,7 @@ class ProductService
 
         $product = $query->first();
 
-        return $product ? $this->toProduct($product) : null;
+        return $product ? $this->toProduct($product, $admin) : null;
     }
 
     /**
@@ -205,7 +217,7 @@ class ProductService
 
         $product = $query->first();
 
-        return $product ? $this->toProduct($product) : null;
+        return $product ? $this->toProduct($product, $admin) : null;
     }
 
     public function findOneBySlug(string $slug): ?array
@@ -389,10 +401,32 @@ class ProductService
     }
 
     /**
+     * Public (website) data carries online stock: each size's 'stock' is what
+     * the website may sell, so every view that checks stock honours the
+     * sell-out threshold. Admin data keeps the real stock and adds
+     * 'onlineStock' per size.
+     *
      * @return array<string, mixed>
      */
-    private function toProduct(Product $product): array
+    private function toProduct(Product $product, bool $admin = false): array
     {
+        $sizes = is_array($product->sizes) ? $product->sizes : [];
+        $totalStock = (int) ($product->total_stock ?? 0);
+
+        foreach ($sizes as $i => $s) {
+            $real = (int) ($s['stock'] ?? 0);
+            $online = $this->shopSettings->onlineStock($real);
+            if ($admin) {
+                $sizes[$i]['onlineStock'] = $online;
+            } else {
+                $sizes[$i]['stock'] = $online;
+            }
+        }
+
+        if (! $admin && $sizes !== []) {
+            $totalStock = (int) array_sum(array_column($sizes, 'stock'));
+        }
+
         return [
             '_id' => $product->id,
             'id' => $product->id,
@@ -407,8 +441,8 @@ class ProductService
             'category' => $product->category,
             'gender' => $product->gender ?? 'unisex',
             'tags' => $product->tags ?? [],
-            'sizes' => $product->sizes ?? [],
-            'totalStock' => (int) ($product->total_stock ?? 0),
+            'sizes' => $sizes,
+            'totalStock' => $totalStock,
             'featured' => (bool) $product->featured,
             'isActive' => (bool) $product->is_active,
             'sortOrder' => (int) ($product->sort_order ?? 0),

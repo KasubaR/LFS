@@ -14,6 +14,13 @@ class OrderPaymentVerifyTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // These tests are about stock mechanics, not the online sell-out threshold.
+        app(\App\Services\ShopSettingsService::class)->setOnlineSelloutThreshold(0);
+    }
+
     public function test_verify_rejects_txid_not_granted_to_this_session(): void
     {
         Order::query()->create([

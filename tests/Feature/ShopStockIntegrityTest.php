@@ -14,6 +14,13 @@ class ShopStockIntegrityTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // These tests are about stock mechanics, not the online sell-out threshold.
+        app(\App\Services\ShopSettingsService::class)->setOnlineSelloutThreshold(0);
+    }
+
     private function makeProduct(int $stock): Product
     {
         return Product::query()->create([
