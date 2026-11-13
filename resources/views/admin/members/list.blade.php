@@ -90,7 +90,7 @@ $filterStatus = $filterStatus ?? '';
               </span>
             </td>
             <td style="padding:0.75rem; font-size:0.88rem; white-space:nowrap; color:{{ ($m['balance'] ?? 0) > 0 ? '#e88' : 'var(--text-dim)' }};">
-              {{ ($m['balance'] ?? 0) > 0 ? 'K'.number_format($m['balance'], 2).' owing' : '—' }}
+              {{ ($m['balance'] ?? 0) > 0 ? 'K'.number_format($m['balance'], 2) : '—' }}
             </td>
             <td style="padding:0.75rem; color:var(--text-dim); font-size:0.88rem;">
               {{ !empty($m['createdAt']) ? date('j M Y', strtotime($m['createdAt'])) : '—' }}

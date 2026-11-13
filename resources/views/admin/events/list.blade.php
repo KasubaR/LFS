@@ -122,28 +122,30 @@ if (! function_exists('formatEventDate')) {
             <td style="padding:0.75rem; color:var(--off-white);">{{ formatEventDate($ev['eventDate'] ?? null) }}</td>
             <td style="padding:0.75rem; color:var(--text-dim);">{{ $ev['location'] ?? '—' }}</td>
             <td style="padding:0.75rem; color:var(--text-dim); font-size:0.85rem;">{{ $ev['slug'] ?? '—' }}</td>
-            <td style="padding:0.75rem;">
-              <div class="upcoming-events__actions">
-                @if(($ev['registrationType'] ?? '') === 'paid')
-                <a href="/admin/events/{{ $ev['id'] }}/tickets"
-                   class="admin-btn admin-btn--sm">
-                  <i class="fas fa-ticket" aria-hidden="true"></i> Tickets
-                </a>
-                @endif
-                <a href="/admin/events/{{ $ev['id'] }}/edit"
-                   class="admin-btn admin-btn--primary admin-btn--sm">
-                  <i class="fas fa-pen" aria-hidden="true"></i> Edit
-                </a>
-                <form method="POST"
-                      action="/admin/events/{{ $ev['id'] }}/delete"
-                      class="admin-inline-form"
-                      onsubmit="return confirm('Delete: {{ addslashes($ev['title'] ?? 'this event') }}? This cannot be undone.')">
-                  <input type="hidden" name="_csrf" value="{{ $csrfToken ?? '' }}">
-                  <button type="submit" class="admin-btn admin-btn--danger admin-btn--sm">
-                    <i class="fas fa-trash" aria-hidden="true"></i> Delete
-                  </button>
-                </form>
-              </div>
+            <td class="row-menu-cell" style="padding:0.75rem;">
+              <details class="row-menu">
+                <summary class="admin-btn admin-btn--ghost admin-btn--sm row-menu__toggle" aria-label="Actions for {{ $ev['title'] ?? 'event' }}">
+                  <i class="fas fa-ellipsis-vertical" aria-hidden="true"></i>
+                </summary>
+                <div class="row-menu__list" role="menu">
+                  @if(($ev['registrationType'] ?? '') === 'paid')
+                  <a href="/admin/events/{{ $ev['id'] }}/tickets" role="menuitem">
+                    <i class="fas fa-ticket" aria-hidden="true"></i> Tickets
+                  </a>
+                  @endif
+                  <a href="/admin/events/{{ $ev['id'] }}/edit" role="menuitem">
+                    <i class="fas fa-pen" aria-hidden="true"></i> Edit
+                  </a>
+                  <form method="POST"
+                        action="/admin/events/{{ $ev['id'] }}/delete"
+                        onsubmit="return confirm('Delete: {{ addslashes($ev['title'] ?? 'this event') }}? This cannot be undone.')">
+                    <input type="hidden" name="_csrf" value="{{ $csrfToken ?? '' }}">
+                    <button type="submit" class="row-menu__danger" role="menuitem">
+                      <i class="fas fa-trash" aria-hidden="true"></i> Delete
+                    </button>
+                  </form>
+                </div>
+              </details>
             </td>
           </tr>
         @endforeach
@@ -161,5 +163,7 @@ if (! function_exists('formatEventDate')) {
     </a>
   </div>
 @endif
+
+@include('admin.partials.row-menu-assets')
 
 @endsection
