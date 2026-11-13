@@ -34,13 +34,13 @@ class AdminUserController extends Controller
         ]);
     }
 
-    public function create(): View
+    public function create(Request $request): View
     {
         return view('admin.users.form', [
             'pageTitle' => 'Create Admin User',
             'activePage' => 'users',
             'admin' => null,
-            'roles' => AdminRole::options(),
+            'roles' => $this->assignableRoles($request),
             'satelliteRole' => AdminRole::SatelliteAdministrator,
             'satellites' => Satellite::query()->where('is_active', true)->orderBy('name')->get(),
             'selectedSatelliteIds' => [],
@@ -51,6 +51,10 @@ class AdminUserController extends Controller
     public function store(StoreAdminUserRequest $request): RedirectResponse
     {
         $data = $request->validated();
+
+        if ($denied = $this->denyIfNotSuperAdmin($request, null, $data['role'])) {
+            return $denied;
+        }
 
         $admin = AdminUser::query()->create([
             'name' => $data['name'],
@@ -66,15 +70,19 @@ class AdminUserController extends Controller
             ->with('flash', ['success' => 'Admin user created.']);
     }
 
-    public function edit(int $id): View
+    public function edit(Request $request, int $id): View|RedirectResponse
     {
         $admin = AdminUser::query()->with('satellites')->findOrFail($id);
+
+        if ($denied = $this->denyIfNotSuperAdmin($request, $admin)) {
+            return $denied;
+        }
 
         return view('admin.users.form', [
             'pageTitle' => 'Edit Admin User',
             'activePage' => 'users',
             'admin' => $admin,
-            'roles' => AdminRole::options(),
+            'roles' => $this->assignableRoles($request),
             'satelliteRole' => AdminRole::SatelliteAdministrator,
             'satellites' => Satellite::query()->where('is_active', true)->orderBy('name')->get(),
             'selectedSatelliteIds' => $admin->satelliteIds(),
@@ -86,6 +94,10 @@ class AdminUserController extends Controller
     {
         $admin = AdminUser::query()->findOrFail($id);
         $data = $request->validated();
+
+        if ($denied = $this->denyIfNotSuperAdmin($request, $admin, $data['role'])) {
+            return $denied;
+        }
 
         $admin->fill([
             'name' => $data['name'],
@@ -109,6 +121,10 @@ class AdminUserController extends Controller
         $admin = AdminUser::query()->findOrFail($id);
         $current = $this->permissions->currentAdmin($request);
 
+        if ($denied = $this->denyIfNotSuperAdmin($request, $admin)) {
+            return $denied;
+        }
+
         if ($current && (int) $current->id === (int) $admin->id) {
             return redirect('/admin/users')
                 ->with('flash', ['error' => 'You cannot deactivate your own account.']);
@@ -120,9 +136,14 @@ class AdminUserController extends Controller
             ->with('flash', ['success' => 'Admin user deactivated.']);
     }
 
-    public function activate(int $id): RedirectResponse
+    public function activate(Request $request, int $id): RedirectResponse
     {
         $admin = AdminUser::query()->findOrFail($id);
+
+        if ($denied = $this->denyIfNotSuperAdmin($request, $admin)) {
+            return $denied;
+        }
+
         $admin->forceFill(['is_active' => true])->save();
 
         return redirect('/admin/users')
@@ -136,13 +157,51 @@ class AdminUserController extends Controller
      * write), and re-enrollment still requires the account's own password
      * plus a confirmed 6-digit code, so this alone can't grant access.
      */
-    public function resetTotp(int $id): RedirectResponse
+    public function resetTotp(Request $request, int $id): RedirectResponse
     {
         $admin = AdminUser::query()->findOrFail($id);
+
+        if ($denied = $this->denyIfNotSuperAdmin($request, $admin)) {
+            return $denied;
+        }
         $admin->forceFill(['totp_secret' => null, 'totp_confirmed_at' => null])->save();
 
         return redirect('/admin/users')
             ->with('flash', ['success' => "Two-factor authentication reset for {$admin->name}. They will set it up again on next login."]);
+    }
+
+    /**
+     * Only a Super Admin may create, edit, deactivate or reset a Super Admin,
+     * or give anyone the Super Admin role (so an Admin cannot promote
+     * themselves or take over a Super Admin account).
+     */
+    private function denyIfNotSuperAdmin(Request $request, ?AdminUser $target, ?string $newRole = null): ?RedirectResponse
+    {
+        $current = $this->permissions->currentAdmin($request);
+        if ($current?->isSuperAdmin()) {
+            return null;
+        }
+
+        if (($target && $target->isSuperAdmin()) || $newRole === AdminRole::SuperAdmin) {
+            return redirect('/admin/users')
+                ->with('flash', ['error' => 'Only a Super Admin can manage Super Admin accounts.']);
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function assignableRoles(Request $request): array
+    {
+        $roles = AdminRole::options();
+
+        if (! $this->permissions->currentAdmin($request)?->isSuperAdmin()) {
+            unset($roles[AdminRole::SuperAdmin]);
+        }
+
+        return $roles;
     }
 
     /**

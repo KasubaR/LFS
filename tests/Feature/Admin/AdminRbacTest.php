@@ -336,4 +336,45 @@ class AdminRbacTest extends TestCase
         $this->actingAsAdmin($admin)->get('/admin/api-clients')->assertForbidden();
         $this->assertTrue(AdminRole::isValid(AdminRole::Admin));
     }
+
+    public function test_an_admin_cannot_manage_super_admins_or_promote_anyone_to_one(): void
+    {
+        $admin = $this->makeAdminUser(['role' => AdminRole::Admin]);
+        $super = $this->makeAdminUser(['email' => 'super@lfs.test', 'role' => AdminRole::SuperAdmin]);
+        $other = $this->makeAdminUser(['email' => 'other@lfs.test', 'role' => AdminRole::Finance]);
+
+        // Cannot create a Super Admin.
+        $this->actingAsAdmin($admin)->post('/admin/users/create', [
+            'name' => 'New Boss', 'email' => 'boss@lfs.test',
+            'password' => 'Str0ng-pass-123!', 'password_confirmation' => 'Str0ng-pass-123!',
+            'role' => AdminRole::SuperAdmin,
+        ])->assertRedirect('/admin/users');
+        $this->assertDatabaseMissing('admin_users', ['email' => 'boss@lfs.test']);
+
+        // Cannot promote themselves or someone else.
+        $this->actingAsAdmin($admin)->post("/admin/users/{$other->id}/edit", [
+            'name' => $other->name, 'email' => $other->email, 'role' => AdminRole::SuperAdmin,
+        ]);
+        $this->assertSame(AdminRole::Finance, $other->fresh()->role);
+
+        // Cannot edit, deactivate or reset a Super Admin.
+        $this->actingAsAdmin($admin)->get("/admin/users/{$super->id}/edit")->assertRedirect('/admin/users');
+        $this->actingAsAdmin($admin)->post("/admin/users/{$super->id}/deactivate");
+        $this->assertTrue((bool) $super->fresh()->is_active);
+
+        // Can still manage other admins, and the Super Admin role is not offered.
+        $this->actingAsAdmin($admin)->get('/admin/users/create')
+            ->assertOk()->assertDontSee('value="super_admin"', false);
+        $this->actingAsAdmin($admin)->post("/admin/users/{$other->id}/edit", [
+            'name' => 'Renamed', 'email' => $other->email, 'role' => AdminRole::Finance,
+        ]);
+        $this->assertSame('Renamed', $other->fresh()->name);
+    }
+
+    public function test_a_super_admin_can_still_manage_super_admins(): void
+    {
+        $super = $this->makeAdminUser(['role' => AdminRole::SuperAdmin]);
+
+        $this->actingAsAdmin($super)->get('/admin/users/create')->assertOk()->assertSee('value="super_admin"', false);
+    }
 }
