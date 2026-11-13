@@ -20,6 +20,9 @@ class Order extends Model
         'subtotal',
         'total',
         'status',
+        'channel',
+        'payment_method',
+        'recorded_by',
     ];
 
     protected function casts(): array
@@ -28,6 +31,7 @@ class Order extends Model
             'user_id' => 'integer',
             'subtotal' => 'decimal:2',
             'total' => 'decimal:2',
+            'recorded_by' => 'integer',
         ];
     }
 

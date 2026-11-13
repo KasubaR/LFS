@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\FaqController;
 use App\Http\Controllers\Admin\GalleryController;
 use App\Http\Controllers\Admin\MembersController;
 use App\Http\Controllers\Admin\MessageController;
+use App\Http\Controllers\Admin\OfflineSaleController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\ProductCategoryController;
 use App\Http\Controllers\Admin\ProductController;
@@ -247,6 +248,9 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
     // ── Orders ───────────────────────────────────────────────────────────────────────
     Route::prefix('orders')->middleware('admin.can:orders,read')->group(function (): void {
         Route::get('/', [OrderController::class, 'index']);
+        Route::get('sales/create', [OfflineSaleController::class, 'create']);
+        Route::post('sales', [OfflineSaleController::class, 'store']);
+        Route::get('{id}/receipt', [OfflineSaleController::class, 'receipt'])->where('id', '[0-9]+');
         Route::get('{id}', [OrderController::class, 'show'])->where('id', '[0-9]+');
         Route::post('{id}/status', [OrderController::class, 'updateStatus'])->where('id', '[0-9]+');
     });

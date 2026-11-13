@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use Illuminate\Http\Response;
 
+use App\Enums\OrderChannel;
 use App\Enums\OrderStatus;
 use App\Http\Controllers\Controller;
 use Illuminate\Contracts\View\View;
@@ -26,10 +27,17 @@ class OrderController extends Controller
         $perPage = 50;
         $page = max(1, (int) $request->query('page', 1));
         $status = $request->query('status', '');
+        $channel = $request->query('channel', '');
+        if (! in_array($channel, OrderChannel::ALL, true)) {
+            $channel = '';
+        }
 
         $opts = ['limit' => $perPage, 'offset' => ($page - 1) * $perPage];
         if ($status !== '') {
             $opts['status'] = $status;
+        }
+        if ($channel !== '') {
+            $opts['channel'] = $channel;
         }
 
         $orderList = [];
@@ -38,10 +46,10 @@ class OrderController extends Controller
         $statusCounts = [];
         try {
             $orderList = $this->orderService->getAll($opts);
-            $total = $this->orderService->countByStatus($status !== '' ? $status : null);
+            $total = $this->orderService->countByStatus($status !== '' ? $status : null, $channel !== '' ? $channel : null);
             $pages = (int) ceil(max(1, $total) / $perPage);
             foreach (OrderStatus::ALL as $s) {
-                $statusCounts[$s] = $this->orderService->countByStatus($s);
+                $statusCounts[$s] = $this->orderService->countByStatus($s, $channel !== '' ? $channel : null);
             }
         } catch (Throwable) {
         }
@@ -54,7 +62,7 @@ class OrderController extends Controller
             'pages' => $pages,
             'currentPage' => $page,
             'statusCounts' => $statusCounts,
-            'filters' => ['status' => $status],
+            'filters' => ['status' => $status, 'channel' => $channel],
             'counts' => [
                 'pendingOrders' => $this->pendingOrdersCount(),
                 'newMessages' => 0,

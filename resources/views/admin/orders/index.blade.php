@@ -4,6 +4,7 @@
 @php
 $list         = $orderList    ?? [];
 $statusFilter = $filters['status'] ?? '';
+$channelFilter = $filters['channel'] ?? '';
 $currentPage  = $currentPage  ?? 1;
 $formatPrice  = $formatPrice  ?? fn ($v) => 'ZMW ' . number_format((float)$v, 2);
 $breadcrumbs  = [
@@ -35,8 +36,11 @@ $allStatuses = \App\Enums\OrderStatus::ALL;
 @endphp
 
 <!-- Page header -->
-<div class="admin-page-header">
+<div class="admin-page-header admin-page-header--row">
   <h2 class="admin-page-header__heading">Orders</h2>
+  <a href="{{ url('/admin/orders/sales/create') }}" class="admin-btn admin-btn--primary">
+    <i class="fas fa-plus" aria-hidden="true"></i> Record offline sale
+  </a>
 </div>
 
 <!-- Stats row -->
@@ -78,7 +82,14 @@ $allStatuses = \App\Enums\OrderStatus::ALL;
         </option>
       @endforeach
     </select>
-    @if($statusFilter !== '')
+    <label for="orders-channel-filter" class="admin-label">Channel</label>
+    <select id="orders-channel-filter" name="channel" class="admin-select"
+            onchange="this.form.submit()">
+      <option value="">All channels</option>
+      <option value="online"  {{ $channelFilter === 'online'  ? 'selected' : '' }}>Online</option>
+      <option value="offline" {{ $channelFilter === 'offline' ? 'selected' : '' }}>Offline</option>
+    </select>
+    @if($statusFilter !== '' || $channelFilter !== '')
       <a href="{{ url('/admin/orders') }}" class="admin-btn admin-btn--ghost admin-btn--sm">
         <i class="fas fa-xmark" aria-hidden="true"></i> Clear
       </a>
@@ -96,6 +107,7 @@ $allStatuses = \App\Enums\OrderStatus::ALL;
           <th>Order #</th>
           <th>Customer</th>
           <th>Total</th>
+          <th>Channel</th>
           <th>Status</th>
           <th>Date</th>
           <th></th>
@@ -118,6 +130,11 @@ $allStatuses = \App\Enums\OrderStatus::ALL;
             <div class="admin-table__sub">{{ $o['customerEmail'] }}</div>
           </td>
           <td>{{ ($formatPrice)($o['total']) }}</td>
+          <td>
+            <span class="status-pill status-pill--{{ ($o['channel'] ?? 'online') === 'offline' ? 'muted' : 'blue' }}">
+              {{ ($o['channel'] ?? 'online') === 'offline' ? 'Offline' : 'Online' }}
+            </span>
+          </td>
           <td>
             <span class="status-pill status-pill--{{ $badge }}">
               {{ $lbl }}
@@ -143,6 +160,7 @@ $allStatuses = \App\Enums\OrderStatus::ALL;
         @php
           $pHref = '/admin/orders?page=' . $p;
           if ($statusFilter !== '') $pHref .= '&status=' . urlencode($statusFilter);
+          if ($channelFilter !== '') $pHref .= '&channel=' . urlencode($channelFilter);
         @endphp
         <a href="{{ url($pHref) }}"
            class="admin-btn admin-btn--sm {{ $p === $currentPage ? 'admin-btn--primary' : 'admin-btn--ghost' }}"

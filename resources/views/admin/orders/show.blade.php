@@ -65,6 +65,16 @@ $breadcrumbs = [
               </span>
             </td>
           </tr>
+          <tr>
+            <th>Channel</th>
+            <td>
+              {{ ($order['channel'] ?? 'online') === 'offline' ? 'Offline (in person)' : 'Online' }}
+              @if(($order['channel'] ?? 'online') === 'offline')
+                &middot; {{ \App\Enums\OfflinePaymentMethod::LABELS[$order['paymentMethod'] ?? ''] ?? ($order['paymentMethod'] ?? '—') }}
+                &middot; <a href="{{ url('/admin/orders/'.$id.'/receipt') }}">Receipt</a>
+              @endif
+            </td>
+          </tr>
           <tr><th>Placed</th>    <td>{{ date('d M Y, H:i', strtotime($order['createdAt'])) }}</td></tr>
           <tr><th>Updated</th>   <td>{{ date('d M Y, H:i', strtotime($order['updatedAt'])) }}</td></tr>
           <tr><th>Subtotal</th>  <td>{{ ($formatPrice)($order['subtotal'] ?? 0) }}</td></tr>
@@ -82,6 +92,7 @@ $breadcrumbs = [
       <table class="admin-table admin-table--compact">
         <tbody>
           <tr><th>Name</th>  <td>{{ $order['customerName'] }}</td></tr>
+          @if(!empty($order['customerEmail']))
           <tr>
             <th>Email</th>
             <td>
@@ -90,6 +101,7 @@ $breadcrumbs = [
               </a>
             </td>
           </tr>
+          @endif
           @if(!empty($order['customerPhone']))
           <tr>
             <th>Phone</th>
