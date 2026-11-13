@@ -69,7 +69,7 @@ class MailBrandingTest extends TestCase
             $this->assertStringContainsString('https://instagram.com/lfszambia', $html, $name);
             $this->assertStringContainsString('https://wa.me/260767023948', $html, $name);
             $this->assertStringContainsString('+260 767 023 948', $html, $name);
-            $this->assertStringContainsString('mailto:support@lfszambia.run', $html, $name);
+            $this->assertStringContainsString('mailto:hi@lfszambia.run', $html, $name);
             $this->assertStringContainsString('© '.date('Y').' Lusaka Fitness Squad.', $html, $name);
         }
     }
@@ -81,7 +81,7 @@ class MailBrandingTest extends TestCase
 
         $html = $this->html((new MailMessage)->line('Hi'));
 
-        $this->assertStringContainsString('mailto:support@lfszambia.run', $html);
+        $this->assertStringContainsString('mailto:hi@lfszambia.run', $html);
         $this->assertStringNotContainsString('no-reply@sender.test', $html);
     }
 
@@ -144,7 +144,7 @@ class MailBrandingTest extends TestCase
 
         $this->assertStringContainsString('LFS — Lusaka Fitness Squad', $text);
         $this->assertStringContainsString('WhatsApp +260767023948', $text);
-        $this->assertStringContainsString('support@lfszambia.run', $text);
+        $this->assertStringContainsString('hi@lfszambia.run', $text);
         $this->assertStringContainsString('Lusaka Fitness Squad. All rights reserved.', $text);
     }
 
@@ -173,7 +173,7 @@ class MailBrandingTest extends TestCase
         $this->assertStringContainsString('Payment successful', $html);
         $this->assertStringContainsString('Ann Banda', $html);
         $this->assertStringContainsString('images/email/lfs-logo.png', $html);
-        $this->assertStringContainsString('mailto:support@lfszambia.run', $html);
+        $this->assertStringContainsString('mailto:hi@lfszambia.run', $html);
         $this->assertMatchesRegularExpression('/class="button button-primary"[^>]*style="[^"]*#198a4e/i', $html);
     }
 }

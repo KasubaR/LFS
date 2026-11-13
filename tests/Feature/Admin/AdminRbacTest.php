@@ -324,4 +324,16 @@ class AdminRbacTest extends TestCase
             'expiry_date' => now()->addYear()->toDateString(),
         ]);
     }
+
+    public function test_admin_role_can_use_everything_except_api_clients(): void
+    {
+        $admin = $this->makeAdminUser(['role' => AdminRole::Admin]);
+
+        foreach (['/admin/dashboard', '/admin/members', '/admin/promotions', '/admin/users', '/admin/elections', '/admin/orders'] as $path) {
+            $this->actingAsAdmin($admin)->get($path)->assertOk();
+        }
+
+        $this->actingAsAdmin($admin)->get('/admin/api-clients')->assertForbidden();
+        $this->assertTrue(AdminRole::isValid(AdminRole::Admin));
+    }
 }

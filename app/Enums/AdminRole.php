@@ -6,6 +6,8 @@ class AdminRole
 {
     public const SuperAdmin = 'super_admin';
 
+    public const Admin = 'admin';
+
     public const Finance = 'finance';
 
     public const MembershipOfficer = 'membership_officer';
@@ -23,6 +25,7 @@ class AdminRole
     /** @var list<string> */
     public const ALL = [
         self::SuperAdmin,
+        self::Admin,
         self::Finance,
         self::MembershipOfficer,
         self::EventsOfficer,
@@ -37,6 +40,7 @@ class AdminRole
      */
     public const LABELS = [
         self::SuperAdmin => 'Super Admin',
+        self::Admin => 'Admin',
         self::Finance => 'Finance',
         self::MembershipOfficer => 'Membership Officer',
         self::EventsOfficer => 'Events Officer',

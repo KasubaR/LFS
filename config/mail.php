@@ -126,7 +126,7 @@ return [
     |
     */
 
-    'contact_address' => env('MAIL_CONTACT_ADDRESS', 'support@lfszambia.run'),
+    'contact_address' => env('MAIL_CONTACT_ADDRESS', 'hi@lfszambia.run'),
 
     'contact_whatsapp' => env('MAIL_CONTACT_WHATSAPP', '260767023948'),
 

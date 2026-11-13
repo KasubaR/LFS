@@ -47,6 +47,23 @@ return [
             'admin_users' => 'write',
             'elections' => 'write',
         ],
+        // Everything a Super Admin can do except API clients.
+        'admin' => [
+            'dashboard' => 'write',
+            'messages' => 'write',
+            'members' => 'write',
+            'promotions' => 'write',
+            'events' => 'write',
+            'gallery' => 'write',
+            'blog' => 'write',
+            'faqs' => 'write',
+            'announcements' => 'write',
+            'documents' => 'write',
+            'products' => 'write',
+            'orders' => 'write',
+            'admin_users' => 'write',
+            'elections' => 'write',
+        ],
         'finance' => [
             'dashboard' => 'read',
             'messages' => 'read',
