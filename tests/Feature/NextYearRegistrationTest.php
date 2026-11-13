@@ -194,4 +194,54 @@ class NextYearRegistrationTest extends TestCase
         $this->assertSame(2027, $this->years->yearFor(Carbon::parse('2026-10-31 23:30:00', 'UTC')));
         $this->assertSame(2026, $this->years->yearFor(Carbon::parse('2026-10-31 21:30:00', 'UTC')));
     }
+
+    public function test_an_unpaid_application_is_priced_again_when_the_year_rolls_over(): void
+    {
+        $this->years->setOpensOn('2026-11-01');
+        Carbon::setTestNow('2026-10-20 10:00:00');
+
+        $user = User::factory()->create();
+        $created = $this->service->createApplication($user->id, $this->annual->id);
+        $submitted = $this->service->submitApplication($created['membershipId']);
+        $this->assertSame(500.00, $submitted['latestPayment']['amount'], 'late-joiner rate after 1 July');
+
+        // Still the same year: the price stays put.
+        Carbon::setTestNow('2026-10-30 10:00:00');
+        $this->service->repriceIfYearChanged($created['membershipId'], false);
+        $this->assertSame(500.00, $this->latestAmount($created['membershipId']));
+
+        // The window opens: the member would get 2027, so the full fee applies.
+        Carbon::setTestNow('2026-11-15 10:00:00');
+        $this->service->repriceIfYearChanged($created['membershipId'], false);
+        $this->assertSame(1000.00, $this->latestAmount($created['membershipId']));
+    }
+
+    public function test_new_year_reprices_an_application_left_over_from_december(): void
+    {
+        Carbon::setTestNow('2026-12-20 10:00:00');
+        $user = User::factory()->create();
+        $created = $this->service->createApplication($user->id, $this->annual->id);
+        $this->service->submitApplication($created['membershipId']);
+        $this->assertSame(500.00, $this->latestAmount($created['membershipId']));
+
+        Carbon::setTestNow('2027-01-10 10:00:00');
+        $this->service->repriceIfYearChanged($created['membershipId'], false);
+        $this->assertSame(1000.00, $this->latestAmount($created['membershipId']));
+    }
+
+    public function test_pricing_helper_knows_whether_the_payer_is_renewing(): void
+    {
+        $this->years->setOpensOn('2026-11-01');
+        Carbon::setTestNow('2026-11-15 10:00:00');
+        $this->promotion('Loyalty', 2027, 'renewals');
+
+        $this->assertSame(1000.00, $this->service->currentAnnualPricing()['amount']);
+        $this->assertSame(900.00, $this->service->currentAnnualPricing(true)['amount']);
+    }
+
+    private function latestAmount(string $membershipId): float
+    {
+        return (float) \App\Models\MembershipPayment::query()
+            ->where('membership_id', $membershipId)->latest('id')->value('amount');
+    }
 }

@@ -13,6 +13,7 @@ use App\Models\Membership;
 use App\Models\MembershipHistory;
 use App\Models\MembershipPayment;
 use App\Models\MembershipPlan;
+use App\Notifications\MembershipPaymentReceivedNotification;
 use App\Models\User;
 use App\Support\Uuid;
 use Illuminate\Support\Carbon;
@@ -351,7 +352,10 @@ class MembershipService
 
     public function handlePaymentUpdate(int $paymentId, float $amountPaid, array $extra = []): array
     {
-        return DB::transaction(function () use ($paymentId, $amountPaid, $extra) {
+        $paidBefore = (float) ($this->paymentService->findById($paymentId)['amountPaid'] ?? 0);
+        $notify = false;
+
+        $result = DB::transaction(function () use ($paymentId, $amountPaid, $extra, &$notify) {
             $payment = $this->paymentService->recordAmountPaid($paymentId, $amountPaid, $extra);
 
             // Recovery: a prior attempt may have marked the payment Paid and then
@@ -366,11 +370,13 @@ class MembershipService
                 ) {
                     $membership = $this->findMembershipOrFail($existing['membershipId']);
                     if ($membership->status === MembershipStatus::PendingPayment) {
+                        $notify = true;
                         $this->activateOnPayment($membership, $existing);
 
                         return $this->toMembership($membership->fresh(['user', 'plan']), $paymentId);
                     }
                     if ($membership->status === MembershipStatus::Suspended) {
+                        $notify = true;
                         $this->reinstateOnPayment($membership, $existing);
 
                         return $this->toMembership($membership->fresh(['user', 'plan']), $paymentId);
@@ -384,6 +390,7 @@ class MembershipService
             }
 
             $membership = $this->findMembershipOrFail($payment['membershipId']);
+            $notify = true;
 
             // A PartiallyPaid first payment still activates the membership —
             // full access during the grace period is the whole point of
@@ -418,6 +425,36 @@ class MembershipService
 
             return $this->toMembership($membership->fresh(['user', 'plan']), $paymentId);
         });
+
+        // After the transaction, so a rolled-back payment never produces an email.
+        if ($notify) {
+            $this->sendPaymentReceivedEmail($paymentId, $paidBefore);
+        }
+
+        return $result;
+    }
+
+    private function sendPaymentReceivedEmail(int $paymentId, float $paidBefore): void
+    {
+        try {
+            $payment = MembershipPayment::query()->with('membership.user')->find($paymentId);
+            $membership = $payment?->membership;
+            $user = $membership?->user;
+
+            if (! $payment || ! $user || blank($user->email)) {
+                return;
+            }
+
+            $charged = round((float) $payment->amount_paid - $paidBefore, 2);
+            if ($charged <= 0) {
+                return;
+            }
+
+            $user->notify(new MembershipPaymentReceivedNotification($membership, $payment, $charged));
+        } catch (\Throwable $e) {
+            // The payment is already recorded; a mail outage must not turn that into an error.
+            report($e);
+        }
     }
 
     /**
@@ -722,9 +759,48 @@ class MembershipService
      *
      * @return array{amount: float, promotionId: ?int, discountAmount: float}
      */
-    public function currentAnnualPricing(): array
+    public function currentAnnualPricing(bool $isRenewal = false): array
     {
-        return $this->annualPricingFor(now());
+        return $this->annualPricingFor(now(), $isRenewal);
+    }
+
+    /**
+     * Whether this membership is a renewal for pricing purposes (renewals-only
+     * and new-members-only promotions depend on it).
+     */
+    public function isRenewal(Membership $membership): bool
+    {
+        return $membership->status === MembershipStatus::Expired
+            || $this->isEligibleForEarlyRenewal($membership)
+            || $this->isRenewalMembership($membership);
+    }
+
+    /**
+     * The price is fixed when an application is submitted, but the membership
+     * year (and with it the late-joiner rate and any promotion) is decided when
+     * payment is confirmed. If the year has rolled over since the unpaid payment
+     * was created (31 Dec -> 1 Jan, or next-year registration opening), price it
+     * again so the member never gets the new year at the old year's rate.
+     */
+    public function repriceIfYearChanged(string $membershipId, bool $isRenewal): void
+    {
+        $payment = $this->paymentService->findLatestForMembership($membershipId);
+
+        if (
+            ! $payment
+            || $payment['status'] !== MembershipPaymentStatus::Pending
+            || (float) $payment['amountPaid'] > 0
+            || filled($payment['paymentReference'])
+        ) {
+            return;
+        }
+
+        $createdYear = $this->yearService->yearFor(Carbon::parse($payment['createdAt']));
+        if ($createdYear === $this->yearService->yearFor(now())) {
+            return;
+        }
+
+        $this->paymentService->updatePricing((int) $payment['id'], $this->annualPricingFor(now(), $isRenewal));
     }
 
     private function findAnnualPlanOrFail(): MembershipPlan

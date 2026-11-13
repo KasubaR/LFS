@@ -314,6 +314,21 @@ class MembershipPaymentService
      *
      * @param  array<string, mixed>  $data
      */
+    /**
+     * Replace the amount, promotion and discount on a payment nothing has been
+     * paid against yet (see MembershipService::repriceIfYearChanged()).
+     *
+     * @param  array{amount: float, promotionId: ?int, discountAmount: float}  $pricing
+     */
+    public function updatePricing(int $id, array $pricing): void
+    {
+        MembershipPayment::query()->whereKey($id)->update([
+            'amount' => $pricing['amount'],
+            'promotion_id' => $pricing['promotionId'],
+            'discount_amount' => $pricing['discountAmount'],
+        ]);
+    }
+
     public function recordGatewayInitiation(int $id, array $data): void
     {
         $map = [

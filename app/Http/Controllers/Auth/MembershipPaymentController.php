@@ -73,6 +73,12 @@ class MembershipPaymentController extends Controller
                 $membership->refresh();
             }
 
+            $isRenewal = $this->membershipService->isRenewal($membership);
+
+            if (! $isBalanceTopUp) {
+                $this->membershipService->repriceIfYearChanged($membership->id, $isRenewal);
+            }
+
             $payment = $this->paymentService->findLatestForMembership($membership->id);
 
             // A prior MoMo attempt may have failed — create a fresh row so initiate
@@ -89,7 +95,7 @@ class MembershipPaymentController extends Controller
                 } else {
                     // Re-resolve pricing rather than reusing the failed row's amount, so a
                     // retry still gets whatever promotion/late-joiner rate currently applies.
-                    $pricing = $this->membershipService->currentAnnualPricing();
+                    $pricing = $this->membershipService->currentAnnualPricing($isRenewal);
 
                     $paymentId = $this->paymentService->create($membership->id, (int) $membership->current_plan_id, [
                         'amount' => $pricing['amount'],

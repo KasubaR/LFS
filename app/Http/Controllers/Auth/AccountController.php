@@ -75,7 +75,7 @@ class AccountController extends Controller
             $latestPayment = $this->paymentService->findLatestForMembership($membership->id);
             $amountDue = $latestPayment
                 ? (float) $latestPayment['amount']
-                : (float) $this->membershipService->currentAnnualPricing()['amount'];
+                : (float) $this->membershipService->currentAnnualPricing($this->membershipService->isRenewal($membership))['amount'];
             $planPrice = (float) ($membership->plan?->price ?? $amountDue);
 
             $chargeAmountNow = $this->membershipService->isWithinGraceWindow()
@@ -91,7 +91,7 @@ class AccountController extends Controller
         $renewalPlans = $this->planService->getActivePlans();
         if (! $withinGrace && $renewalPlans !== []) {
             $fullPlan = collect($renewalPlans)->sortByDesc('price')->first();
-            $fullPlan['displayPrice'] = $this->membershipService->currentAnnualPricing()['amount'];
+            $fullPlan['displayPrice'] = $this->membershipService->currentAnnualPricing(true)['amount'];
             $renewalPlans = [$fullPlan];
         }
 
