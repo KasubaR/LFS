@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\BillingCycle;
+use App\Enums\MembershipStatus;
 use App\Enums\TShirtSize;
 use App\Models\Membership;
 use App\Models\MembershipImportBatch;
@@ -158,8 +159,16 @@ class MemberImportService
 
         foreach ($sheet->getRowIterator() as $rowIndex => $row) {
             $cells = [];
+            $expired = false;
             foreach ($row->getCellIterator() as $cell) {
                 $value = $cell->getValue();
+
+                // A cell highlighted red marks a member whose membership expired
+                // because the balance was never paid.
+                $fill = $cell->getStyle()->getFill();
+                if ($rowIndex > 1 && $fill->getFillType() === 'solid' && strtoupper($fill->getStartColor()->getARGB()) === 'FFFF0000') {
+                    $expired = true;
+                }
 
                 if (is_numeric($value) && ExcelDate::isDateTime($cell)) {
                     $dateTime = ExcelDate::excelToDateTimeObject($value);
@@ -192,6 +201,7 @@ class MemberImportService
                 $mapped[$this->normalizeHeader($header)] = $cells[$i] ?? '';
             }
 
+            $mapped['_expired'] = $expired;
             $rows[] = $this->mapRow($mapped);
         }
 
@@ -239,6 +249,7 @@ class MemberImportService
             'satellite' => $mapped['satellite'] ?? '',
             'paymentPlan' => $mapped['payment_plan'] ?? '',
             'town' => trim($mapped['town'] ?? ''),
+            'expired' => (bool) ($mapped['_expired'] ?? false),
         ];
     }
 
@@ -294,7 +305,22 @@ class MemberImportService
             return ['status' => 'skipped', 'message' => 'Row missing email or name'];
         }
 
-        if (User::query()->where('email', $row['email'])->exists()) {
+        $existing = User::query()->where('email', $row['email'])->first();
+        if ($existing !== null) {
+            // Never touches the member's number or details: the only change an
+            // existing account takes from a re-import is being marked expired.
+            if (! empty($row['expired'])) {
+                $membership = Membership::query()
+                    ->where('user_id', $existing->id)
+                    ->where('status', MembershipStatus::Active)
+                    ->first();
+                if ($membership !== null) {
+                    $this->membershipService->expire($membership->id, 'Balance not paid (import '.$batch->id.')');
+
+                    return ['status' => 'imported', 'warning' => $row['email'].': existing member '.$membership->membership_number.' marked expired'];
+                }
+            }
+
             return ['status' => 'skipped', 'message' => $row['email'].': email already exists'];
         }
 
@@ -324,7 +350,8 @@ class MemberImportService
             return ['status' => 'skipped', 'message' => $row['email'].': unrecognized t-shirt size "'.$rawTShirtSize.'"'];
         }
 
-        $plan = $this->resolvePlan($row['paymentPlan'] ?? '');
+        $plan = $this->resolvePlan($row['paymentPlan'] ?? '')
+            ?? (stripos((string) ($row['paymentPlan'] ?? ''), 'part') !== false ? $this->planForAmount((float) $row['amount']) : null);
         if ($plan === null) {
             return ['status' => 'skipped', 'message' => $row['email'].': unknown payment plan'];
         }
@@ -337,6 +364,9 @@ class MemberImportService
         }
 
         $registeredAt = $this->parseRegisteredAt($row);
+        if ($registeredAt->isFuture()) {
+            $registeredAt = now();
+        }
 
         $user = DB::transaction(function () use ($row, $batch, $importedBy, $tShirtSize, $plan, $satellite, $registeredAt, $tempPassword, $tempPasswordExpiresAt, $membershipNumber) {
             [$otherNames, $lastName] = $this->splitFullName($row['name']);
@@ -382,6 +412,10 @@ class MemberImportService
                 'row_email' => $row['email'],
                 'row_payload' => $row,
             ]);
+
+            if (! empty($row['expired'])) {
+                $this->membershipService->expire($membership['membershipId'], 'Balance not paid (import '.$batch->id.')');
+            }
 
             return $user;
         });
@@ -461,6 +495,20 @@ class MemberImportService
             str_contains($key, 'quarter') => BillingCycle::Quarterly,
             str_contains($key, 'semi') => BillingCycle::SemiAnnual,
             str_contains($key, 'annual') => BillingCycle::Annual,
+            default => null,
+        };
+
+        return $cycle ? $this->planService->findByBillingCycle($cycle) : null;
+    }
+
+    /**
+     * "Part-payment" rows don't name a plan, so use what was actually paid.
+     */
+    private function planForAmount(float $amount): ?array
+    {
+        $cycle = match (true) {
+            abs($amount - 250) < 0.01 => BillingCycle::Quarterly,
+            abs($amount - 500) < 0.01 => BillingCycle::SemiAnnual,
             default => null,
         };
 

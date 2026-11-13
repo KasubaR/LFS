@@ -4,10 +4,11 @@ namespace App\Console\Commands;
 
 use App\Services\MemberImportService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 
 class ImportMembersCommand extends Command
 {
-    protected $signature = 'membership:import {file : Path to xlsx/csv file} {--send-welcome : Send welcome emails}';
+    protected $signature = 'membership:import {file : Path to xlsx/csv file} {--send-welcome : Send welcome emails} {--dry-run : Run the import, then roll everything back}';
 
     protected $description = 'Import members from a legacy Excel/CSV export';
 
@@ -21,11 +22,23 @@ class ImportMembersCommand extends Command
             return self::FAILURE;
         }
 
-        $result = $importService->importFromFile(
-            $path,
-            'artisan:membership:import',
-            $this->option('send-welcome'),
-        );
+        $dryRun = (bool) $this->option('dry-run');
+        if ($dryRun) {
+            DB::beginTransaction();
+        }
+
+        try {
+            $result = $importService->importFromFile(
+                $path,
+                'artisan:membership:import',
+                $this->option('send-welcome') && ! $dryRun,
+            );
+        } finally {
+            if ($dryRun) {
+                DB::rollBack();
+                $this->warn('Dry run: nothing was saved.');
+            }
+        }
 
         $this->info('Import complete.');
         $this->table(
@@ -40,7 +53,7 @@ class ImportMembersCommand extends Command
 
         if (! empty($result['errors'])) {
             $this->warn('Issues:');
-            foreach (array_slice($result['errors'], 0, 10) as $error) {
+            foreach ($result['errors'] as $error) {
                 $this->line('- '.$error);
             }
         }
