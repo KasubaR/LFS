@@ -160,7 +160,7 @@ class ShopController extends Controller
 
     public function cart(): View
     {
-        $cart = $this->loadCart();
+        $cart = $this->pruneUnavailable($this->loadCart());
         ['itemCount' => $itemCount] = $this->cartTotals($cart);
         $pricing = $this->pricing($cart);
 
@@ -186,7 +186,7 @@ class ShopController extends Controller
 
     public function checkout(): View|RedirectResponse
     {
-        $cart = $this->loadCart();
+        $cart = $this->pruneUnavailable($this->loadCart());
         ['itemCount' => $itemCount] = $this->cartTotals($cart);
 
         if ($itemCount === 0) {
@@ -490,6 +490,27 @@ class ShopController extends Controller
         $cart = session('cart', []);
 
         return is_array($cart) ? $cart : [];
+    }
+
+    /**
+     * Drop lines whose product has since been deleted, so they never show as K 0.00.
+     *
+     * @param  list<array<string, mixed>>  $cart
+     * @return list<array<string, mixed>>
+     */
+    private function pruneUnavailable(array $cart): array
+    {
+        if ($cart === []) {
+            return $cart;
+        }
+        $ids = array_values(array_unique(array_map(fn (array $i): string => (string) ($i['productId'] ?? ''), $cart)));
+        $existing = \App\Models\Product::query()->whereIn('id', $ids)->pluck('id')->map(fn ($id): string => (string) $id)->all();
+        $kept = array_values(array_filter($cart, fn (array $i): bool => in_array((string) ($i['productId'] ?? ''), $existing, true)));
+        if (count($kept) !== count($cart)) {
+            $this->saveCart($kept);
+        }
+
+        return $kept;
     }
 
     /**

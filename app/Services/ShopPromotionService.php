@@ -28,6 +28,9 @@ use Illuminate\Support\Collection;
  */
 class ShopPromotionService
 {
+    /** @var array<string, mixed>|null request-scoped cache, only set inside batched() */
+    private ?array $batch = null;
+
     /** Percentages above this are never accepted. */
     public const MAX_PERCENTAGE = 99;
 
@@ -83,7 +86,8 @@ class ShopPromotionService
                 'fixed' => $fixed,
                 'listUnit' => $listUnit,
                 'listTotal' => $listTotal,
-                'saleDiscount' => min($listTotal, round($listTotal * $salePct / 100, 2)),
+                // A sale never takes a line below one ngwee, so a tiny price can't round to free.
+                'saleDiscount' => min(max(0.0, $listTotal - 0.01), round($listTotal * $salePct / 100, 2)),
                 'saleName' => $saleName,
                 'codeDiscount' => 0.0,
             ];
@@ -180,7 +184,36 @@ class ShopPromotionService
 
     public function isActiveMember(User $user): bool
     {
-        return $user->memberships()->get()->contains(fn ($m): bool => $m->isCardActive());
+        if ($this->batch !== null && isset($this->batch['member'][$user->id])) {
+            return $this->batch['member'][$user->id];
+        }
+        $active = $user->memberships()->get()->contains(fn ($m): bool => $m->isCardActive());
+        if ($this->batch !== null) {
+            $this->batch['member'][$user->id] = $active;
+        }
+
+        return $active;
+    }
+
+    /**
+     * Run $callback with active automatic sales (and member checks) loaded once,
+     * so list pages don't query per product. The cache never outlives the call.
+     *
+     * @template T
+     * @param  callable(): T  $callback
+     * @return T
+     */
+    public function batched(callable $callback): mixed
+    {
+        if ($this->batch !== null) {
+            return $callback();
+        }
+        $this->batch = [];
+        try {
+            return $callback();
+        } finally {
+            $this->batch = null;
+        }
     }
 
     /**
@@ -199,7 +232,7 @@ class ShopPromotionService
             throw $invalid;
         }
         if ($today->gt($promotion->ends_at)) {
-            throw new PromoCodeException('This promo code has expired.');
+            throw $invalid;
         }
         if ($promotion->members_only && ! $isMember) {
             throw new PromoCodeException('This code is for active LFS members. Log in with your member account to use it.');
@@ -207,7 +240,7 @@ class ShopPromotionService
 
         $eligible = array_filter($priced, fn (array $l): bool => ! $l['fixed'] && $this->coversCategory($promotion, $l['category']));
         if ($eligible === []) {
-            throw new PromoCodeException('This code doesn\'t apply to any of the items in your cart.');
+            throw $invalid;
         }
 
         $min = $promotion->min_order_amount !== null ? (float) $promotion->min_order_amount : null;
@@ -244,18 +277,34 @@ class ShopPromotionService
             return;
         }
 
-        // Fixed Kwacha amount: spread across eligible lines in proportion to their value.
-        $eligibleTotal = array_sum(array_map(fn (int $i): float => $priced[$i]['listTotal'], $eligibleIdx));
-        if ($eligibleTotal <= 0) {
+        // Fixed Kwacha amount: spread across eligible lines in proportion to their
+        // value. A line whose sale already beats its share keeps the sale and drops
+        // out, and the amount is re-spread over the rest, so the customer still gets
+        // the full stated amount off the lines the code actually applies to.
+        $active = $eligibleIdx;
+        do {
+            $activeTotal = array_sum(array_map(fn (int $i): float => $priced[$i]['listTotal'], $active));
+            if ($activeTotal <= 0) {
+                return;
+            }
+            $dropped = array_values(array_filter($active, fn (int $i): bool => $priced[$i]['saleDiscount'] >= $value * $priced[$i]['listTotal'] / $activeTotal));
+            $active = array_values(array_diff($active, $dropped));
+        } while ($dropped !== [] && $active !== []);
+
+        if ($active === []) {
             return;
         }
-        $amount = min($value, $eligibleTotal);
-        $remaining = $amount;
-        $last = end($eligibleIdx);
-        foreach ($eligibleIdx as $i) {
+        $activeTotal = array_sum(array_map(fn (int $i): float => $priced[$i]['listTotal'], $active));
+        if ($value >= $activeTotal) {
+            throw new PromoCodeException('This discount can\'t cover the whole order.');
+        }
+
+        $remaining = $value;
+        $last = end($active);
+        foreach ($active as $i) {
             $share = $i === $last
                 ? $remaining
-                : round($amount * $priced[$i]['listTotal'] / $eligibleTotal, 2);
+                : round($value * $priced[$i]['listTotal'] / $activeTotal, 2);
             $share = min($share, $priced[$i]['listTotal'], $remaining);
             $priced[$i]['codeDiscount'] = round(max(0.0, $share), 2);
             $remaining = round($remaining - $share, 2);
@@ -272,10 +321,20 @@ class ShopPromotionService
      */
     private function activeAutomatic(bool $isMember): Collection
     {
-        return $this->activeQuery()
+        $key = $isMember ? 'sales-member' : 'sales-guest';
+        if ($this->batch !== null && isset($this->batch[$key])) {
+            return $this->batch[$key];
+        }
+
+        $sales = $this->activeQuery()
             ->whereNull('code')
             ->when(! $isMember, fn (Builder $q) => $q->where('members_only', false))
             ->get();
+        if ($this->batch !== null) {
+            $this->batch[$key] = $sales;
+        }
+
+        return $sales;
     }
 
     /**

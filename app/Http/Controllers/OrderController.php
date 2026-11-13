@@ -162,6 +162,7 @@ class OrderController extends Controller
                 // payment: the webhook or poller finds it by reference and settles
                 // or expires it. Releasing stock here could sell it twice.
                 session(['cart' => []]);
+                session()->forget('cart_promo_code');
 
                 return $this->jsonError(
                     'We could not confirm your payment request. Please check your phone and wait a few minutes before trying again, so you are not charged twice.',
@@ -219,6 +220,7 @@ class OrderController extends Controller
         }
 
         session(['cart' => []]);
+        session()->forget('cart_promo_code');
 
         return $this->jsonResponse([
             'ok' => true,

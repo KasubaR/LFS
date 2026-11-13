@@ -165,8 +165,9 @@ class ProductService
             ->limit($limit)
             ->offset($offset)
             ->get()
-            ->map(fn (Product $product) => $this->toProduct($product, $admin))
-            ->all();
+            ->pipe(fn ($rows) => app(ShopPromotionService::class)->batched(
+                fn () => $rows->map(fn (Product $product) => $this->toProduct($product, $admin))->all()
+            ));
 
         return [
             'products' => $products,
@@ -242,8 +243,9 @@ class ProductService
             ->orderByDesc('created_at')
             ->limit($limit)
             ->get()
-            ->map(fn (Product $product) => $this->toProduct($product))
-            ->all();
+            ->pipe(fn ($rows) => app(ShopPromotionService::class)->batched(
+                fn () => $rows->map(fn (Product $product) => $this->toProduct($product))->all()
+            ));
     }
 
     /**

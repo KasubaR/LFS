@@ -414,4 +414,77 @@ class ShopPromotionTest extends TestCase
         $this->assertSame(0, Order::query()->count());
         $this->assertSame(5, $product->fresh()->total_stock);
     }
+
+    public function test_a_fixed_code_bigger_than_the_eligible_lines_is_rejected_even_with_other_lines(): void
+    {
+        $this->makePromo(['code' => 'BIG', 'discount_type' => 'fixed', 'discount_value' => 500]);
+        $jersey = $this->makeProduct('jerseys', 50);
+        $cap = $this->makeProduct('caps', 20);
+
+        $this->expectException(PromoCodeException::class);
+        $this->service()->priceCart([
+            ['productId' => $jersey->id, 'qty' => 1],
+            ['productId' => $cap->id, 'qty' => 1, 'fixedPrice' => true],
+        ], 'BIG');
+    }
+
+    public function test_a_fixed_code_gives_its_full_amount_off_lines_not_already_on_sale(): void
+    {
+        $this->makePromo(['code' => null, 'name' => 'Sale', 'discount_value' => 50, 'category' => 'jerseys']);
+        $this->makePromo(['code' => 'F10', 'discount_type' => 'fixed', 'discount_value' => 10]);
+        $jersey = $this->makeProduct('jerseys', 100);
+        $cap = $this->makeProduct('caps', 20);
+
+        $result = $this->service()->priceCart($this->lines($jersey, $cap), 'F10');
+
+        $this->assertSame(60.0, $result['discount']); // K50 sale + the full K10 code off the cap
+        $this->assertSame(60.0, $result['total']);
+    }
+
+    public function test_expired_and_wrong_category_codes_share_the_generic_message(): void
+    {
+        $this->makePromo(['code' => 'OLD', 'starts_at' => now()->subDays(9)->toDateString(), 'ends_at' => now()->subDay()->toDateString()]);
+        $this->makePromo(['code' => 'CAP', 'category' => 'caps']);
+        $jersey = $this->makeProduct('jerseys');
+
+        foreach (['OLD', 'CAP', 'NOPE'] as $code) {
+            try {
+                $this->service()->priceCart($this->lines($jersey), $code);
+                $this->fail('expected rejection');
+            } catch (PromoCodeException $e) {
+                $this->assertSame("That promo code isn't valid.", $e->getMessage());
+            }
+        }
+    }
+
+    public function test_a_sale_never_takes_a_line_to_zero(): void
+    {
+        $this->makePromo(['code' => null, 'name' => 'Sale', 'discount_value' => 99]);
+        $product = $this->makeProduct('jerseys', 0.04);
+
+        $this->assertSame(0.01, $this->service()->priceCart($this->lines($product))['total']);
+    }
+
+    public function test_cart_page_drops_products_that_no_longer_exist(): void
+    {
+        $this->withSession(['cart' => [[
+            'key' => 'gone::M', 'productId' => 'gone', 'slug' => 'gone', 'name' => 'Gone',
+            'price' => 50.0, 'image' => '', 'size' => 'M', 'qty' => 1,
+        ]]])->get('/shop/cart')->assertOk()->assertSessionHas('cart', []);
+    }
+
+    public function test_list_pages_load_automatic_sales_once(): void
+    {
+        $this->makePromo(['code' => null, 'name' => 'Sale', 'discount_value' => 10]);
+        for ($i = 0; $i < 6; $i++) {
+            $this->makeProduct('jerseys', 50 + $i);
+        }
+
+        \DB::flushQueryLog();
+        \DB::enableQueryLog();
+        $this->get('/shop')->assertOk();
+        $salesQueries = collect(\DB::getQueryLog())->filter(fn ($q) => str_contains($q['query'], 'shop_promotions'))->count();
+
+        $this->assertLessThanOrEqual(1, $salesQueries);
+    }
 }

@@ -37,6 +37,11 @@ class PublicPagesBatch7Test extends TestCase
 
     public function test_checkout_renders_when_cart_has_items(): void
     {
+        \App\Models\Product::query()->create([
+            'id' => 'prod-1', 'name' => 'Test Product', 'slug' => 'test-product', 'price' => 100,
+            'category' => 'jerseys', 'gender' => 'unisex', 'sizes' => [['size' => 'M', 'stock' => 5]],
+            'total_stock' => 5, 'is_active' => true,
+        ]);
         $this->withSession([
             'cart' => [[
                 'key' => 'prod-1::M',
