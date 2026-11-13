@@ -146,8 +146,8 @@
     </ul>
     <p>
       To exercise any of these rights, email us at
-      <a href="mailto:support@lfszambia.run" style="color:var(--dark-green);text-decoration:underline">
-        support@lfszambia.run</a>.
+      <a href="mailto:hi@lfszambia.run" style="color:var(--dark-green);text-decoration:underline">
+        hi@lfszambia.run</a>.
     </p>
 
     <h2 style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;margin-top:2.5rem;margin-bottom:0.5rem;color:#111">
@@ -173,8 +173,8 @@
     </h2>
     <p>
       Questions about this policy?  Reach us at
-      <a href="mailto:support@lfszambia.run" style="color:var(--dark-green);text-decoration:underline">
-        support@lfszambia.run</a>
+      <a href="mailto:hi@lfszambia.run" style="color:var(--dark-green);text-decoration:underline">
+        hi@lfszambia.run</a>
       or use the <a href="{{ url('/contact') }}" style="color:var(--dark-green);text-decoration:underline">contact form</a>.
     </p>
 
