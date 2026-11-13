@@ -6,6 +6,8 @@ use App\Enums\OfflinePaymentMethod;
 use App\Enums\OrderChannel;
 use App\Exceptions\InsufficientStockException;
 use App\Http\Controllers\Controller;
+use App\Enums\OrderStatus;
+use App\Models\AdminUser;
 use App\Models\Order;
 use App\Models\Product;
 use App\Services\AdminPermissionService;
@@ -14,7 +16,10 @@ use App\Services\ShopSettingsService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
 /**
@@ -23,6 +28,9 @@ use Throwable;
  */
 class OfflineSaleController extends Controller
 {
+    /** Sales days are Lusaka days, whatever the server clock says. */
+    private const TIMEZONE = 'Africa/Lusaka';
+
     public function __construct(
         private readonly OrderService $orderService,
         private readonly ShopSettingsService $shopSettings,
@@ -118,6 +126,151 @@ class OfflineSaleController extends Controller
                 ['label' => 'Receipt'],
             ],
         ]);
+    }
+
+    public function void(Request $request, int $id): RedirectResponse
+    {
+        $data = $request->validate([
+            'void_reason' => ['required', 'string', 'max:255'],
+        ], [
+            'void_reason.required' => 'Say why the sale is being voided.',
+        ]);
+
+        try {
+            $this->orderService->voidOfflineSale($id, (int) $this->permissions->currentAdmin($request)?->id, trim($data['void_reason']));
+        } catch (\DomainException $e) {
+            return redirect('/admin/orders/'.$id)->with('flash', ['error' => $e->getMessage()]);
+        }
+
+        return redirect('/admin/orders/'.$id)->with('flash', ['success' => 'Sale voided and the stock put back.']);
+    }
+
+    /**
+     * Day-by-day report of offline sales, with totals per payment method for
+     * end-of-day reconciliation.
+     */
+    public function report(Request $request): View
+    {
+        [$from, $to] = $this->dateRange($request);
+        $sales = $this->orderService->offlineSalesBetween($from->copy()->utc(), $to->copy()->utc());
+
+        $kept = $sales->where('status', '!=', OrderStatus::Cancelled);
+        $voided = $sales->where('status', OrderStatus::Cancelled);
+
+        $byMethod = [];
+        foreach (OfflinePaymentMethod::LABELS as $method => $label) {
+            $rows = $kept->where('payment_method', $method);
+            $byMethod[$method] = ['label' => $label, 'count' => $rows->count(), 'total' => (float) $rows->sum('total')];
+        }
+
+        return view('admin.orders.sales-report', [
+            'pageTitle' => 'Offline sales report',
+            'activePage' => 'orders',
+            'sales' => $sales,
+            'from' => $from->toDateString(),
+            'to' => $to->toDateString(),
+            'totals' => [
+                'count' => $kept->count(),
+                'total' => (float) $kept->sum('total'),
+                'voidedCount' => $voided->count(),
+                'voidedTotal' => (float) $voided->sum('total'),
+                'byMethod' => $byMethod,
+            ],
+            'paymentLabels' => OfflinePaymentMethod::LABELS,
+            'timezone' => self::TIMEZONE,
+            'breadcrumbs' => [
+                ['label' => 'Admin', 'url' => '/admin/dashboard'],
+                ['label' => 'Orders', 'url' => '/admin/orders'],
+                ['label' => 'Offline sales report'],
+            ],
+        ]);
+    }
+
+    public function export(Request $request): StreamedResponse
+    {
+        [$from, $to] = $this->dateRange($request);
+        $sales = $this->orderService->offlineSalesBetween($from->copy()->utc(), $to->copy()->utc());
+
+        $adminNames = AdminUser::query()
+            ->whereIn('id', $sales->pluck('recorded_by')->merge($sales->pluck('voided_by'))->filter()->unique())
+            ->pluck('name', 'id');
+
+        $filename = 'offline-sales-'.$from->toDateString().'-to-'.$to->toDateString().'.csv';
+
+        return response()->streamDownload(function () use ($sales, $adminNames): void {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, [
+                'Receipt no.', 'Date (Lusaka)', 'Customer', 'Phone', 'Email', 'Payment method',
+                'Items', 'Total (ZMW)', 'Status', 'Recorded by', 'Voided at (Lusaka)', 'Void reason', 'Voided by',
+            ]);
+
+            foreach ($sales as $order) {
+                $items = $order->items
+                    ->map(fn ($i): string => $i->name.' ('.$i->size.') x'.$i->qty.' @ '.number_format((float) $i->unit_price, 2, '.', ''))
+                    ->implode('; ');
+
+                fputcsv($out, array_map([$this, 'csvSafe'], [
+                    $order->order_number,
+                    $order->created_at->copy()->timezone(self::TIMEZONE)->format('Y-m-d H:i'),
+                    $order->customer_name,
+                    $order->customer_phone,
+                    $order->customer_email,
+                    OfflinePaymentMethod::LABELS[$order->payment_method] ?? (string) $order->payment_method,
+                    $items,
+                    number_format((float) $order->total, 2, '.', ''),
+                    $order->status === OrderStatus::Cancelled ? 'Voided' : 'Completed',
+                    (string) ($adminNames[$order->recorded_by] ?? ''),
+                    $order->voided_at?->copy()->timezone(self::TIMEZONE)->format('Y-m-d H:i') ?? '',
+                    (string) $order->void_reason,
+                    (string) ($adminNames[$order->voided_by] ?? ''),
+                ]));
+            }
+
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    /**
+     * Start and end of the requested Lusaka days (default: today).
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    private function dateRange(Request $request): array
+    {
+        $parse = function (mixed $value): ?Carbon {
+            if (! is_string($value) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+                return null;
+            }
+
+            try {
+                return Carbon::createFromFormat('Y-m-d', $value, self::TIMEZONE)->startOfDay();
+            } catch (Throwable) {
+                return null;
+            }
+        };
+
+        $today = Carbon::now(self::TIMEZONE)->startOfDay();
+        $from = $parse($request->query('from')) ?? $today->copy();
+        $to = $parse($request->query('to')) ?? $from->copy();
+
+        if ($to->lt($from)) {
+            [$from, $to] = [$to, $from];
+        }
+
+        // Keep a report to a year at most.
+        if ($from->diffInDays($to) > 366) {
+            $from = $to->copy()->subDays(366);
+        }
+
+        return [$from, $to->copy()->endOfDay()];
+    }
+
+    /** Stops a spreadsheet treating a typed value as a formula. */
+    private function csvSafe(?string $value): string
+    {
+        $value = (string) $value;
+
+        return $value !== '' && in_array($value[0], ['=', '+', '-', '@', "\t", "\r"], true) ? "'".$value : $value;
     }
 
     /**

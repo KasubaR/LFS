@@ -248,8 +248,11 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
     // ── Orders ───────────────────────────────────────────────────────────────────────
     Route::prefix('orders')->middleware('admin.can:orders,read')->group(function (): void {
         Route::get('/', [OrderController::class, 'index']);
+        Route::get('sales', [OfflineSaleController::class, 'report']);
+        Route::get('sales/export', [OfflineSaleController::class, 'export']);
         Route::get('sales/create', [OfflineSaleController::class, 'create']);
         Route::post('sales', [OfflineSaleController::class, 'store']);
+        Route::post('{id}/void', [OfflineSaleController::class, 'void'])->where('id', '[0-9]+');
         Route::get('{id}/receipt', [OfflineSaleController::class, 'receipt'])->where('id', '[0-9]+');
         Route::get('{id}', [OrderController::class, 'show'])->where('id', '[0-9]+');
         Route::post('{id}/status', [OrderController::class, 'updateStatus'])->where('id', '[0-9]+');

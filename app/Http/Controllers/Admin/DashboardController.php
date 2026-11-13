@@ -45,6 +45,7 @@ class DashboardController extends Controller
                 'upcomingEvents' => count($upcomingEvents),
                 'pendingOrders' => $stats['pendingOrders'],
                 'shopRevenue' => $stats['shopRevenue'],
+                'offlineRevenue' => $stats['offlineRevenue'],
                 'membershipRevenue' => $stats['membershipRevenue'],
                 'galleryUploads' => 0,
             ],

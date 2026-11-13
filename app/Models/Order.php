@@ -23,6 +23,9 @@ class Order extends Model
         'channel',
         'payment_method',
         'recorded_by',
+        'voided_at',
+        'voided_by',
+        'void_reason',
     ];
 
     protected function casts(): array
@@ -32,6 +35,8 @@ class Order extends Model
             'subtotal' => 'decimal:2',
             'total' => 'decimal:2',
             'recorded_by' => 'integer',
+            'voided_at' => 'datetime',
+            'voided_by' => 'integer',
         ];
     }
 

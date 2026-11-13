@@ -6,6 +6,8 @@ use App\Enums\OrderChannel;
 use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Models\OrderItem;
+use Carbon\CarbonInterface;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class OrderService
@@ -151,6 +153,65 @@ class OrderService
 
             return ['id' => (int) $order->id, 'orderNumber' => $order->order_number, 'total' => $total];
         });
+    }
+
+    /**
+     * Undo an offline sale (recorded by mistake, or the goods came back): the
+     * order moves to Cancelled, the stock goes back to the shelf, and who/when/why
+     * is kept on the order. Only a Collected offline sale can be voided.
+     *
+     * @throws \DomainException if the order isn't an offline sale that can still be voided
+     */
+    public function voidOfflineSale(int $orderId, int $adminId, string $reason): void
+    {
+        DB::transaction(function () use ($orderId, $adminId, $reason): void {
+            $order = Order::query()->lockForUpdate()->find($orderId);
+
+            if ($order === null || $order->channel !== OrderChannel::Offline) {
+                throw new \DomainException('Only offline sales can be voided.');
+            }
+
+            if ($order->status !== OrderStatus::Collected) {
+                throw new \DomainException('This sale has already been voided.');
+            }
+
+            $this->restoreStockForOrder($order->order_number);
+
+            $order->update([
+                'status' => OrderStatus::Cancelled,
+                'voided_at' => now(),
+                'voided_by' => $adminId,
+                'void_reason' => $reason,
+            ]);
+        });
+    }
+
+    /**
+     * Offline sales created between two moments (inclusive), newest first.
+     * Voided sales are included so a report can show them separately.
+     *
+     * @return Collection<int, Order>
+     */
+    public function offlineSalesBetween(CarbonInterface $from, CarbonInterface $to): Collection
+    {
+        return Order::query()
+            ->with('items')
+            ->where('channel', OrderChannel::Offline)
+            ->whereBetween('created_at', [$from, $to])
+            ->orderByDesc('created_at')
+            ->get();
+    }
+
+    /**
+     * Money taken by offline sales since a moment, excluding voided sales.
+     */
+    public function offlineRevenueSince(CarbonInterface $since): float
+    {
+        return (float) Order::query()
+            ->where('channel', OrderChannel::Offline)
+            ->where('status', OrderStatus::Collected)
+            ->where('created_at', '>=', $since)
+            ->sum('total');
     }
 
     private function generateOfflineOrderNumber(): string
@@ -320,6 +381,8 @@ class OrderService
             'channel' => $order->channel ?? OrderChannel::Online,
             'paymentMethod' => $order->payment_method,
             'recordedBy' => $order->recorded_by,
+            'voidedAt' => $order->voided_at?->toIso8601String(),
+            'voidReason' => $order->void_reason,
             'createdAt' => (string) $order->created_at,
             'updatedAt' => (string) $order->updated_at,
         ];

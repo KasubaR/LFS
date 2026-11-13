@@ -8,6 +8,8 @@ use App\Enums\OrderStatus;
 use App\Models\AdminUser;
 use App\Models\Order;
 use App\Models\Product;
+use App\Services\DashboardStatsService;
+use Illuminate\Support\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\Concerns\ActsAsAdmin;
@@ -238,5 +240,226 @@ class OfflineSaleAdminTest extends TestCase
 
         $this->assertSame(0, Order::query()->count());
         $this->assertInstanceOf(AdminUser::class, $auditor);
+    }
+
+    private function recordSale(Product $product, array $overrides = [], ?AdminUser $admin = null): Order
+    {
+        $this->actingAsAdmin($admin)->post('/admin/orders/sales', $this->salePayload($product, $overrides))->assertRedirect();
+
+        return Order::query()->latest('id')->firstOrFail();
+    }
+
+    // ── Void ────────────────────────────────────────────────────────────────
+
+    public function test_voiding_a_sale_cancels_it_restores_stock_and_records_who_and_why(): void
+    {
+        $product = $this->makeProduct(stockM: 25);
+        $order = $this->recordSale($product, [
+            'items' => [['product_id' => $product->id, 'size' => 'M', 'qty' => 10, 'unit_price' => '']],
+        ]);
+        $this->assertSame(15, $product->fresh()->sizes[0]['stock']);
+
+        $admin = $this->makeAdminUser();
+        $this->actingAsAdmin($admin)
+            ->post('/admin/orders/'.$order->id.'/void', ['void_reason' => 'Wrong size'])
+            ->assertRedirect('/admin/orders/'.$order->id);
+
+        $order->refresh();
+        $this->assertSame(OrderStatus::Cancelled, $order->status);
+        $this->assertSame('Wrong size', $order->void_reason);
+        $this->assertSame($admin->id, $order->voided_by);
+        $this->assertNotNull($order->voided_at);
+
+        $product->refresh();
+        $this->assertSame(25, $product->sizes[0]['stock']);
+        $this->assertSame(30, $product->total_stock);
+    }
+
+    public function test_a_sale_cannot_be_voided_twice(): void
+    {
+        $product = $this->makeProduct(stockM: 25);
+        $order = $this->recordSale($product);
+
+        $this->actingAsAdmin()->post('/admin/orders/'.$order->id.'/void', ['void_reason' => 'Mistake']);
+        $this->actingAsAdmin()->post('/admin/orders/'.$order->id.'/void', ['void_reason' => 'Mistake again'])
+            ->assertSessionHas('flash.error');
+
+        // Stock went back exactly once: 25 - 2 + 2.
+        $this->assertSame(25, $product->fresh()->sizes[0]['stock']);
+        $this->assertSame('Mistake', $order->fresh()->void_reason);
+    }
+
+    public function test_void_needs_a_reason(): void
+    {
+        $order = $this->recordSale($this->makeProduct());
+
+        $this->actingAsAdmin()->post('/admin/orders/'.$order->id.'/void', ['void_reason' => ''])
+            ->assertSessionHasErrors('void_reason');
+
+        $this->assertSame(OrderStatus::Collected, $order->fresh()->status);
+    }
+
+    public function test_online_orders_cannot_be_voided(): void
+    {
+        $online = Order::query()->create([
+            'order_number' => 'LFS-ONLINE-3', 'customer_name' => 'Jane', 'customer_email' => 'j@example.com',
+            'subtotal' => 10, 'total' => 10, 'status' => OrderStatus::Collected,
+        ]);
+
+        $this->actingAsAdmin()->post('/admin/orders/'.$online->id.'/void', ['void_reason' => 'Nope'])
+            ->assertSessionHas('flash.error');
+
+        $this->assertSame(OrderStatus::Collected, $online->fresh()->status);
+        $this->assertNull($online->fresh()->voided_at);
+    }
+
+    public function test_read_only_auditor_cannot_void(): void
+    {
+        $order = $this->recordSale($this->makeProduct());
+        $auditor = $this->makeAdminUser(['role' => AdminRole::ReadOnlyAuditor]);
+
+        $this->actingAsAdmin($auditor)->post('/admin/orders/'.$order->id.'/void', ['void_reason' => 'x'])
+            ->assertForbidden();
+
+        $this->assertSame(OrderStatus::Collected, $order->fresh()->status);
+    }
+
+    public function test_order_page_offers_void_and_then_shows_the_reason(): void
+    {
+        $order = $this->recordSale($this->makeProduct());
+
+        $this->actingAsAdmin()->get('/admin/orders/'.$order->id)->assertOk()->assertSee('Void sale')->assertSee('void_reason');
+
+        $this->actingAsAdmin()->post('/admin/orders/'.$order->id.'/void', ['void_reason' => 'Customer changed mind']);
+
+        $this->actingAsAdmin()->get('/admin/orders/'.$order->id)
+            ->assertOk()->assertSee('Customer changed mind')->assertDontSee('name="void_reason"', false);
+        $this->actingAsAdmin()->get('/admin/orders/'.$order->id.'/receipt')->assertOk()->assertSee('VOIDED');
+    }
+
+    // ── Report ──────────────────────────────────────────────────────────────
+
+    public function test_report_totals_by_payment_method_and_leaves_out_voided_sales(): void
+    {
+        $product = $this->makeProduct(stockM: 100);
+        $this->recordSale($product, ['payment_method' => 'cash']);                       // 200
+        $this->recordSale($product, ['payment_method' => 'mobile_money']);               // 200
+        $voided = $this->recordSale($product, ['payment_method' => 'cash']);             // 200, voided
+        $this->actingAsAdmin()->post('/admin/orders/'.$voided->id.'/void', ['void_reason' => 'Mistake']);
+
+        $response = $this->actingAsAdmin()->get('/admin/orders/sales')->assertOk();
+
+        $report = $response->viewData('totals');
+        $this->assertSame(2, $report['count']);
+        $this->assertSame(400.0, $report['total']);
+        $this->assertSame(200.0, $report['byMethod']['cash']['total']);
+        $this->assertSame(200.0, $report['byMethod']['mobile_money']['total']);
+        $this->assertSame(0.0, $report['byMethod']['card']['total']);
+        $this->assertSame(1, $report['voidedCount']);
+        $this->assertSame(200.0, $report['voidedTotal']);
+        $response->assertSee($voided->order_number)->assertSee('Voided');
+    }
+
+    public function test_report_defaults_to_today_in_lusaka_time(): void
+    {
+        $product = $this->makeProduct(stockM: 100);
+
+        // 23:30 UTC on the 10th is 01:30 on the 11th in Lusaka (UTC+2).
+        Carbon::setTestNow(Carbon::parse('2026-11-10 23:30:00', 'UTC'));
+        $lateNight = $this->recordSale($product);
+
+        // (Assert on the report's data: the "Sale recorded" flash also contains the number.)
+        $ids = fn (string $query): array => $this->actingAsAdmin()->get('/admin/orders/sales'.$query)
+            ->assertOk()->viewData('sales')->pluck('id')->all();
+
+        $this->assertSame([], $ids('?from=2026-11-10&to=2026-11-10'));
+        $this->assertSame([$lateNight->id], $ids('?from=2026-11-11&to=2026-11-11'));
+
+        // "Today" in Lusaka is the 11th, so no dates shows it too.
+        $this->assertSame([$lateNight->id], $ids(''));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_report_ignores_bad_dates_and_swaps_a_reversed_range(): void
+    {
+        $order = $this->recordSale($this->makeProduct());
+        $today = Carbon::now('Africa/Lusaka')->toDateString();
+
+        $this->actingAsAdmin()->get('/admin/orders/sales?from=garbage&to=also-garbage')
+            ->assertOk()->assertSee($order->order_number);
+        $this->actingAsAdmin()->get('/admin/orders/sales?from='.$today.'&to=2020-01-01')->assertOk();
+    }
+
+    public function test_report_does_not_include_online_orders(): void
+    {
+        $online = Order::query()->create([
+            'order_number' => 'LFS-ONLINE-4', 'customer_name' => 'Jane', 'customer_email' => 'j@example.com',
+            'subtotal' => 10, 'total' => 10, 'status' => OrderStatus::Paid,
+        ]);
+
+        $this->actingAsAdmin()->get('/admin/orders/sales')->assertOk()->assertDontSee($online->order_number);
+    }
+
+    // ── CSV export ──────────────────────────────────────────────────────────
+
+    public function test_export_downloads_a_csv_with_each_sale(): void
+    {
+        $product = $this->makeProduct(stockM: 100);
+        $admin = $this->makeAdminUser(['name' => 'Till Operator']);
+        $sale = $this->recordSale($product, ['payment_method' => 'card', 'customer_name' => 'Walk In'], $admin);
+        $voided = $this->recordSale($product);
+        $this->actingAsAdmin()->post('/admin/orders/'.$voided->id.'/void', ['void_reason' => 'Mistake']);
+
+        $response = $this->actingAsAdmin()->get('/admin/orders/sales/export');
+
+        $response->assertOk();
+        $this->assertStringContainsString('text/csv', $response->headers->get('Content-Type'));
+        $this->assertStringContainsString('offline-sales-', $response->headers->get('Content-Disposition'));
+
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('Receipt no.', $csv);
+        $this->assertStringContainsString($sale->order_number, $csv);
+        $this->assertStringContainsString('Card / POS', $csv);
+        $this->assertStringContainsString('Test Jersey (M) x2 @ 100.00', $csv);
+        $this->assertStringContainsString('Till Operator', $csv);
+        $this->assertStringContainsString('Completed', $csv);
+        $this->assertStringContainsString('Voided', $csv);
+        $this->assertStringContainsString('Mistake', $csv);
+    }
+
+    public function test_export_neutralises_values_a_spreadsheet_would_run_as_formulas(): void
+    {
+        $this->recordSale($this->makeProduct(), ['customer_name' => '=HYPERLINK("http://evil.example","x")']);
+
+        $csv = $this->actingAsAdmin()->get('/admin/orders/sales/export')->streamedContent();
+
+        $this->assertStringContainsString("'=HYPERLINK", $csv);
+        $this->assertStringNotContainsString(',=HYPERLINK', $csv);
+    }
+
+    public function test_read_only_auditor_can_view_the_report_and_export(): void
+    {
+        $auditor = $this->makeAdminUser(['role' => AdminRole::ReadOnlyAuditor]);
+
+        $this->actingAsAdmin($auditor)->get('/admin/orders/sales')->assertOk();
+        $this->actingAsAdmin($auditor)->get('/admin/orders/sales/export')->assertOk();
+    }
+
+    // ── Dashboard ───────────────────────────────────────────────────────────
+
+    public function test_dashboard_counts_this_months_offline_sales_but_not_voided_ones(): void
+    {
+        $product = $this->makeProduct(stockM: 100);
+        $this->recordSale($product);                       // 200
+        $voided = $this->recordSale($product);             // 200, voided
+        $this->actingAsAdmin()->post('/admin/orders/'.$voided->id.'/void', ['void_reason' => 'Mistake']);
+
+        $old = $this->recordSale($product);                // last month: not counted
+        Order::query()->whereKey($old->id)->update(['created_at' => now()->subMonths(2)]);
+
+        $this->assertSame(200.0, app(DashboardStatsService::class)->compute()['offlineRevenue']);
+
+        $this->actingAsAdmin()->get('/admin/dashboard')->assertOk()->assertSee('Offline Sales');
     }
 }

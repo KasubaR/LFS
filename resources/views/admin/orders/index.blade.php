@@ -38,9 +38,14 @@ $allStatuses = \App\Enums\OrderStatus::ALL;
 <!-- Page header -->
 <div class="admin-page-header admin-page-header--row">
   <h2 class="admin-page-header__heading">Orders</h2>
-  <a href="{{ url('/admin/orders/sales/create') }}" class="admin-btn admin-btn--primary">
-    <i class="fas fa-plus" aria-hidden="true"></i> Record offline sale
-  </a>
+  <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+    <a href="{{ url('/admin/orders/sales') }}" class="admin-btn admin-btn--ghost">
+      <i class="fas fa-chart-simple" aria-hidden="true"></i> Offline sales report
+    </a>
+    <a href="{{ url('/admin/orders/sales/create') }}" class="admin-btn admin-btn--primary">
+      <i class="fas fa-plus" aria-hidden="true"></i> Record offline sale
+    </a>
+  </div>
 </div>
 
 <!-- Stats row -->

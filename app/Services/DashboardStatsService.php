@@ -27,6 +27,7 @@ class DashboardStatsService
      *     activeMembers: int,
      *     newMembersThisMonth: int,
      *     shopRevenue: float,
+     *     offlineRevenue: float,
      *     membershipRevenue: float,
      *     pendingMemberships: int,
      *     failedMembershipPayments: int,
@@ -41,6 +42,7 @@ class DashboardStatsService
             'activeMembers' => 0,
             'newMembersThisMonth' => 0,
             'shopRevenue' => 0.0,
+            'offlineRevenue' => 0.0,
             'membershipRevenue' => 0.0,
             'pendingMemberships' => 0,
             'failedMembershipPayments' => 0,
@@ -59,6 +61,7 @@ class DashboardStatsService
                 ->where('status', 'completed')
                 ->where('completed_at', '>=', now()->startOfMonth())
                 ->sum('amount');
+            $stats['offlineRevenue'] = $this->orderService->offlineRevenueSince(now()->startOfMonth());
             $stats['membershipRevenue'] = (float) MembershipPayment::query()
                 ->where('status', 'paid')
                 ->where('paid_at', '>=', now()->startOfMonth())

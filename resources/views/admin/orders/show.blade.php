@@ -167,6 +167,30 @@ $breadcrumbs = [
   <!-- ── Right: sidebar ──────────────────────────────── -->
   <div class="order-detail__aside">
 
+    @if(($order['channel'] ?? 'online') === 'offline')
+    <div class="admin-card">
+      <p class="admin-card__title">Void sale</p>
+      @if(!empty($order['voidedAt']))
+        <p>
+          This sale was voided on {{ \Illuminate\Support\Carbon::parse($order['voidedAt'])->timezone('Africa/Lusaka')->format('d M Y, H:i') }}.
+          The stock was put back.
+        </p>
+        <p><strong>Reason:</strong> {{ $order['voidReason'] }}</p>
+      @elseif($order['status'] === \App\Enums\OrderStatus::Collected)
+        <p class="text-muted">Use this for a sale recorded by mistake or goods that came back. The stock goes back on the shelf.</p>
+        <form method="post" action="{{ url('/admin/orders/'.$id.'/void') }}"
+              onsubmit="return confirm('Void this sale and put the stock back? This cannot be undone.');">
+          @csrf
+          <div class="admin-form__field">
+            <label for="void_reason" class="admin-label">Reason</label>
+            <input id="void_reason" name="void_reason" type="text" maxlength="255" required class="admin-input">
+          </div>
+          <button type="submit" class="admin-btn admin-btn--danger">Void sale</button>
+        </form>
+      @endif
+    </div>
+    @endif
+
     <!-- Update status — mirrors messages/show.php pattern -->
     <div class="admin-card">
       <p class="admin-card__title">Update status</p>

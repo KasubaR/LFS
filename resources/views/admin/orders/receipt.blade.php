@@ -24,13 +24,16 @@ $money = fn ($v) => 'ZMW ' . number_format((float) $v, 2);
 </div>
 
 <div class="admin-card receipt">
+  @if($order->voided_at)
+    <p style="text-align:center;margin:0 0 .75rem;color:#b91c1c;"><strong>VOIDED</strong></p>
+  @endif
   <p style="text-align:center;margin:0;"><strong>Lusaka Fitness Squad</strong></p>
   <p style="text-align:center;margin:0 0 1rem;">Sales receipt</p>
 
   <table>
     <tbody>
       <tr><th>Receipt no.</th><td>{{ $order->order_number }}</td></tr>
-      <tr><th>Date</th><td>{{ $order->created_at->format('d M Y, H:i') }}</td></tr>
+      <tr><th>Date</th><td>{{ $order->created_at->copy()->timezone('Africa/Lusaka')->format('d M Y, H:i') }}</td></tr>
       <tr><th>Customer</th><td>{{ $order->customer_name }}</td></tr>
       <tr><th>Phone</th><td>{{ $order->customer_phone }}</td></tr>
       <tr><th>Paid by</th><td>{{ $paymentLabel }}</td></tr>

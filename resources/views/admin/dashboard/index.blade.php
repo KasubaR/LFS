@@ -66,6 +66,18 @@ $breadcrumbs = [];
     </div>
   </article>
 
+  <!-- Offline Sales -->
+  <article class="stat-card stat-card--gold" aria-label="Offline sales this month">
+    <div class="stat-card__icon" aria-hidden="true"><i class="fas fa-store"></i></div>
+    <p class="stat-card__label">Offline Sales</p>
+    <p class="stat-card__value" id="stat-offline-revenue" style="font-size:1.6rem; letter-spacing:0.01em;">
+      K {{ isset($stats['offlineRevenue']) ? number_format($stats['offlineRevenue']) : '—' }}
+    </p>
+    <div class="stat-card__meta">
+      <span style="font-size:0.68rem;color:var(--text-dim);">In person, this month</span>
+    </div>
+  </article>
+
   <!-- Membership Revenue -->
   <article class="stat-card stat-card--gold" aria-label="Membership revenue this month">
     <div class="stat-card__icon" aria-hidden="true"><i class="fas fa-id-card"></i></div>
