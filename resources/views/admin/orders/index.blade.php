@@ -39,6 +39,9 @@ $allStatuses = \App\Enums\OrderStatus::ALL;
 <div class="admin-page-header admin-page-header--row">
   <h2 class="admin-page-header__heading">Orders</h2>
   <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+    <a href="{{ url('/admin/orders/payments') }}" class="admin-btn admin-btn--primary">
+      <i class="fas fa-credit-card" aria-hidden="true"></i> Payments
+    </a>
     <a href="{{ url('/admin/orders/sales') }}" class="admin-btn admin-btn--ghost">
       <i class="fas fa-chart-simple" aria-hidden="true"></i> Offline sales report
     </a>
@@ -158,23 +161,7 @@ $allStatuses = \App\Enums\OrderStatus::ALL;
     </table>
   </div>
 
-  <!-- Pagination -->
-  @if(($pages ?? 1) > 1)
-    <nav class="admin-toolbar" aria-label="Pagination" style="justify-content:center;margin-top:1rem;">
-      @for($p = 1; $p <= $pages; $p++)
-        @php
-          $pHref = '/admin/orders?page=' . $p;
-          if ($statusFilter !== '') $pHref .= '&status=' . urlencode($statusFilter);
-          if ($channelFilter !== '') $pHref .= '&channel=' . urlencode($channelFilter);
-        @endphp
-        <a href="{{ url($pHref) }}"
-           class="admin-btn admin-btn--sm {{ $p === $currentPage ? 'admin-btn--primary' : 'admin-btn--ghost' }}"
-           aria-current="{{ $p === $currentPage ? 'page' : 'false' }}">
-          {{ $p }}
-        </a>
-      @endfor
-    </nav>
-  @endif
+  <x-admin.pagination :paginator="$paginator" />
 
 @else
 

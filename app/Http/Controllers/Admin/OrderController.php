@@ -54,7 +54,13 @@ class OrderController extends Controller
         } catch (Throwable) {
         }
 
+        $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
+            [], $total, $perPage, $page,
+            ['path' => url('/admin/orders'), 'query' => array_filter(['status' => $status, 'channel' => $channel], fn ($v) => $v !== '')]
+        );
+
         return view('admin.orders.index', [
+            'paginator' => $paginator,
             'pageTitle' => 'Orders',
             'activePage' => 'orders',
             'orderList' => $orderList,

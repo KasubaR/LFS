@@ -51,12 +51,12 @@ class MembersController extends Controller
         $filterStatus = $request->query('status', '');
         $search = $request->query('search', '');
 
-        $members = $this->membershipService->getMembersForAdmin([
+        $paginator = $this->membershipService->paginateMembersForAdmin([
             'filterStatus' => $filterStatus,
             'search' => $search,
-            'limit' => 200,
             'satelliteIds' => $this->satelliteScope(),
-        ]);
+        ], 50);
+        $members = $paginator->items();
 
         return view('admin.members.list', [
             'pageTitle' => 'Members',
@@ -66,6 +66,7 @@ class MembersController extends Controller
                 ['label' => 'All Members'],
             ],
             'members' => $members,
+            'membersPaginator' => $paginator,
             'filterStatus' => $filterStatus,
             'search' => $search,
             'counts' => [

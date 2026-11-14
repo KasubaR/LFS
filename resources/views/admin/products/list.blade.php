@@ -74,6 +74,11 @@ $activeCount = count(array_filter($list, fn ($p) => !empty($p['isActive'])));
   </form>
 
   <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+    @if(!empty($adminCanRead['orders']))
+    <a href="/admin/orders/payments" class="admin-btn admin-btn--primary">
+      <i class="fas fa-credit-card" aria-hidden="true"></i> Payments
+    </a>
+    @endif
     <a href="/admin/products/categories" class="admin-btn admin-btn--ghost">
       <i class="fas fa-tags" aria-hidden="true"></i> Categories
     </a>

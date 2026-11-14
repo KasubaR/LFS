@@ -39,6 +39,9 @@ $filterStatus = $filterStatus ?? '';
     </a>
   </form>
 
+  <a href="{{ url('/admin/members/payments') }}" class="admin-btn admin-btn--primary">
+    <i class="fas fa-receipt" aria-hidden="true"></i> Payments
+  </a>
   @if(empty($adminIsSatelliteAdmin) && !empty($adminCanWrite['members']))
   <a href="{{ url('/admin/members/import') }}" class="admin-btn admin-btn--primary">
     <i class="fas fa-file-import" aria-hidden="true"></i> Import Members
@@ -108,6 +111,7 @@ $filterStatus = $filterStatus ?? '';
       </tbody>
     </table>
   </div>
+  @isset($membersPaginator)<x-admin.pagination :paginator="$membersPaginator" />@endisset
 @else
   <div style="text-align:center; padding:5rem 2rem; color:var(--text-dim);">
     <i class="fas fa-users" style="font-size:3.5rem; margin-bottom:1.25rem; display:block; opacity:0.25;"></i>

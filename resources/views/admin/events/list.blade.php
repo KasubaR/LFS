@@ -86,6 +86,9 @@ if (! function_exists('formatEventDate')) {
       <i class="fas fa-xmark"></i> Clear
     </a>
   </form>
+  <a href="/admin/events/payments" class="admin-btn admin-btn--ghost">
+    <i class="fas fa-ticket" aria-hidden="true"></i> Ticket payments
+  </a>
   <a href="/admin/events/create"
      style="display:inline-flex; align-items:center; gap:0.5rem; padding:0.6rem 1.1rem; background:var(--flag-green); color:#fff; border-radius:8px; font-family:var(--font-body); font-size:0.85rem; font-weight:600; text-decoration:none; white-space:nowrap;">
     <i class="fas fa-plus"></i> New Event

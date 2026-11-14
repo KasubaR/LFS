@@ -17,6 +17,12 @@ $inactiveCount  = count(array_filter($members, fn($m) => ($m['status'] ?? '') ==
 <!-- ══════════════════════════════════════════════
      STATS
 ════════════════════════════════════════════════ -->
+<div style="display:flex; justify-content:flex-end; margin-bottom:1rem;">
+  <a href="{{ url('/admin/members/payments') }}" class="admin-btn admin-btn--primary">
+    <i class="fas fa-receipt" aria-hidden="true"></i> Member payments
+  </a>
+</div>
+
 <section class="stats-grid" style="grid-template-columns:repeat(5,1fr); margin-bottom:1.5rem;" aria-label="Member stats">
   <article class="stat-card stat-card--green">
     <div class="stat-card__icon"><i class="fas fa-users"></i></div>

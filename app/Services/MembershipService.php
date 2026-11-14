@@ -990,14 +990,37 @@ class MembershipService
      */
     public function getMembersForAdmin(array $opts = []): array
     {
+        return $this->adminMembersQuery($opts)
+            ->limit((int) ($opts['limit'] ?? 100))
+            ->get()
+            ->map(fn (User $user) => $this->toMemberListItem($user))
+            ->all();
+    }
+
+    /**
+     * One page of the admin member list, with search / status / satellite filters
+     * applied across ALL members (not just the first N).
+     *
+     * @param  array<string, mixed>  $opts
+     */
+    public function paginateMembersForAdmin(array $opts = [], int $perPage = 50): \Illuminate\Pagination\LengthAwarePaginator
+    {
+        return $this->adminMembersQuery($opts)
+            ->paginate($perPage)
+            ->withQueryString()
+            ->through(fn (User $user) => $this->toMemberListItem($user));
+    }
+
+    /** @param  array<string, mixed>  $opts */
+    private function adminMembersQuery(array $opts): \Illuminate\Database\Eloquent\Builder
+    {
         $filterStatus = $opts['filterStatus'] ?? '';
         $search = trim((string) ($opts['search'] ?? ''));
-        $limit = (int) ($opts['limit'] ?? 100);
 
         $query = User::query()
             ->with(['satellite', 'memberships' => fn ($q) => $q->orderByDesc('created_at')->limit(1)])
             ->orderByDesc('created_at')
-            ->limit($limit);
+            ->orderByDesc('id');
 
         if ($filterStatus !== '') {
             $statuses = MembershipStatus::statusesForAdminFilter($filterStatus);
@@ -1018,9 +1041,7 @@ class MembershipService
             $query->whereIn('satellite_id', $opts['satelliteIds']);
         }
 
-        return $query->get()
-            ->map(fn (User $user) => $this->toMemberListItem($user))
-            ->all();
+        return $query;
     }
 
     /**

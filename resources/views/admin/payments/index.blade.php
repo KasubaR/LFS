@@ -83,12 +83,12 @@ $qs = fn (array $over) => http_build_query(array_filter(array_merge(request()->q
           @php [$label, $color] = $statuses[$r['status']] ?? [ucfirst(str_replace('_', ' ', (string) $r['status'])), 'muted']; @endphp
           <tr>
             <td>
-              @if($r['link'])<a href="{{ $r['link'] }}"><strong>{{ $r['ref'] }}</strong></a>@else<strong>{{ $r['ref'] }}</strong>@endif
+              @if($r['link'])<a href="{{ $r['link'] }}" class="admin-table__link"><strong>{{ $r['ref'] }}</strong></a>@else<strong>{{ $r['ref'] }}</strong>@endif
               @if($r['detail'])<div class="admin-table__sub">{{ $r['detail'] }}</div>@endif
             </td>
             <td>{{ $r['who'] }}</td>
             <td>
-              @if($r['phone'])<a href="tel:{{ $r['phone'] }}">{{ $r['phone'] }}</a><br>@endif
+              @if($r['phone'])<a href="tel:{{ $r['phone'] }}" class="admin-table__link">{{ $r['phone'] }}</a><br>@endif
               @if($r['email'])<span class="admin-table__sub">{{ $r['email'] }}</span>@endif
             </td>
             <td>{{ $fmt($r['amount'], $r['currency']) }}</td>
@@ -102,7 +102,7 @@ $qs = fn (array $over) => http_build_query(array_filter(array_merge(request()->q
       </tbody>
     </table>
   </div>
-  <div style="margin-top:1rem;">{{ $page->links() }}</div>
+  <x-admin.pagination :paginator="$page" />
 @else
   <div class="admin-empty"><p>No payments match these filters.</p></div>
 @endif

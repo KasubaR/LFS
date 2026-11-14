@@ -33,6 +33,10 @@ $th = 'padding:0.75rem; font-size:0.75rem; text-transform:uppercase; color:var(-
      style="display:inline-flex; align-items:center; gap:0.5rem; padding:0.6rem 1.1rem; background:var(--black-soft); border:1px solid var(--border-mid); color:var(--off-white); border-radius:8px; font-size:0.85rem; text-decoration:none;">
     <i class="fas fa-file-csv" aria-hidden="true"></i> Export attendees (CSV)
   </a>
+  <a href="/admin/events/payments?event={{ $event->id }}"
+     style="display:inline-flex; align-items:center; gap:0.5rem; padding:0.6rem 1.1rem; background:var(--black-soft); border:1px solid var(--border-mid); color:var(--off-white); border-radius:8px; font-size:0.85rem; text-decoration:none;">
+    <i class="fas fa-credit-card" aria-hidden="true"></i> Payments
+  </a>
   <a href="/events/{{ $event->slug }}" target="_blank" rel="noopener"
      style="color:var(--green-bright); font-size:0.85rem; text-decoration:none;">View public page</a>
 </div>
