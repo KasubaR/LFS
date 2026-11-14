@@ -329,8 +329,8 @@ class MembershipLifecycleTest extends TestCase
         // payment reference — a receipt number is its own dedicated id.
         $this->assertNotSame($activeA['membershipNumber'], $paymentA->receipt_number);
         $this->assertNotSame($paymentA->payment_reference, $paymentA->receipt_number);
-        $this->assertMatchesRegularExpression('/^LFS-RCT-\d{6}$/', $paymentA->receipt_number);
-        $this->assertMatchesRegularExpression('/^LFS-RCT-\d{6}$/', $paymentB->receipt_number);
+        $this->assertMatchesRegularExpression('/^LFS-RCT-\d{7}$/', $paymentA->receipt_number);
+        $this->assertMatchesRegularExpression('/^LFS-RCT-\d{7}$/', $paymentB->receipt_number);
     }
 
     public function test_active_promotion_discounts_the_payment_created_on_submission(): void

@@ -72,7 +72,7 @@ class MemberImportTest extends TestCase
         $this->assertSame($membership->membership_number, $payment->payment_reference);
         $this->assertNotNull($payment->receipt_number);
         $this->assertNotSame($membership->membership_number, $payment->receipt_number);
-        $this->assertMatchesRegularExpression('/^LFS-RCT-\d{6}$/', $payment->receipt_number);
+        $this->assertMatchesRegularExpression('/^LFS-RCT-\d{7}$/', $payment->receipt_number);
     }
 
     public function test_import_parses_comma_formatted_net_amount(): void

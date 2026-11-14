@@ -378,7 +378,10 @@ class MembershipPaymentService
 
             $sequence = 1;
             if ($latest && preg_match('/-(\d+)$/', $latest, $matches)) {
-                $sequence = (int) $matches[1] + 1;
+                // New format is YY + 5-digit sequence (LFS-RCT-2600448); the
+                // original format was a bare 6-digit sequence (LFS-RCT-000448).
+                $digits = $matches[1];
+                $sequence = (strlen($digits) > 6 ? (int) substr($digits, 2) : (int) $digits) + 1;
             }
 
             DB::table('receipt_number_counters')->insert([
@@ -386,7 +389,7 @@ class MembershipPaymentService
                 'next_value' => $sequence + 1,
             ]);
 
-            return sprintf('%s-%06d', $prefix, $sequence);
+            return $this->formatReceiptNumber($prefix, $sequence);
         }
 
         $sequence = (int) $counter->next_value;
@@ -395,7 +398,13 @@ class MembershipPaymentService
             ->where('prefix', $prefix)
             ->update(['next_value' => $sequence + 1]);
 
-        return sprintf('%s-%06d', $prefix, $sequence);
+        return $this->formatReceiptNumber($prefix, $sequence);
+    }
+
+    /** LFS-RCT-{YY}{5-digit sequence}, e.g. LFS-RCT-2600448 for receipt 448 issued in 2026. */
+    public static function formatReceiptNumber(string $prefix, int $sequence, ?\DateTimeInterface $at = null): string
+    {
+        return sprintf('%s-%s%05d', $prefix, ($at ?? now())->format('y'), $sequence);
     }
 
     /**
