@@ -97,6 +97,7 @@
       }
       if (!empty($canRead['members'])) {
           $navItem('members',   '/admin/members',   'fas fa-users',                    'Members',  (int)($counts['pendingMembers']  ?? 0));
+          $navItem('member-payments', '/admin/members/payments', 'fas fa-receipt', 'Member payments');
       }
       if (!empty($canRead['promotions'])) {
           $navItem('promotions', '/admin/promotions', 'fas fa-tags',                    'Promotions');
@@ -104,6 +105,7 @@
       }
       if (!empty($canRead['events'])) {
           $navItem('events',    '/admin/events',     'fas fa-calendar-days',             'Events');
+          $navItem('ticket-payments', '/admin/events/payments', 'fas fa-ticket', 'Ticket payments');
       }
       if (!empty($canRead['gallery'])) {
           $navItem('gallery',   '/admin/gallery',    'fas fa-images',                    'Gallery',  (int)($counts['pendingGallery']  ?? 0));
@@ -128,6 +130,7 @@
       }
       if (!empty($canRead['orders'])) {
           $navItem('orders',    '/admin/orders',     'fas fa-bag-shopping',              'Orders',   (int)($counts['pendingOrders']   ?? 0));
+          $navItem('shop-payments', '/admin/orders/payments', 'fas fa-credit-card', 'Shop payments');
       }
       if (!empty($canRead['api_clients'])) {
           $navItem('api-clients', '/admin/api-clients', 'fas fa-key',                    'API Keys');

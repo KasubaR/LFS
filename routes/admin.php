@@ -61,6 +61,7 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
     Route::prefix('events')->middleware('admin.can:events,read')->group(function (): void {
         Route::redirect('/', '/admin/events/list');
         Route::get('list', [EventController::class, 'index']);
+        Route::get('payments', [\App\Http\Controllers\Admin\PaymentsController::class, 'tickets']);
         Route::get('create', [EventController::class, 'create']);
         Route::post('/', [EventController::class, 'store']);
         Route::get('{id}/edit', [EventController::class, 'edit'])->where('id', '[^/]+');
@@ -224,6 +225,7 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
     Route::prefix('members')->middleware('admin.can:members,read')->group(function (): void {
         Route::get('/', [MembersController::class, 'index'])->name('admin.members.index');
         Route::get('list', [MembersController::class, 'list'])->name('admin.members.list');
+        Route::get('payments', [\App\Http\Controllers\Admin\PaymentsController::class, 'members'])->name('admin.members.payments');
         Route::get('import', [MembersController::class, 'importForm'])->name('admin.members.import');
         Route::post('import', [MembersController::class, 'import'])->name('admin.members.import.store');
         Route::post('import/{batchId}/rollback', [MembersController::class, 'rollback'])
@@ -263,6 +265,7 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
     // ── Orders ───────────────────────────────────────────────────────────────────────
     Route::prefix('orders')->middleware('admin.can:orders,read')->group(function (): void {
         Route::get('/', [OrderController::class, 'index']);
+        Route::get('payments', [\App\Http\Controllers\Admin\PaymentsController::class, 'shop']);
         Route::get('sales', [OfflineSaleController::class, 'report']);
         Route::get('sales/export', [OfflineSaleController::class, 'export']);
         Route::get('sales/create', [OfflineSaleController::class, 'create']);
