@@ -11,6 +11,7 @@ use App\Models\Membership;
 use App\Models\MembershipHistory;
 use App\Models\MembershipPayment;
 use App\Models\Payment;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class DashboardStatsService
@@ -80,9 +81,48 @@ class DashboardStatsService
     }
 
     /**
-     * @return list<array{type: string, icon: string, message: string}>
+     * @return list<array{key: string, fingerprint: string, type: string, icon: string, message: string}>
      */
     public function computeSystemAlerts(): array
+    {
+        $alerts = $this->allSystemAlerts();
+
+        try {
+            $dismissed = DB::table('admin_alert_dismissals')->pluck('fingerprint', 'alert_key');
+        } catch (Throwable) {
+            return $alerts;
+        }
+
+        return array_values(array_filter(
+            $alerts,
+            fn (array $alert) => ($dismissed[$alert['key']] ?? null) !== $alert['fingerprint'],
+        ));
+    }
+
+    /**
+     * Clears an alert as it stands now. It comes back if the situation changes
+     * (e.g. another payment fails). Returns false if there is no such alert.
+     */
+    public function dismissAlert(string $key, ?string $by): bool
+    {
+        foreach ($this->allSystemAlerts() as $alert) {
+            if ($alert['key'] === $key) {
+                DB::table('admin_alert_dismissals')->updateOrInsert(
+                    ['alert_key' => $key],
+                    ['fingerprint' => $alert['fingerprint'], 'dismissed_by' => $by, 'dismissed_at' => now()],
+                );
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return list<array{key: string, fingerprint: string, type: string, icon: string, message: string}>
+     */
+    private function allSystemAlerts(): array
     {
         return array_merge(
             $this->alertFailedMembershipPayments(),
@@ -93,7 +133,7 @@ class DashboardStatsService
     }
 
     /**
-     * @return list<array{type: string, icon: string, message: string}>
+     * @return list<array{key: string, fingerprint: string, type: string, icon: string, message: string}>
      */
     private function alertFailedMembershipPayments(): array
     {
@@ -105,6 +145,8 @@ class DashboardStatsService
 
             if ($failedPayments > 0) {
                 return [[
+                    'key' => 'failed_membership_payments',
+                    'fingerprint' => (string) MembershipPayment::query()->where('status', MembershipPaymentStatus::Failed)->max('id'),
                     'type' => 'warning',
                     'icon' => 'fas fa-triangle-exclamation',
                     'message' => $failedPayments === 1
@@ -119,7 +161,7 @@ class DashboardStatsService
     }
 
     /**
-     * @return list<array{type: string, icon: string, message: string}>
+     * @return list<array{key: string, fingerprint: string, type: string, icon: string, message: string}>
      */
     private function alertFailedShopPayments(): array
     {
@@ -131,6 +173,8 @@ class DashboardStatsService
 
             if ($failedPayments > 0) {
                 return [[
+                    'key' => 'failed_shop_payments',
+                    'fingerprint' => (string) Payment::query()->where('status', 'failed')->max('id'),
                     'type' => 'warning',
                     'icon' => 'fas fa-triangle-exclamation',
                     'message' => $failedPayments === 1
@@ -149,7 +193,7 @@ class DashboardStatsService
      * payments:poll-pending uses to auto-resolve them — a sign the
      * scheduler cron or the gateway integration may be stuck.
      *
-     * @return list<array{type: string, icon: string, message: string}>
+     * @return list<array{key: string, fingerprint: string, type: string, icon: string, message: string}>
      */
     private function alertStuckPendingPayments(): array
     {
@@ -170,6 +214,9 @@ class DashboardStatsService
 
             if ($total > 0) {
                 return [[
+                    'key' => 'stuck_pending_payments',
+                    'fingerprint' => ((string) Payment::query()->where('status', 'pending')->where('created_at', '<', $cutoff)->max('id'))
+                        .'/'.((string) MembershipPayment::query()->where('status', MembershipPaymentStatus::Pending)->where('created_at', '<', $cutoff)->max('id')),
                     'type' => 'error',
                     'icon' => 'fas fa-circle-exclamation',
                     'message' => sprintf(
@@ -187,7 +234,7 @@ class DashboardStatsService
     }
 
     /**
-     * @return list<array{type: string, icon: string, message: string}>
+     * @return list<array{key: string, fingerprint: string, type: string, icon: string, message: string}>
      */
     private function alertMembershipsExpiringSoon(): array
     {
@@ -199,6 +246,8 @@ class DashboardStatsService
 
             if ($expiringSoon > 0) {
                 return [[
+                    'key' => 'memberships_expiring_soon',
+                    'fingerprint' => now()->toDateString(),
                     'type' => 'info',
                     'icon' => 'fas fa-hourglass-half',
                     'message' => $expiringSoon === 1

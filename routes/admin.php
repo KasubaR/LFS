@@ -53,6 +53,9 @@ Route::prefix('admin')->middleware(['admin', 'admin.ratelimit'])->group(function
         Route::get('dashboard', [DashboardController::class, 'index']);
         Route::get('activity', [DashboardController::class, 'activity']);
     });
+    Route::post('dashboard/alerts/{key}/dismiss', [DashboardController::class, 'dismissAlert'])
+        ->middleware('admin.can:dashboard,write')
+        ->where('key', '[a-z_]+');
 
     // ── Events ───────────────────────────────────────────────────────────────────────
     Route::prefix('events')->middleware('admin.can:events,read')->group(function (): void {

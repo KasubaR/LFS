@@ -6,7 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Services\ActivityService;
 use App\Services\DashboardStatsService;
 use App\Services\EventService;
+use App\Services\AdminPermissionService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Throwable;
 
 class DashboardController extends Controller
@@ -16,6 +19,17 @@ class DashboardController extends Controller
         private readonly ActivityService $activityService,
         private readonly DashboardStatsService $dashboardStats,
     ) {}
+
+    public function dismissAlert(Request $request, string $key): RedirectResponse
+    {
+        $admin = app(AdminPermissionService::class)->currentAdmin($request);
+
+        $cleared = $this->dashboardStats->dismissAlert($key, $admin?->email);
+
+        return redirect('/admin/dashboard')->with('flash', $cleared
+            ? ['success' => 'Alert cleared. It will come back if the situation changes.']
+            : ['error' => 'That alert is no longer active.']);
+    }
 
     public function index(): View
     {

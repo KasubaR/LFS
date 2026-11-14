@@ -353,6 +353,14 @@ $breadcrumbs = [];
           <div class="sys-notif sys-notif--{{ $alert['type'] }}" role="status">
             <i class="{{ $alert['icon'] }}" aria-hidden="true"></i>
             <span>{{ $alert['message'] }}</span>
+            @if(!empty($adminCanWrite['dashboard']) && !empty($alert['key']))
+              <form method="POST" action="/admin/dashboard/alerts/{{ $alert['key'] }}/dismiss" style="margin-left:auto;">
+                @csrf
+                <button type="submit" class="admin-btn admin-btn--ghost admin-btn--sm" title="Clear this alert">
+                  <i class="fas fa-xmark" aria-hidden="true"></i> Clear
+                </button>
+              </form>
+            @endif
           </div>
         @endforeach
       @else
